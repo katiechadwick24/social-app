@@ -1,0 +1,3499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Socials</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Socials">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script>
+  // Wire up window.claude to the local server proxy
+  window.claude = {
+    complete: async function({ messages }) {
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Claude API call failed');
+      }
+      const data = await res.json();
+      return data.text;
+    }
+  };
+</script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0a; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; }
+  ::-webkit-scrollbar { display: none; }
+  input, textarea { font-family: inherit; }
+  /* Full-screen on real phones */
+  @media (max-width: 480px) {
+    body { display: block; background: #111; }
+  }
+</style>
+</head>
+<body>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "darkMode": true,
+  "accentColor": "#4dabf7",
+  "fontSize": 14,
+  "compactFeed": false
+}/*EDITMODE-END*/;
+
+// ─── Theme builder ────────────────────────────────────────────────
+function buildTheme(tweaks) {
+  const dark = tweaks.darkMode;
+  return {
+    bg:    dark ? '#111'     : '#f5f5f0',
+    card:  dark ? '#1c1c1c'  : '#ffffff',
+    card2: dark ? '#252525'  : '#eeede8',
+    border:dark ? '#2a2a2a'  : '#ddddd8',
+    text:  dark ? '#f0f0f0'  : '#111111',
+    muted: dark ? '#777'     : '#888',
+    blue:  tweaks.accentColor,
+    purple:'#9d5cff',
+    green: '#22c55e',
+    orange:'#f97316',
+    yellow:'#f5c842',
+    red:   '#ef4444',
+    isDark: dark,
+  };
+}
+
+// C is set globally and updated when tweaks change
+let C = buildTheme(TWEAK_DEFAULTS);
+
+// ─── House ring colors ────────────────────────────────────────────
+const HOUSE_COLORS = {
+  gryffindor: '#c41e3a',
+  slytherin:  '#2a8a4a',
+  ravenclaw:  '#4169c8',
+  hufflepuff: '#f0c75e',
+};
+function getHouseColor(char) {
+  if (!char) return null;
+  if (char.house && HOUSE_COLORS[char.house]) return HOUSE_COLORS[char.house];
+  // Legacy fallback: scan bio/description
+  const text = ((char.bio || '') + ' ' + (char.description || '')).toLowerCase();
+  if (text.includes('slytherin'))  return HOUSE_COLORS.slytherin;
+  if (text.includes('gryffindor')) return HOUSE_COLORS.gryffindor;
+  if (text.includes('ravenclaw'))  return HOUSE_COLORS.ravenclaw;
+  if (text.includes('hufflepuff')) return HOUSE_COLORS.hufflepuff;
+  return null;
+}
+
+// ─── Avatar component ─────────────────────────────────────────────
+const AVATAR_COLORS = [
+  ['#1a1a2e','#4dabf7'], ['#1a2e1a','#22c55e'], ['#2e1a1a','#ef4444'],
+  ['#2a1a2e','#9d5cff'], ['#2e2a1a','#f5c842'], ['#1a2e2a','#22c55e'],
+  ['#2e1a2a','#f97316'], ['#1a1a1a','#fff'],
+];
+function getAvatarColors(id) {
+  const i = (id || '').split('').reduce((a,c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[i];
+}
+function Avatar({ char, size = 42, onClick }) {
+  const [bg, fg] = getAvatarColors(char?.id);
+  const initials = (char?.name || '?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const houseColor = getHouseColor(char);
+  const ringWidth = Math.max(1, size * 0.022);
+  const ringGap = Math.max(0.5, size * 0.015);
+  return (
+    <div onClick={onClick} style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0, cursor: onClick ? 'pointer' : 'default',
+      padding: houseColor ? ringWidth + ringGap : 0,
+      background: houseColor || 'transparent',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{
+        width: '100%', height: '100%', borderRadius: '50%', background: bg,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: (size - (houseColor ? (ringWidth + ringGap) * 2 : 0)) * 0.36,
+        fontWeight: 700, color: fg,
+      }}>{initials}</div>
+    </div>
+  );
+}
+
+// ─── Verified / Quidditch badge ──────────────────────────────────
+function isQuidditchPlayer(char) {
+  const text = ((char.bio||'') + ' ' + (char.description||'')).toLowerCase();
+  return ['beater','chaser','keeper','seeker','quidditch'].some(w => text.includes(w));
+}
+function CharBadge({ char }) {
+  if (!char) return null;
+  if (isQuidditchPlayer(char)) return <span style={{fontSize:13, lineHeight:1}}>🧹</span>;
+  if ((char.followers||0) >= 1000000) return <svg width="14" height="14" viewBox="0 0 24 24" fill={C.blue} style={{flexShrink:0}}><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>;
+  return null;
+}
+
+function Verified() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill={C.blue} style={{flexShrink:0}}><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>;
+}
+
+// ─── Number formatter ─────────────────────────────────────────────
+function fmt(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(1)+'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return String(n);
+}
+
+// ─── Global dialogue rules ────────────────────────────────────────────
+const BANNED_PHRASES_RULE = `
+BANNED WORDS — do not use these in dialogue under any circumstance, no exceptions:
+"darling", "sweetheart", "love" (as a pet name), "dear", "hun", "honey", "babe" (as a pet name).
+These feel forced and AI-generated. Use the person's name, handle, or no address at all. Real people don't constantly call each other pet names.`;
+
+// ─── Bot pool ─────────────────────────────────────────────────────
+const BOT_COLORS = ['#8b0000','#1a3a1a','#1a1a4a','#3a1a00','#2a002a','#003a3a','#1a1a1a'];
+// Recurring "bots" = finsta/burner-style accounts. Real-people vibes, chaotic usernames,
+// each has a personality so their comments stay in-character across posts.
+const RECURRING_BOTS = [
+  { id:'gmz', name:'GMZ', handle:'gmz', type:'press', bg:'#c00', fg:'#fff', initials:'GMZ', bio:'Your #1 source for campus drama. We don\'t make the news, we just ruin lives with it.' },
+  { id:'mothballin', name:'mothballin', handle:'mothballin', type:'stan', bg:'#2a0a4a', fg:'#cc88ff', initials:'mb', vibe:'unhinged stan account, calls everyone "mother", types in lowercase, uses "girl" as punctuation' },
+  { id:'wetcatlooks', name:'wet cat looks', handle:'wetcatlooks', type:'snarky', bg:'#1a3a3a', fg:'#7adfdf', initials:'wc', vibe:'snarky observer, dry one-liners, mild contempt, never punctuates' },
+  { id:'pumpkinjuiced', name:'pumpkinjuiced', handle:'pumpkinjuiced', type:'hater', bg:'#3a1a00', fg:'#ff9944', initials:'pj', vibe:'mild hater account, pretends to be neutral but isn\'t, "i mean..." energy' },
+  { id:'gobletoffire', name:'gobletoffire', handle:'gobletoffire', type:'thirsty', bg:'#3a0a0a', fg:'#ff7766', initials:'gf', vibe:'thirst-poster, unhinged horny comments about everyone, uses 🥵💀' },
+  { id:'sortinghat404', name:'sortinghat404', handle:'sortinghat404', type:'chaos', bg:'#1a002a', fg:'#aa66ff', initials:'sh', vibe:'chaos goblin, unrelated weird comments, replies with cursed observations' },
+  { id:'dormfridge', name:'whoever ate my leftovers', handle:'dormfridge', type:'feral', bg:'#0a2a1a', fg:'#66dd99', initials:'df', vibe:'feral campus account, unhinged but harmless, talks about food and roommates randomly' },
+  { id:'broombroke', name:'broom broke (pls help)', handle:'broombroke', type:'fan', bg:'#001a3a', fg:'#66bbff', initials:'bb', vibe:'sweet fan, supportive, slightly cringe, uses heart emojis unironically' },
+  { id:'libraryghoul', name:'library ghoul', handle:'libraryghoul', type:'gossip', bg:'#2a1a00', fg:'#d4a060', initials:'lg', vibe:'gossip account that pretends to be above it but isn\'t, "interesting that..."' },
+  { id:'quafflewasted', name:'quaffle wasted', handle:'quafflewasted', type:'snarky', bg:'#1a3a00', fg:'#9adf3f', initials:'qw', vibe:'sports drunk, irreverent commentary on everything like it\'s a match, "L take" energy' },
+  { id:'crylittlerunt', name:'cry little runt', handle:'crylittlerunt', type:'hater', bg:'#1a0000', fg:'#ff6060', initials:'cl', vibe:'unapologetic hater, mean girl energy, brutal short comments' },
+  { id:'nikitasburner', name:'nikita\'s burner', handle:'nikitasburner', type:'chaos', bg:'#2a002a', fg:'#ff66cc', initials:'nb', vibe:'obvious finsta, talks about main account drama, "anyway as i was saying"' },
+  { id:'lowkeylurking', name:'lowkey lurking', handle:'lowkeylurking', type:'lurker', bg:'#0f0f1a', fg:'#888aaa', initials:'ll', vibe:'comments rarely but cuts deep, observational, sees through everyone' },
+];
+
+function BotAvatar({ bot, size=36 }) {
+  const bg = bot.bg || '#222';
+  const fg = bot.fg || '#888';
+  const initials = bot.initials || (bot.name||'?').slice(0,2).toUpperCase();
+  return (
+    <div style={{width:size, height:size, borderRadius:'50%', background:bg, border:`1.5px solid ${fg}44`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:size*0.32, fontWeight:700, color:fg, flexShrink:0}}>
+      {initials}
+    </div>
+  );
+}
+
+// ─── Default data ─────────────────────────────────────────────────
+const DEFAULT_CHARS = [
+  { id:'zara', name:'Zara Voss', handle:'zaravoss', house:'slytherin', bio:'Slytherin. Sharp aim, sharper mouth. Here for the chaos, not the consequences.', followers:4200000, description:'Zara is a 20-year-old Slytherin at Merlin\'s College of Magic (wizarding university). She\'s on the competitive dueling circuit, notorious for trash talk that somehow never crosses the line. She\'s brilliant, bored easily, and treats every social interaction like a sport. She has a dry, cutting sense of humor and zero patience for people who can\'t keep up. She is not malicious — she\'s honest, which is somehow worse.', personality:'sarcastic, witty, bold, competitive, irreverent', relationships:{eli: 62, sienna: -30, rook: 55} },
+  { id:'eli', name:'Eli Cross', handle:'elicross', house:'gryffindor', bio:'Gryffindor beater. Professionally chaotic. Not sorry.', followers:2800000, description:'Eli is a 21-year-old Gryffindor at Merlin\'s College. He plays Quidditch like he lives — aggressively and with no clear plan. He\'s impulsive, funny, and somehow always at the center of drama he swears he didn\'t start. He has a loud personality with a surprisingly soft core he\'d die before admitting. He and Zara have the most unhinged rivalry-flirtation dynamic on campus.', personality:'flirty, chaotic, impulsive, charming, loud', relationships:{zara: 62, sienna: 45, rook: -20} },
+  { id:'sienna', name:'Sienna Drake', handle:'siennadrake', house:'ravenclaw', bio:'Ravenclaw. Running this whole operation. You\'re all extras.', followers:8900000, description:'Sienna is a 22-year-old Ravenclaw. Student council president, top of her year, and effortlessly socially dominant. She\'s not mean — she\'s strategic, which is more dangerous. She weaponizes compliments and always knows exactly how every room sees her. She has a complicated history with basically everyone on campus.', personality:'calculating, poised, queen bee, strategic, precise', relationships:{zara: -30, eli: 45, rook: 15} },
+  { id:'rook', name:'Rook', handle:'rookrunner', house:'hufflepuff', bio:'hufflepuff. watches everything. says almost nothing.', followers:1100000, description:'Rook is a 20-year-old Hufflepuff at Merlin\'s College. Quiet, perceptive, and chronically online in a way nobody expected from someone who seems so detached in person. They notice everything happening on campus before it happens and react to almost none of it publicly. Their posts are infrequent, cryptic, and always somehow perfectly timed. Dry humor, minimal energy. Surprisingly loyal to people who earn it.', personality:'deadpan, perceptive, reserved, dry humor, observant', relationships:{zara: 55, eli: -20, sienna: 15} },
+];
+
+const DEFAULT_PLAYER = { id:'player', name:'Nova', handle:'nova', house:'slytherin', bio:'Slytherin. Main character energy. Questionable decisions since year one.', followers:196800000, description:'The player. Responds to everything, instigates selectively.', personality:'curious, bold, unpredictable, witty' };
+
+const DEFAULT_FEED = [
+  { id:'p1', charId:'sienna', text:'If one more person uses "team bonding" as an excuse to skip mandatory study hall I will personally owl the dean.', likes:231800, reposts:9400, comments:77, timestamp: Date.now()-3600000*2, reply:null,
+    botComments:[
+      {bot:'libraryghoul', text:'subtweeting the entire quidditch house rn 👀', likes:4200},
+      {bot:'sortinghat404', text:'she has a LIST and she\'s working through it alphabetically', likes:8800},
+      {bot:'pumpkinjuiced', text:'i mean. ravenclaw student council energy is unmatched.', likes:1200},
+    ]},
+  { id:'p2', charId:'zara', text:'the Gryffindors lost the practice match and somehow it\'s still everyone else\'s problem to hear about', likes:165000, reposts:7200, comments:44, timestamp: Date.now()-3600000*3, reply:null,
+    botComments:[
+      {bot:'quafflewasted', text:'she said what she said and the broom closet has EARS', likes:3300},
+      {bot:'crylittlerunt', text:'gryff tears taste like butterbeer ngl', likes:5100},
+      {bot:'mothballin', text:'EXCUSE ME @zaravoss girl we demand a recount', likes:890},
+    ]},
+  { id:'p3', charId:'eli', text:'I didn\'t start the thing in the Astronomy Tower. I was simply there when it started.', likes:89000, reposts:3100, comments:33, timestamp: Date.now()-3600000*4, reply:null,
+    botComments:[
+      {bot:'broombroke', text:'this is his entire personality and i love him for it 💗', likes:6700},
+      {bot:'sortinghat404', text:'the innocent bystander to chaos pipeline 😭', likes:9200},
+      {bot:'libraryghoul', text:'interesting how it\'s ALWAYS him though', likes:4400},
+    ]},
+  { id:'p4', charId:'zara', text:'some of you need to be studied by the Department of Mysteries', likes:610000, reposts:51000, comments:20, timestamp: Date.now()-3600000*5,
+    reply:{ charId:'eli', text:'@zaravoss volunteering myself obviously. I\'m fascinating.' },
+    botComments:[
+      {bot:'gmz', text:'BREAKING: @zaravoss issues public threat to 40% of campus', likes:22000},
+      {bot:'mothballin', text:'girl is she talking about the charms incident bc 😭', likes:1400},
+      {bot:'pumpkinjuiced', text:'the way @elicross jumped in immediately 💀 he\'s so obvious', likes:18500},
+      {bot:'quafflewasted', text:'he really said pick me. king behavior honestly', likes:7700},
+    ]},
+  { id:'p5', charId:'rook', text:'interesting night in the astronomy tower. won\'t elaborate.', likes:44200, reposts:2800, comments:12, timestamp: Date.now()-3600000*6, reply:null,
+    botComments:[
+      {bot:'sortinghat404', text:'ROOK. WHAT HAPPENED. ELABORATE NOW.', likes:14000},
+      {bot:'broombroke', text:'i will pay actual galleons for context 💗', likes:8800},
+      {bot:'wetcatlooks', text:'the restraint the mystery the audacity', likes:3300},
+    ]},
+  { id:'p6', charId:'sienna', text:'Constructive criticism: maybe consider being more interesting. Just a thought.', likes:502000, reposts:18000, comments:301, timestamp: Date.now()-3600000*7, reply:null,
+    botComments:[
+      {bot:'gmz', text:'Sienna Drake said what she said and will not be taking owls', likes:31000},
+      {bot:'crylittlerunt', text:'the audacity is immaculate honestly', likes:5500},
+      {bot:'pumpkinjuiced', text:'okay but she\'s right though and that\'s why it hurts', likes:12200},
+      {bot:'libraryghoul', text:'WHO is she talking about. drop the name bestie.', likes:44000},
+    ]},
+];
+
+const GMZ_CHAR = { id:'__gmz__', name:'GMZ', handle:'gmz', bio:'Your #1 source for campus drama.', followers:4800000, description:'GMZ is the unofficial campus gossip account.', personality:'chaotic, tabloid, dramatic' };
+
+// ─── Quidditch schedule ───────────────────────────────────────────
+const MATCH_SCHEDULE = [
+  { id:'m1', day:103, home:'Slytherin', away:'Gryffindor', location:'Main Pitch', status:'upcoming' },
+  { id:'m2', day:118, home:'Gryffindor', away:'Slytherin', location:'Championship Pitch', status:'upcoming' },
+  { id:'m3', day:134, home:'Slytherin', away:'Gryffindor', location:'Main Pitch — Final', status:'upcoming' },
+];
+
+const MATCH_EVENT_TEMPLATES = [
+  { type:'goal',    team:'home', text:(h,a,p)=>`${h} scores! ${p.name} with a clean pass, and the Chaser slips it right through. ${h} leads.`, icon:'🟢' },
+  { type:'goal',    team:'away', text:(h,a,p)=>`${a} answers back. Goal. The crowd is split down the middle.`, icon:'🔴' },
+  { type:'bludger', team:'home', text:(h,a,p)=>`Bludger hit — one of the ${a} Chasers takes a hit. That looked personal.`, icon:'💥' },
+  { type:'bludger', team:'away', text:(h,a,p)=>`${a} Beater with a brutal bludger. ${h} scrambling to recover.`, icon:'💥' },
+  { type:'foul',    team:'away', text:(h,a,p)=>`Foul called on ${a}. The ${h} side of the pitch absolutely loses it.`, icon:'🚩' },
+  { type:'foul',    team:'home', text:(h,a,p)=>`Foul on ${h}. Questionable call — the ref is going to hear about this.`, icon:'🚩' },
+  { type:'argue',   team:'both', text:(h,a,p)=>`Players from both sides are hovering, yelling. Nobody's playing right now.`, icon:'🌪️' },
+  { type:'snitch',  team:'both', text:(h,a,p)=>`The Snitch has been spotted. Both Seekers breaking for it — everything's about to end.`, icon:'✨' },
+];
+
+function generateMatchEvents(match, chars, player) {
+  const slyChar = chars.find(c => (c.bio+c.description||'').toLowerCase().includes('slytherin') && isQuidditchPlayer(c)) || player;
+  const gryfChar = chars.find(c => (c.bio+''+(c.description||'')).toLowerCase().includes('gryffindor') && isQuidditchPlayer(c));
+  const events = [];
+  // Shuffle and pick 7 events, ending with snitch
+  const pool = [...MATCH_EVENT_TEMPLATES.filter(e => e.type !== 'snitch')];
+  pool.sort(() => Math.random()-0.5);
+  const picked = pool.slice(0,6);
+  picked.push(MATCH_EVENT_TEMPLATES.find(e => e.type === 'snitch'));
+  return picked.map((tpl, i) => ({
+    id: `ev-${i}`,
+    type: tpl.type,
+    icon: tpl.icon,
+    text: tpl.text(match.home, match.away, player),
+  }));
+}
+// typeLabel / typeColor / typeEmoji for display
+const EVENT_TYPES = {
+  scandal:     { label:'Scandal',     color:'#ef4444', emoji:'🔥' },
+  gossip:      { label:'Gossip',      color:'#9d5cff', emoji:'👀' },
+  tag:         { label:'Tagged',      color:'#4dabf7', emoji:'⚡' },
+  opportunity: { label:'Opportunity', color:'#22c55e', emoji:'🎯' },
+};
+
+const EVENT_POOL = [
+  // ── SCANDAL ──────────────────────────────────────────────────────
+  { id:'ev1', type:'scandal',
+    scenario:'GMZ just dropped a post claiming @zaravoss deliberately sabotaged @elicross\'s broom before the last match — and tagged you as a "possible witness." The thread is already at 5K reposts.',
+    chars:['zara','eli'], xp:[140,240] },
+  { id:'ev2', type:'scandal',
+    scenario:'@siennadrake just subtweeted someone for "riding social clout they didn\'t earn" — and the entire school is convinced it\'s about you. She hasn\'t confirmed or denied.',
+    chars:['sienna'], xp:[120,200] },
+  { id:'ev3', type:'scandal',
+    scenario:'A GMZ source claims there\'s a betting ring on who @rookrunner\'s private account is going to post about next — and your name is the current favorite. Rook has said nothing.',
+    chars:['rook'], xp:[100,180] },
+  { id:'ev4', type:'scandal',
+    scenario:'Someone screenshotted a DM that\'s allegedly from @elicross saying he let Gryffindor lose the scrimmage on purpose. He\'s denying everything. Everyone\'s tagging you for comment.',
+    chars:['eli'], xp:[130,220] },
+
+  // ── GOSSIP ───────────────────────────────────────────────────────
+  { id:'ev5', type:'gossip',
+    scenario:'@zaravoss posted "interesting night" with zero context and @rookrunner liked it within 4 seconds. The internet has exactly one theory and it involves you.',
+    chars:['zara','rook'], xp:[80,160] },
+  { id:'ev6', type:'gossip',
+    scenario:'teatime__ just posted that @siennadrake was seen leaving the library with @elicross at 2am during exam week. No one knows what to do with this information.',
+    chars:['sienna','eli'], xp:[90,160] },
+  { id:'ev7', type:'gossip',
+    scenario:'QuaffleKing started a poll: "who wins in a duel, @zaravoss or @elicross" — it\'s 50/50 and both of them are publicly ignoring it, which is somehow making it worse.',
+    chars:['zara','eli'], xp:[70,140] },
+  { id:'ev8', type:'gossip',
+    scenario:'@rookrunner posted a single ":)" at 3am. No caption, no context. It has 44K likes. @siennadrake screenshot it. The whole school is trying to decode it.',
+    chars:['rook','sienna'], xp:[60,130] },
+
+  // ── DIRECT TAG ───────────────────────────────────────────────────
+  { id:'ev9', type:'tag',
+    scenario:'@zaravoss just replied to your last post with "this energy is why Slytherin keeps winning" and now half the school is @-ing you waiting to see if you clap back.',
+    chars:['zara'], xp:[100,180] },
+  { id:'ev10', type:'tag',
+    scenario:'@elicross tagged you in a post: "found someone who actually talks game instead of just playing it 👀" — no other context. @siennadrake has already liked it.',
+    chars:['eli','sienna'], xp:[110,190] },
+  { id:'ev11', type:'tag',
+    scenario:'@siennadrake publicly invited you to co-sign her new "campus standards" post. It\'s beautifully worded. It is also absolutely a trap.',
+    chars:['sienna'], xp:[120,200] },
+  { id:'ev12', type:'tag',
+    scenario:'@rookrunner posted a cryptic "some people just get it" and tagged exactly two accounts: you and @zaravoss. No explanation. Both fandoms are losing their minds.',
+    chars:['rook','zara'], xp:[90,170] },
+
+  // ── OPPORTUNITY ──────────────────────────────────────────────────
+  { id:'ev13', type:'opportunity',
+    scenario:'@elicross and @zaravoss are mid-argument in the replies of a GMZ post and both of them are absolutely wrong about the same thing. The window to humiliate both at once is open.',
+    chars:['eli','zara'], xp:[130,230] },
+  { id:'ev14', type:'opportunity',
+    scenario:'@siennadrake\'s perfectly curated "study aesthetic" post has one fatal flaw — a background detail only you would notice. You could say nothing. Or you could say everything.',
+    chars:['sienna'], xp:[100,180] },
+  { id:'ev15', type:'opportunity',
+    scenario:'@rookrunner just silently unfollowed someone and the entire school noticed. You\'re one of the few who knows why. Say something or let the chaos cook?',
+    chars:['rook'], xp:[80,160] },
+];
+
+// ─── Relationship bar ─────────────────────────────────────────────
+function RelBar({ value }) {
+  const isNeg = value < 0;
+  const pct = Math.min(Math.abs(value), 100);
+  return (
+    <div style={{display:'flex', alignItems:'center', gap:8, marginTop:4}}>
+      <div style={{flex:1, height:6, background:'#333', borderRadius:3, overflow:'hidden'}}>
+        <div style={{width:`${pct}%`, height:'100%', background: isNeg ? C.orange : C.green, borderRadius:3, transition:'width 0.5s'}}/>
+      </div>
+      <span style={{color: isNeg ? C.orange : C.green, fontSize:12, minWidth:45, textAlign:'right'}}>{value > 0 ? '+':''}{value.toFixed(1)}%</span>
+    </div>
+  );
+}
+
+// ─── Bottom Nav ───────────────────────────────────────────────────
+function BottomNav({ tab, setTab, dmNotifs = {} }) {
+  const totalDmNotifs = Object.values(dmNotifs).reduce((a,b) => a+b, 0);
+  const tabs = [
+    { id:'feed', icon: <svg viewBox="0 0 24 24" width="22" height="22"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></svg> },
+    { id:'activity', icon: <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="currentColor"/></svg> },
+    { id:'messages', icon: (
+      <div style={{position:'relative', display:'inline-flex'}}>
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>
+        {totalDmNotifs > 0 && <div style={{position:'absolute', top:-4, right:-6, background:'#e91e8c', borderRadius:'50%', width:16, height:16, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:'#fff', border:`1.5px solid ${C.bg}`}}>{totalDmNotifs}</div>}
+      </div>
+    )},
+    { id:'notifications', icon: <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/></svg> },
+    { id:'profile', icon: <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg> },
+  ];
+  return (
+    <div style={{display:'flex', borderTop:`1px solid ${C.border}`, background:C.bg, paddingBottom:8}}>
+      {tabs.map(t => (
+        <button key={t.id} onClick={() => setTab(t.id)} style={{
+          flex:1, background:'none', border:'none', padding:'10px 0 4px', cursor:'pointer',
+          color: tab === t.id ? '#fff' : C.muted, display:'flex', flexDirection:'column', alignItems:'center',
+        }}>{t.icon}</button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Post Card ────────────────────────────────────────────────────
+function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
+  const allChars = [...chars, player, GMZ_CHAR];
+  const char = allChars.find(c => c.id === post.charId);
+  const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
+  const [liked, setLiked] = useState(false);
+
+  function timeAgo(ts) {
+    const d = (Date.now() - ts) / 1000;
+    if (d < 60) return `${Math.floor(d)}s`;
+    if (d < 3600) return `${Math.floor(d/60)}m`;
+    if (d < 86400) return `${Math.floor(d/3600)}h`;
+    return `${Math.floor(d/86400)}d`;
+  }
+
+  if (!char) return null;
+
+  const renderText = (text) => {
+    return text.split(/(@\w+)/g).map((part, i) =>
+      part.startsWith('@') ? <span key={i} style={{color: C.blue}}>{part}</span> : part
+    );
+  };
+
+  return (
+    <div style={{padding:'14px 16px', borderBottom:`1px solid ${C.border}`}}>
+      <div style={{display:'flex', gap:10}}>
+        <Avatar char={char} size={40} onClick={() => char.id !== '__gmz__' && onCharClick(char)} />
+        <div style={{flex:1, minWidth:0}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+            <div style={{display:'flex', alignItems:'center', gap:4, flexWrap:'wrap'}}>
+              <span style={{fontWeight:700, fontSize:14, color:C.text, cursor:'pointer'}} onClick={() => onCharClick(char)}>{char.name}</span>
+              <CharBadge char={char} />
+              <span style={{color:C.muted, fontSize:13}}>@{char.handle}</span>
+              <span style={{color:C.muted, fontSize:13}}>· {timeAgo(post.timestamp)}</span>
+            </div>
+            <span style={{color:C.muted, fontSize:18, cursor:'pointer', padding:'0 4px'}}>···</span>
+          </div>
+          <p style={{color:C.text, fontSize:14, lineHeight:1.5, marginTop:4, cursor:'pointer'}} onClick={() => onOpenThread && onOpenThread(post)}>{renderText(post.text)}</p>
+          {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', borderRadius:12, marginTop:8, maxHeight:220, objectFit:'cover', cursor:'pointer'}} />}
+          <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
+            <button onClick={() => onOpenThread && onOpenThread(post)} style={{background:'none',border:'none',color:C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              {fmt(post.comments)}
+            </button>
+            <button style={{background:'none',border:'none',color:C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+              {fmt(post.reposts)}
+            </button>
+            <button onClick={() => { setLiked(!liked); onLike && onLike(post.id, liked); }} style={{background:'none',border:'none',color: liked ? '#e91e8c' : C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill={liked ? '#e91e8c' : 'none'} stroke={liked ? '#e91e8c' : 'currentColor'} strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              {fmt(post.likes + (liked ? 1 : 0))}
+            </button>
+            <button style={{background:'none',border:'none',color:C.muted,cursor:'pointer',marginLeft:'auto'}}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M22 9V7h-2V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2V9h2zm-4 10H4V5h14v14z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      {replyChar && (
+        <div style={{marginLeft:50, marginTop:10, padding:'10px 12px', background:C.card2, borderRadius:12, borderLeft:`3px solid ${C.border}`}}>
+          <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:4}}>
+            <Avatar char={replyChar} size={22} />
+            <span style={{fontWeight:700, fontSize:13, color:C.text}}>{replyChar.name}</span>
+            <CharBadge char={replyChar} />
+            <span style={{color:C.muted, fontSize:12}}>@{replyChar.handle}</span>
+          </div>
+          <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{renderText(post.reply.text)}</p>
+          <div style={{display:'flex', alignItems:'center', gap:4, marginTop:6}}>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill={liked ? '#e91e8c' : C.muted}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <span style={{color:C.muted, fontSize:12}}>{fmt(post.likes * 62)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Post Thread View ─────────────────────────────────────────────
+function PostThreadView({ post, chars, player, onBack, onCharClick, feed }) {
+  const allChars = [...chars, player, GMZ_CHAR];
+  const char = allChars.find(c => c.id === post.charId);
+  const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
+  const [liked, setLiked] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replyOpen, setReplyOpen] = useState(false);
+  const replyInputRef = useRef(null);
+  const [botComments, setBotComments] = useState(post.botComments || []);
+  const [charComments, setCharComments] = useState(post.charComments || []);
+  const [likedBots, setLikedBots] = useState({});
+  const [likedCharComments, setLikedCharComments] = useState({});
+  const [replyingToBot, setReplyingToBot] = useState(null); // bot comment index
+  const [botReplyText, setBotReplyText] = useState('');
+  const [botReplyLoading, setBotReplyLoading] = useState(false);
+  const [loadingBots, setLoadingBots] = useState(false);
+  const [loadingChars, setLoadingChars] = useState(false);
+
+  // Generate the full thread (chars + bots, multi-round, tension-aware)
+  useEffect(() => {
+    if ((botComments.length > 0 || charComments.length > 0) || !post.text) return;
+    if (loadingBots || loadingChars) return;
+    let cancelled = false;
+    setLoadingBots(true);
+    setLoadingChars(true);
+
+    const isPlayerPost = post.charId === 'player';
+    const author = allChars.find(c => c.id === post.charId);
+    const baseTs = post.timestamp || Date.now();
+
+    // ─── ROUND 1: characters react ────────────────────────────────
+    // Eligible: anyone but the author. Weight by emotional charge — strong relationship (+ or -)
+    // means more likely to comment. Neutral relationships are passed over more often.
+    const eligible = chars.filter(c => c.id !== post.charId);
+    if (eligible.length === 0) { setLoadingChars(false); setLoadingBots(false); return; }
+
+    const charge = (c) => {
+      const r = c.relationships?.[post.charId] ?? c.relationships?.player;
+      if (r === undefined) return 25; // neutral default
+      return Math.abs(r - 50) + 10; // distance from neutral, min 10
+    };
+    const weighted = eligible.map(c => ({ c, w: charge(c) + Math.random()*30 }));
+    weighted.sort((a,b) => b.w - a.w);
+
+    // Pick 2-4 chars. More if engagement is high.
+    const picked = weighted.slice(0, 2 + Math.floor(Math.random()*3)).map(x => x.c);
+
+    const charRoster = picked.map((c,i) => {
+      const rel = c.relationships?.[post.charId] ?? c.relationships?.player;
+      const feel = rel === undefined ? 'neutral' :
+        rel > 70 ? 'best friends with the poster' :
+        rel > 40 ? 'on good terms with the poster' :
+        rel > 10 ? 'tolerates the poster' :
+        rel > -20 ? 'tense / complicated with the poster' :
+        'genuinely dislikes the poster';
+      return `${i+1}. ${c.name} (@${c.handle}) — ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}).`;
+    }).join('\n');
+
+    const intro = isPlayerPost
+      ? `${player.name} (@${player.handle}, the main character everyone watches) posted: "${post.text}"`
+      : `${author?.name} (@${author?.handle}) posted: "${post.text}"`;
+
+    (async () => {
+      let charR1 = [];
+      try {
+        const res = await window.claude.complete({
+          messages:[{ role:'user', content:
+            `${intro}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character — match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nLength: 6-30 words each. Lowercase casual texting / lowkey ranting / dragging is encouraged. They might pile on, defend, deflect, sub-tweet, or escalate. People with bad blood should NOT be polite. People who are friends should be supportive but in their own voice. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+          }]
+        });
+        const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
+        const parsed = JSON.parse(cleaned);
+        charR1 = picked.map((c,i) => ({
+          charId: c.id,
+          text: (parsed[i]||'').trim().replace(/^["']|["']$/g,''),
+          likes: Math.floor(Math.random()*8000),
+          timestamp: baseTs + 60000 + i*30000 + Math.floor(Math.random()*120000),
+        })).filter(c => c.text);
+      } catch(e) {}
+
+      if (cancelled) return;
+      // Stagger reveal: drop char comments in over a few seconds
+      for (let i = 0; i < charR1.length; i++) {
+        setTimeout(() => {
+          if (cancelled) return;
+          setCharComments(prev => [...prev, charR1[i]]);
+        }, 400 + i*(600 + Math.random()*500));
+      }
+
+      // ─── ROUND 2: bots react as audience ──────────────────────
+      // They've now seen the post AND the character drama
+      const transcript = [
+        `${author?.name || player.name} (@${author?.handle || player.handle}): "${post.text}"`,
+        ...charR1.map(cc => {
+          const c = allChars.find(x => x.id === cc.charId);
+          return `${c?.name} (@${c?.handle}): "${cc.text}"`;
+        })
+      ].join('\n');
+
+      const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
+      const botCount = 3 + Math.floor(Math.random()*4); // 3-6
+      const botsPicked = [...pool].sort(() => Math.random()-0.5).slice(0, botCount);
+      const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
+
+      let bots = [];
+      try {
+        const res = await window.claude.complete({
+          messages:[{ role:'user', content:
+            `Below is a thread on a college social media app. ${charR1.length > 0 ? "It's gotten spicy — characters have piled on." : ''}
+
+${transcript}
+
+You are writing reactions from random anonymous student accounts watching this play out. They're an AUDIENCE. They:
+- pick teams ("team @whoever", "@xxx ATE this")
+- quote-laugh by repeating the funniest line back ("the way she said '${charR1[0]?.text?.split(/[.,!?]/)[0]?.trim()?.slice(0,40) || 'X'}' I AM CRYING")
+- use slang heavily: lmfaooo, not him saying X, the way, I cant, screaming, deceased, oop, bestie no, etc.
+- dunk, escalate, drag, or take sides — never neutral
+- can call out specific @handles
+- are NOT polite
+
+Accounts (in order):
+${botRoster}
+
+Each comment 5-30 words. Match each account's voice — ${botsPicked.map(b => `@${b.handle} = ${b.vibe}`).join('; ')}. Mix CAPS/lowercase naturally. NO hashtags.
+${BANNED_PHRASES_RULE}
+Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
+          }]
+        });
+        const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
+        const parsed = JSON.parse(cleaned);
+        bots = botsPicked.map((b,i) => ({
+          bot: b.id,
+          text: (parsed[i]||'').trim().replace(/^["']|["']$/g,''),
+          likes: Math.floor(Math.random()*15000),
+          timestamp: baseTs + 240000 + i*45000 + Math.floor(Math.random()*180000),
+        })).filter(b => b.text);
+      } catch(e) {}
+
+      if (cancelled) return;
+      const botStartDelay = 400 + charR1.length*(600 + 250); // after chars finish
+      for (let i = 0; i < bots.length; i++) {
+        setTimeout(() => {
+          if (cancelled) return;
+          setBotComments(prev => [...prev, bots[i]]);
+        }, botStartDelay + i*(500 + Math.random()*400));
+      }
+      if (!cancelled) setLoadingChars(false);
+
+      // ─── ROUND 3: char-vs-char clapback ───────────────────────
+      // Only fires if there are 2+ char replies AND at least one pair has bad blood
+      const pairs = [];
+      for (let i = 0; i < charR1.length; i++) {
+        for (let j = 0; j < charR1.length; j++) {
+          if (i === j) continue;
+          const ci = allChars.find(x => x.id === charR1[i].charId);
+          const cj = allChars.find(x => x.id === charR1[j].charId);
+          const rel = ci?.relationships?.[cj?.id];
+          if (rel !== undefined && rel < 30) {
+            pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel });
+          }
+        }
+      }
+
+      if (pairs.length > 0) {
+        // Pick the most charged pair (lowest rel)
+        pairs.sort((a,b) => a.rel - b.rel);
+        const fight = pairs[0];
+        try {
+          const res = await window.claude.complete({
+            messages:[{ role:'user', content:
+              `On a college social media thread, ${fight.target.name} (@${fight.target.handle}) just replied: "${fight.targetReply.text}"
+
+Original post by ${author?.name || player.name}: "${post.text}"
+
+You are ${fight.replier.name} (@${fight.replier.handle}). Your relationship with @${fight.target.handle} is bad (${fight.rel}/100). You see what they just said and you can't help yourself — you reply to THEM, not to the original post. Personality: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
+
+Write ONE clapback (8-30 words). It should clearly be a reply to @${fight.target.handle} — quote their wording back at them, drag them, expose them, escalate. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
+${BANNED_PHRASES_RULE}
+Return ONLY the reply text. No other text.`
+            }]
+          });
+          if (cancelled) return;
+          const clapback = {
+            charId: fight.replier.id,
+            text: res.trim().replace(/^["']|["']$/g,''),
+            likes: Math.floor(Math.random()*20000) + 2000, // clapbacks pop off
+            timestamp: baseTs + 480000 + Math.floor(Math.random()*240000),
+            replyTo: fight.target.handle,
+          };
+          // Drop it after the bot wave finishes, plus a beat
+          setTimeout(() => {
+            if (cancelled) return;
+            setCharComments(prev => [...prev, clapback]);
+          }, botStartDelay + bots.length*600 + 1200);
+
+          // ─── ROUND 4: bots react to the clapback ────────────
+          const clapTranscript = `${author?.name || player.name}: "${post.text}"\n${fight.target.name}: "${fight.targetReply.text}"\n${fight.replier.name}: "${clapback.text}"`;
+          const reactBots = [...pool].sort(() => Math.random()-0.5).slice(0, 2 + Math.floor(Math.random()*3));
+          const reactRoster = reactBots.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
+          try {
+            const res2 = await window.claude.complete({
+              messages:[{ role:'user', content:
+                `Thread escalated. Latest exchange:\n${clapTranscript}\n\nWrite ${reactBots.length} reactions from anonymous audience accounts who just watched @${fight.replier.handle} clap back at @${fight.target.handle}. They should:\n- pick a winner (CLEARLY — "team @${fight.replier.handle}" or "@${fight.target.handle} did NOT deserve that")\n- quote-laugh the funniest part back\n- use heavy slang (lmfaooo, not the way she said X, screaming, OOP, deceased, etc.)\n- be UNHINGED about it\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-25 words. Match each voice. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+            });
+            if (cancelled) return;
+            const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
+            const parsed2 = JSON.parse(cleaned2);
+            const reactComments = reactBots.map((b,i) => ({
+              bot: b.id,
+              text: (parsed2[i]||'').trim().replace(/^["']|["']$/g,''),
+              likes: Math.floor(Math.random()*25000) + 3000,
+              timestamp: baseTs + 600000 + i*30000,
+            })).filter(b => b.text);
+            const reactStart = botStartDelay + bots.length*600 + 2400;
+            for (let i = 0; i < reactComments.length; i++) {
+              setTimeout(() => {
+                if (cancelled) return;
+                setBotComments(prev => [...prev, reactComments[i]]);
+              }, reactStart + i*(500 + Math.random()*400));
+            }
+          } catch(e) {}
+        } catch(e) {}
+      }
+
+      if (!cancelled) setLoadingBots(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
+
+  function timeAgo(ts) {
+    const d = (Date.now() - ts) / 1000;
+    if (d < 60) return `${Math.floor(d)}s ago`;
+    if (d < 3600) return `${Math.floor(d/60)}m ago`;
+    if (d < 86400) return `${Math.floor(d/3600)}h ago`;
+    return `${Math.floor(d/86400)}d ago`;
+  }
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + ' · ' + new Date(ts).toLocaleDateString([],{month:'numeric',day:'numeric',year:'2-digit'});
+  }
+
+  const renderText = (text) => text.split(/(@\w+)/g).map((part,i) =>
+    part.startsWith('@') ? <span key={i} style={{color:C.blue}}>{part}</span> : part
+  );
+
+  const getBotById = id => RECURRING_BOTS.find(b => b.id === id) || RECURRING_BOTS[0];
+
+  // Merge char + bot comments into a single chronological feed.
+  // Falls back to insertion order (using array index baked into ts) if timestamps tie.
+  const mergedReplies = React.useMemo(() => {
+    const items = [
+      ...charComments.map((cc, i) => ({ kind:'char', data: cc, idx: i, ts: cc.timestamp || 0 })),
+      ...botComments.map((bc, i) => ({ kind:'bot', data: bc, idx: i, ts: bc.timestamp || 0 })),
+    ];
+    items.sort((a,b) => (a.ts||0) - (b.ts||0));
+    return items;
+  }, [charComments, botComments]);
+
+  return (
+    <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+    <div style={{flex:1, overflowY:'auto'}}>
+      {/* Header */}
+      <div style={{padding:'12px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:12, position:'sticky', top:0, background:C.bg, zIndex:5}}>
+        <button onClick={onBack} style={{background:'none',border:'none',color:C.blue,fontSize:20,cursor:'pointer'}}>‹</button>
+        <span style={{color:C.text, fontWeight:700, fontSize:16}}>Post</span>
+      </div>
+
+      {/* Main post */}
+      <div style={{padding:'16px'}}>
+        <div style={{display:'flex', gap:10, alignItems:'flex-start', marginBottom:14}}>
+          <Avatar char={char} size={44} onClick={() => onCharClick(char)} />
+          <div style={{flex:1}}>
+            <div style={{display:'flex', alignItems:'center', gap:4}}>
+              <span style={{fontWeight:700, fontSize:15, color:C.text, cursor:'pointer'}} onClick={() => onCharClick(char)}>{char?.name}</span>
+              <CharBadge char={char} />
+            </div>
+            <span style={{color:C.muted, fontSize:13}}>@{char?.handle}</span>
+          </div>
+          <span style={{color:C.muted, fontSize:20}}>···</span>
+        </div>
+        <p style={{color:C.text, fontSize:17, lineHeight:1.6, marginBottom:12}}>{renderText(post.text)}</p>
+        {post.photo && <img src={post.photo} alt="" style={{width:'100%', borderRadius:14, marginBottom:12, maxHeight:260, objectFit:'cover'}}/>}
+        <p style={{color:C.muted, fontSize:13, marginBottom:12}}>{fmtTime(post.timestamp)} · <strong style={{color:C.text}}>{fmt(post.likes * 7.2 | 0)}</strong> Views</p>
+        <div style={{borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`, padding:'10px 0', display:'flex', gap:16, alignItems:'center'}}>
+          <button onClick={() => { setReplyOpen(true); setTimeout(() => replyInputRef.current?.focus(), 50); }} style={{background:C.blue+'22', color:C.blue, border:'none', borderRadius:20, padding:'7px 16px', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6}}>
+            💬 Reply
+          </button>
+          <div style={{display:'flex', alignItems:'center', gap:6, color:C.muted, fontSize:13}}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+            {fmt(post.reposts)}
+          </div>
+          <button onClick={() => setLiked(l=>!l)} style={{display:'flex', alignItems:'center', gap:6, color: liked ? '#e91e8c' : C.muted, background:'none', border:'none', fontSize:13, cursor:'pointer'}}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill={liked?'#e91e8c':'none'} stroke={liked?'#e91e8c':'currentColor'} strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            {fmt(post.likes + (liked?1:0))}
+          </button>
+        </div>
+      </div>
+
+      {/* Character reply if exists */}
+      {post.reply && replyChar && (
+        <div style={{borderBottom:`1px solid ${C.border}`, padding:'14px 16px'}}>
+          <div style={{display:'flex', gap:10}}>
+            <Avatar char={replyChar} size={38} onClick={() => onCharClick(replyChar)} />
+            <div style={{flex:1}}>
+              <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:4}}>
+                <span style={{fontWeight:700, fontSize:14, color:C.text}}>{replyChar.name}</span>
+                <CharBadge char={replyChar} />
+                <span style={{color:C.muted, fontSize:13}}>@{replyChar.handle}</span>
+              </div>
+              <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{renderText(post.reply.text)}</p>
+              <div style={{display:'flex', gap:16, marginTop:8, alignItems:'center'}}>
+                <span style={{color:C.muted, fontSize:12, display:'flex', alignItems:'center', gap:4}}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                  {fmt(post.likes * 62)}
+                </span>
+                <span style={{color:C.muted, fontSize:12}}>Reply</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comments — chars + bots, chronological */}
+      {(loadingChars || loadingBots) && mergedReplies.length === 0 && (
+        <p style={{color:C.muted, fontSize:13, padding:'14px 16px'}}>Loading comments...</p>
+      )}
+      {mergedReplies.map((item, mi) => {
+        if (item.kind === 'char') {
+          const cc = item.data;
+          const i = item.idx;
+          const cChar = allChars.find(c => c.id === cc.charId);
+          if (!cChar) return null;
+          const isLiked = !!likedCharComments[i];
+          return (
+            <div key={`char-${i}`} style={{borderBottom:`1px solid ${C.border}`, padding:'14px 16px'}}>
+              <div style={{display:'flex', gap:10}}>
+                <Avatar char={cChar} size={38} onClick={() => onCharClick(cChar)}/>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:2, flexWrap:'wrap'}}>
+                    <span style={{fontWeight:700, fontSize:14, color:C.text, cursor:'pointer'}} onClick={() => onCharClick(cChar)}>{cChar.name}</span>
+                    <CharBadge char={cChar} />
+                    <span style={{color:C.muted, fontSize:13}}>@{cChar.handle}</span>
+                    <span style={{color:C.muted, fontSize:13}}>·</span>
+                    <span style={{color:C.muted, fontSize:13}}>{timeAgo(cc.timestamp || post.timestamp)}</span>
+                  </div>
+                  {cc.replyTo && (
+                    <p style={{color:C.muted, fontSize:12, margin:'2px 0 6px'}}>
+                      Replying to <span style={{color:C.blue}}>@{cc.replyTo}</span>
+                    </p>
+                  )}
+                  <p style={{color:C.text, fontSize:14, lineHeight:1.5, margin:0}}>{renderText(cc.text)}</p>
+                  <div style={{display:'flex', gap:24, marginTop:10, alignItems:'center'}}>
+                    <button onClick={() => setLikedCharComments(p => ({...p, [i]: !p[i]}))}
+                      style={{background:'none', border:'none', color: isLiked ? C.red : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4}}>
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill={isLiked?C.red:'none'} stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                      {fmt((cc.likes||0) + (isLiked?1:0))}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        // bot
+        const bc = item.data;
+        const i = item.idx;
+        const bot = getBotById(bc.bot);
+        const isLiked = !!likedBots[i];
+        const isReplying = replyingToBot === i;
+
+        async function handleBotReply() {
+          if (!botReplyText.trim() || botReplyLoading) return;
+          setBotReplyLoading(true);
+          const playerReply = botReplyText;
+          setBotReplyText('');
+          setReplyingToBot(null);
+          // Optimistically add player reply
+          const playerEntry = { bot: '__player__', text: playerReply, likes: 0, isPlayer: true };
+          setBotComments(prev => {
+            const next = [...prev];
+            next.splice(i + 1, 0, playerEntry);
+            return next;
+          });
+          try {
+            const res = await window.claude.complete({
+              messages: [{ role:'user', content:
+                `You are ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university. Your personality: ${bot.bio || bot.type}.
+Original post: "${post.text}"
+Your comment: "${bc.text}"
+${player.name} just replied to your comment: "${playerReply}"
+Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining.`
+              }]
+            });
+            setBotComments(prev => {
+              const next = [...prev];
+              const insertAt = next.findIndex(c => c === playerEntry) + 1;
+              next.splice(insertAt, 0, { bot: bc.bot, text: res.trim(), likes: Math.floor(Math.random()*3000) });
+              return next;
+            });
+          } catch(e) {}
+          setBotReplyLoading(false);
+        }
+
+        if (bc.isPlayer) {
+          return (
+            <div key={i} style={{borderBottom:`1px solid ${C.border}`, padding:'12px 16px', paddingLeft:64}}>
+              <div style={{display:'flex', gap:10}}>
+                <Avatar char={player} size={32}/>
+                <div style={{flex:1}}>
+                  <span style={{fontWeight:700, fontSize:13, color:C.text}}>{player.name}</span>
+                  <span style={{color:C.muted, fontSize:12, marginLeft:6}}>@{player.handle}</span>
+                  <p style={{color:C.text, fontSize:13, lineHeight:1.5, marginTop:4}}>{bc.text}</p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div key={i} style={{borderBottom:`1px solid ${C.border}`, padding:'14px 16px'}}>
+            <div style={{display:'flex', gap:10}}>
+              <BotAvatar bot={bot} size={38}/>
+              <div style={{flex:1}}>
+                <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:4, flexWrap:'wrap'}}>
+                  <span style={{fontWeight:700, fontSize:14, color:C.text}}>{bot.name}</span>
+                  <span style={{color:C.muted, fontSize:13}}>@{bot.handle}</span>
+                </div>
+                <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{bc.text}</p>
+                <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
+                  <button
+                    onClick={() => setReplyingToBot(isReplying ? null : i)}
+                    style={{background:'none', border:'none', color: isReplying ? C.blue : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4}}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    Reply
+                  </button>
+                  <button
+                    onClick={() => setLikedBots(prev => ({...prev, [i]: !prev[i]}))}
+                    style={{background:'none', border:'none', color: isLiked ? '#e91e8c' : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4}}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill={isLiked ? '#e91e8c' : 'none'} stroke={isLiked ? '#e91e8c' : 'currentColor'} strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    {fmt(bc.likes + (isLiked ? 1 : 0))}
+                  </button>
+                </div>
+                {isReplying && (
+                  <div style={{marginTop:10, display:'flex', gap:8, alignItems:'flex-end'}}>
+                    <Avatar char={player} size={28}/>
+                    <div style={{flex:1, background:C.card2, borderRadius:12, border:`1px solid ${botReplyText.trim() ? C.blue+'66' : C.border}`, padding:'8px 12px', transition:'border-color 0.2s'}}>
+                      <input
+                        value={botReplyText}
+                        onChange={e => setBotReplyText(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleBotReply()}
+                        placeholder={`Reply to @${bot.handle}…`}
+                        style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:13, outline:'none'}}
+                        autoFocus
+                      />
+                    </div>
+                    <button
+                      onClick={handleBotReply}
+                      disabled={!botReplyText.trim() || botReplyLoading}
+                      style={{background: botReplyText.trim() ? C.blue : C.card2, color: botReplyText.trim() ? '#fff' : C.muted, border:'none', borderRadius:20, padding:'6px 14px', fontSize:13, fontWeight:700, cursor: botReplyText.trim() ? 'pointer' : 'default', whiteSpace:'nowrap'}}>
+                      {botReplyLoading ? '…' : 'Send'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {(loadingChars || loadingBots) && mergedReplies.length > 0 && (
+        <p style={{color:C.muted, fontSize:12, padding:'10px 16px', textAlign:'center', fontStyle:'italic'}}>more replies coming in...</p>
+      )}
+      <div style={{height: replyOpen ? 80 : 20}}/>
+    </div>
+
+    {/* Reply input bar */}    {replyOpen && (
+      <div style={{borderTop:`1px solid ${C.border}`, background:C.bg, padding:'10px 12px', display:'flex', gap:8, alignItems:'flex-end'}}>
+        <Avatar char={player} size={30}/>
+        <div style={{flex:1, background:C.card2, borderRadius:20, border:`1px solid ${replyText.trim() ? C.blue+'66' : C.border}`, padding:'9px 14px', transition:'border-color 0.2s'}}>
+          <input
+            ref={replyInputRef}
+            value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') { setReplyOpen(false); setReplyText(''); }
+              if (e.key === 'Enter' && replyText.trim()) {
+                setBotComments(prev => [...prev, { bot:'__player__', text: replyText.trim(), likes:0, isPlayer:true }]);
+                setReplyText(''); setReplyOpen(false);
+              }
+            }}
+            placeholder={`Reply to @${char?.handle}…`}
+            style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:14, outline:'none'}}
+          />
+        </div>
+        <button
+          onClick={() => {
+            if (!replyText.trim()) return;
+            setBotComments(prev => [...prev, { bot:'__player__', text: replyText.trim(), likes:0, isPlayer:true }]);
+            setReplyText(''); setReplyOpen(false);
+          }}
+          disabled={!replyText.trim()}
+          style={{background: replyText.trim() ? C.blue : C.card2, color:'#fff', border:'none', borderRadius:'50%', width:36, height:36, cursor: replyText.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0}}>
+          →
+        </button>
+      </div>
+    )}
+    </div>
+  );
+}
+
+// ─── Live Match Modal ─────────────────────────────────────────────
+function LiveMatchModal({ match, chars, player, onClose, onPostToFeed, onMatchEnd }) {
+  const [phase, setPhase] = useState('kickoff'); // kickoff | live | postgame
+  const [events, setEvents] = useState([]);
+  const [visibleIdx, setVisibleIdx] = useState(-1);
+  const [score, setScore] = useState({ home:0, away:0 });
+  const [loading, setLoading] = useState(false);
+  const slyColor = '#2a8a4a';
+  const gryfColor = '#c41e3a';
+  const homeColor = match.home === 'Slytherin' ? slyColor : gryfColor;
+  const awayColor = match.away === 'Slytherin' ? slyColor : gryfColor;
+
+  function startMatch() {
+    const evts = generateMatchEvents(match, chars, player);
+    setEvents(evts);
+    setPhase('live');
+    setVisibleIdx(0);
+    // Post kickoff to feed
+    onPostToFeed(`KICKOFF: ${match.home} vs ${match.away} — ${match.location}. It's on.`, '__gmz__');
+  }
+
+  function nextEvent() {
+    const ev = events[visibleIdx];
+    if (!ev) return;
+    // Update score
+    if (ev.type === 'goal') {
+      const isHome = ev.text(match.home, match.away, player).includes(match.home + ' scores') || ev.text(match.home, match.away, player).startsWith(match.home);
+      setScore(s => isHome ? {...s, home: s.home+10} : {...s, away: s.away+10});
+    }
+    if (ev.type === 'snitch') {
+      // Snitch caught — random team catches, +150
+      const slyWins = Math.random() > 0.45;
+      setScore(s => slyWins
+        ? (match.home==='Slytherin' ? {...s, home:s.home+150} : {...s, away:s.away+150})
+        : (match.home==='Gryffindor' ? {...s, home:s.home+150} : {...s, away:s.away+150})
+      );
+      // Post to feed
+      onPostToFeed(ev.text, '__gmz__');
+      setTimeout(() => setPhase('postgame'), 600);
+      return;
+    }
+    // Post event to feed
+    onPostToFeed(ev.text, '__gmz__');
+    if (visibleIdx < events.length - 1) setVisibleIdx(i => i+1);
+  }
+
+  const currentEv = events[visibleIdx];
+  const homeWon = score.home > score.away;
+
+  return (
+    <div style={{position:'absolute', inset:0, zIndex:200, background:C.bg, display:'flex', flexDirection:'column'}}>
+      {/* Header */}
+      <div style={{padding:'14px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10}}>
+        <button onClick={onClose} style={{background:'none', border:'none', color:C.blue, fontSize:22, cursor:'pointer'}}>×</button>
+        <span style={{color:C.text, fontWeight:700, fontSize:16, flex:1}}>🏆 {match.home} vs {match.away}</span>
+        {phase === 'live' && (
+          <div style={{display:'flex', gap:12, alignItems:'center'}}>
+            <span style={{color:homeColor, fontWeight:800, fontSize:18}}>{score.home}</span>
+            <span style={{color:C.muted, fontSize:14}}>–</span>
+            <span style={{color:awayColor, fontWeight:800, fontSize:18}}>{score.away}</span>
+          </div>
+        )}
+      </div>
+
+      <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 20px'}}>
+
+        {phase === 'kickoff' && (
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:60, marginBottom:20}}>🏟️</div>
+            <div style={{display:'flex', alignItems:'center', gap:16, marginBottom:24, justifyContent:'center'}}>
+              <div style={{textAlign:'center'}}>
+                <div style={{width:56, height:56, borderRadius:'50%', background:homeColor, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, margin:'0 auto 6px'}}>🐍</div>
+                <p style={{color:homeColor, fontWeight:800, fontSize:15}}>{match.home}</p>
+              </div>
+              <span style={{color:C.muted, fontSize:24, fontWeight:700}}>vs</span>
+              <div style={{textAlign:'center'}}>
+                <div style={{width:56, height:56, borderRadius:'50%', background:awayColor, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, margin:'0 auto 6px'}}>🦁</div>
+                <p style={{color:awayColor, fontWeight:800, fontSize:15}}>{match.away}</p>
+              </div>
+            </div>
+            <p style={{color:C.muted, fontSize:13, marginBottom:24}}>{match.location}</p>
+            <button onClick={startMatch} style={{background:C.blue, color:'#fff', border:'none', borderRadius:20, padding:'14px 40px', fontSize:16, fontWeight:700, cursor:'pointer'}}>
+              Kick off →
+            </button>
+          </div>
+        )}
+
+        {phase === 'live' && currentEv && (
+          <div style={{width:'100%', maxWidth:360}}>
+            {/* Current event card */}
+            <div style={{background:C.card2, borderRadius:20, padding:'24px 20px', marginBottom:20, textAlign:'center', minHeight:160, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12}}>
+              <span style={{fontSize:44}}>{currentEv.icon}</span>
+              <p style={{color:C.text, fontSize:15, lineHeight:1.65, fontWeight:500}}>{currentEv.text}</p>
+            </div>
+
+            {/* Score */}
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:C.card2, borderRadius:14, padding:'12px 20px', marginBottom:20}}>
+              <span style={{color:homeColor, fontWeight:800, fontSize:22}}>{score.home}</span>
+              <span style={{color:C.muted, fontSize:12, fontWeight:600}}>{match.home.toUpperCase()} · {match.away.toUpperCase()}</span>
+              <span style={{color:awayColor, fontWeight:800, fontSize:22}}>{score.away}</span>
+            </div>
+
+            {/* Event counter */}
+            <div style={{display:'flex', gap:4, justifyContent:'center', marginBottom:20}}>
+              {events.map((e,i) => (
+                <div key={i} style={{width: i===visibleIdx ? 20 : 6, height:6, borderRadius:3, background: i<=visibleIdx ? C.blue : C.border, transition:'all 0.3s'}}/>
+              ))}
+            </div>
+
+            <button onClick={nextEvent} style={{width:'100%', background:C.text, color:C.bg, border:'none', borderRadius:14, padding:'14px', fontSize:15, fontWeight:700, cursor:'pointer'}}>
+              {currentEv.type === 'snitch' ? '🌟 Catch the Snitch' : 'Next →'}
+            </button>
+          </div>
+        )}
+
+        {phase === 'postgame' && (
+          <div style={{textAlign:'center', width:'100%', maxWidth:360}}>
+            <div style={{fontSize:52, marginBottom:12}}>{homeWon === (match.home==='Slytherin') ? '🐍' : '🦁'}</div>
+            <h2 style={{color:C.text, fontSize:22, fontWeight:800, marginBottom:4}}>
+              {score.home === score.away ? 'Draw' : `${score.home > score.away ? match.home : match.away} wins`}
+            </h2>
+            <div style={{display:'flex', justifyContent:'center', gap:20, marginBottom:24}}>
+              <div style={{textAlign:'center'}}>
+                <p style={{color:homeColor, fontWeight:800, fontSize:32}}>{score.home}</p>
+                <p style={{color:C.muted, fontSize:12}}>{match.home}</p>
+              </div>
+              <div style={{textAlign:'center'}}>
+                <p style={{color:awayColor, fontWeight:800, fontSize:32}}>{score.away}</p>
+                <p style={{color:C.muted, fontSize:12}}>{match.away}</p>
+              </div>
+            </div>
+            <div style={{display:'flex', flexDirection:'column', gap:10}}>
+              <button onClick={() => { onMatchEnd(score); onClose(); }} style={{background:C.blue, color:'#fff', border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700, cursor:'pointer'}}>
+                Back to feed →
+              </button>
+              <button onClick={() => { onMatchEnd(score); onClose(); /* TODO: locker room */ }} style={{background:C.card2, color:C.text, border:`1px solid ${C.border}`, borderRadius:14, padding:'13px', fontSize:14, fontWeight:600, cursor:'pointer'}}>
+                🚿 Locker room scene
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Match Day Banner ─────────────────────────────────────────────
+function MatchDayBanner({ match, day, onWatch }) {
+  if (!match || match.day !== day) return null;
+  const slyColor = '#2a8a4a'; const gryfColor = '#c41e3a';
+  return (
+    <div style={{margin:'0 12px 4px', borderRadius:16, background:`linear-gradient(135deg, ${slyColor}22, ${gryfColor}22)`, border:`1px solid ${slyColor}44`, padding:'14px 16px', display:'flex', alignItems:'center', gap:12}}>
+      <span style={{fontSize:28}}>🏟️</span>
+      <div style={{flex:1}}>
+        <p style={{color:C.text, fontWeight:700, fontSize:14}}>Match Day</p>
+        <p style={{color:C.muted, fontSize:12}}>{match.home} vs {match.away} · {match.location}</p>
+      </div>
+      <button onClick={onWatch} style={{background:C.blue, color:'#fff', border:'none', borderRadius:20, padding:'8px 18px', fontSize:13, fontWeight:700, cursor:'pointer'}}>
+        Watch
+      </button>
+    </div>
+  );
+}
+
+// ─── Feed Screen ──────────────────────────────────────────────────
+function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, setTab, onCompose, onOpenThread, onWatchMatch, currentMatch }) {
+  const [showEvent, setShowEvent] = useState(false);
+  const currentEvent = EVENT_POOL[day % EVENT_POOL.length];
+
+  return (
+    <div style={{flex:1, overflowY:'auto', position:'relative'}}>
+      {/* Header */}
+      <div style={{padding:'10px 16px', borderBottom:`1px solid ${C.border}`, position:'sticky', top:0, background:C.bg, zIndex:10}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+          <div style={{display:'flex', alignItems:'center', gap:6}}>
+            <span style={{fontSize:16}}>☀️</span>
+            <span style={{color:C.text, fontWeight:700}}>Day {day}</span>
+          </div>
+          <div style={{display:'flex', gap:8}}>
+            <div style={{width:32, height:32, background:C.card2, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}} onClick={() => setTab('profile')}>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill={C.muted}><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Match day banner */}
+      <MatchDayBanner match={currentMatch} day={day} onWatch={onWatchMatch} />
+
+      {/* Posts */}
+      {feed.map(post => (
+        <PostCard key={post.id} post={post} chars={chars} player={player} onCharClick={onCharClick} onOpenThread={onOpenThread} />
+      ))}
+
+      {/* Spacer */}
+      <div style={{height:80}}/>
+
+      {/* Event Banner */}
+      <div style={{position:'sticky', bottom:10, left:0, right:0, display:'flex', justifyContent:'center', gap:10, padding:'0 16px', pointerEvents:'none'}}>
+        <button onClick={() => onEvent(currentEvent)} style={{
+          pointerEvents:'all', background:'linear-gradient(135deg, #4dabf7, #2280d2)', color:'#fff', border:'none',
+          borderRadius:30, padding:'12px 24px', fontSize:14, fontWeight:700, cursor:'pointer',
+          display:'flex', alignItems:'center', gap:8, boxShadow:'0 4px 20px rgba(77,171,247,0.4)',
+        }}>
+          📣 Event <span style={{fontSize:11, fontWeight:500, opacity:0.9}}>up to +{currentEvent.xp[1]} xp</span>
+        </button>
+        <button onClick={onCompose} style={{
+          pointerEvents:'all', background:C.blue, color:'#fff', border:'none',
+          borderRadius:'50%', width:46, height:46, fontSize:22, cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(77,171,247,0.4)',
+        }}>+</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Messages Screen ──────────────────────────────────────────────
+function MessagesScreen({ chars, dms, onOpenChat, dmNotifs = {}, setDmNotifs, groupChats = [], onOpenGroup }) {
+  const totalDmNotifs = Object.values(dmNotifs).reduce((a,b) => a+b, 0);
+  // Include GMZ in DM list if it has an active thread
+  const charsWithGmz = (dms[GMZ_CHAR.id]||[]).length > 0 ? [GMZ_CHAR, ...chars] : chars;
+  return (
+    <div style={{flex:1, overflowY:'auto'}}>
+      <div style={{padding:'16px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <h1 style={{color:C.text, fontSize:22, fontWeight:700}}>Messages</h1>
+        <div style={{background:'#2a1a4e', borderRadius:8, padding:'4px 8px', cursor:'pointer'}}>
+          <span style={{fontSize:18}}>🎭</span>
+        </div>
+      </div>
+      <div style={{padding:'8px 16px', background:'#1a0d2e', borderLeft:`3px solid ${C.purple}`, margin:'8px 12px', borderRadius:8}}>
+        <span style={{color:C.purple, fontSize:13, fontWeight:600}}>Add and remove characters from your DMs here!</span>
+      </div>
+
+      {/* Group chats */}
+      {groupChats.length > 0 && (
+        <>
+          <div style={{padding:'10px 16px 4px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <span style={{color:C.muted, fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:1}}>Group Chats</span>
+          </div>
+          {groupChats.map(gc => {
+            const memberChars = gc.members.map(id => chars.find(c => c.id === id)).filter(Boolean);
+            const lastMsg = gc.messages[gc.messages.length - 1];
+            const lastSender = lastMsg ? (chars.find(c=>c.id===lastMsg.charId) || null) : null;
+            return (
+              <div key={gc.id} onClick={() => onOpenGroup(gc)} style={{
+                display:'flex', gap:12, padding:'12px 16px', borderBottom:`1px solid ${C.border}`,
+                cursor:'pointer', alignItems:'center',
+              }}>
+                <div style={{position:'relative', width:48, height:48, flexShrink:0}}>
+                  {memberChars.slice(0,2).map((m,i) => (
+                    <div key={m.id} style={{position:'absolute', top: i===0?0:'auto', bottom: i===1?0:'auto', left: i===0?0:'auto', right: i===1?0:'auto'}}>
+                      <Avatar char={m} size={28}/>
+                    </div>
+                  ))}
+                </div>
+                <div style={{flex:1, minWidth:0}}>
+                  <span style={{fontWeight:700, fontSize:15, color:C.text}}>{gc.name}</span>
+                  <p style={{color:C.muted, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:2}}>
+                    {lastMsg ? `${lastSender?.name?.split(' ')[0] || 'Someone'}: ${lastMsg.text}` : 'Start the conversation'}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{padding:'10px 16px 4px'}}>
+            <span style={{color:C.muted, fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:1}}>Direct Messages</span>
+          </div>
+        </>
+      )}
+
+      {/* DMs */}
+      {charsWithGmz.map(char => {
+        const msgs = dms[char.id] || [];
+        const last = msgs[msgs.length - 1];
+        const notifCount = dmNotifs[char.id] || 0;
+        const hasUnread = notifCount > 0;
+        return (
+          <div key={char.id} onClick={() => { onOpenChat(char); setDmNotifs && setDmNotifs(n => ({...n, [char.id]: 0})); }} style={{
+            display:'flex', gap:12, padding:'14px 16px', borderBottom:`1px solid ${C.border}`,
+            cursor:'pointer', alignItems:'center', background: hasUnread ? C.card2 : 'transparent',
+          }}>
+            <div style={{position:'relative'}}>
+              <Avatar char={char} size={48} />
+              <div style={{position:'absolute', bottom:0, right:0, background:C.purple, borderRadius:'50%', width:16, height:16, display:'flex', alignItems:'center', justifyContent:'center', border:`2px solid ${C.bg}`}}>
+                <span style={{fontSize:8}}>✦</span>
+              </div>
+            </div>
+            <div style={{flex:1, minWidth:0}}>
+              <div style={{display:'flex', alignItems:'center', gap:4}}>
+                <span style={{fontWeight: hasUnread ? 800 : 700, fontSize:15, color:C.text}}>{char.name}</span>
+                <CharBadge char={char} />
+              </div>
+              <p style={{color: hasUnread ? C.text : C.muted, fontWeight: hasUnread ? 600 : 400, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:2}}>
+                {last ? (last.role === 'char' ? last.text : `You: ${last.text}`) : `Say hi to ${char.name.split(' ')[0]}...`}
+              </p>
+            </div>
+            {hasUnread && (
+              <div style={{background:'#e91e8c', borderRadius:'50%', width:20, height:20, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', flexShrink:0}}>
+                {notifCount}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <button style={{
+        position:'fixed', bottom:80, right:20, background:C.blue, color:'#fff', border:'none',
+        borderRadius:'50%', width:52, height:52, fontSize:24, cursor:'pointer',
+        display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(77,171,247,0.4)',
+      }}>+</button>
+    </div>
+  );
+}
+
+// ─── Chat Screen ──────────────────────────────────────────────────
+function buildSystemPrompt(char, player, allChars, feed, dms) {
+  // Recent feed posts (last 12, newest first)
+  const recentPosts = [...feed].slice(0, 12).map(p => {
+    const poster = allChars.find(c => c.id === p.charId);
+    const lines = [`@${poster?.handle || p.charId}: "${p.text}"`];
+    if (p.reply) {
+      const replier = allChars.find(c => c.id === p.reply.charId);
+      lines.push(`  ↳ @${replier?.handle || p.reply.charId} replied: "${p.reply.text}"`);
+    }
+    return lines.join('\n');
+  }).join('\n');
+
+  // Relationships with other chars
+  const relLines = allChars
+    .filter(c => c.id !== char.id)
+    .map(c => {
+      const val = char.relationships?.[c.id];
+      const feel = val === undefined ? 'neutral' : val > 60 ? 'close friends / very positive' : val > 20 ? 'friendly' : val > 0 ? 'acquaintances' : val > -30 ? 'tense / complicated' : 'enemies / strongly negative';
+      return `- ${c.name} (@${c.handle}): ${feel}${val !== undefined ? ` (${val > 0 ? '+':''}${val}%)` : ''}`;
+    }).join('\n');
+
+  // Past DM history summary (only if exists)
+  const pastMsgs = (dms[char.id] || []);
+  const historyNote = pastMsgs.length > 0
+    ? `\nYou and ${player.name} have been talking. Here are your recent exchanges — reference them naturally if relevant:\n` +
+      pastMsgs.slice(-10).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n')
+    : '';
+
+  return `You are ${char.name} (@${char.handle}), a real person with a social media presence.
+
+PERSONALITY: ${char.personality}
+BIO: ${char.bio}
+FULL DESCRIPTION: ${char.description}
+
+YOUR RELATIONSHIPS WITH OTHERS:
+${relLines || 'No known relationships yet.'}
+
+WHAT'S BEEN HAPPENING ON THE FEED RECENTLY:
+${recentPosts || 'Nothing yet.'}
+${historyNote}
+
+You are now in a private DM with ${player.name} (@${player.handle}).
+
+RULES:
+- Stay completely in character. Never break the fourth wall or mention being an AI.
+- Be brief: 1-3 sentences max unless pushed.
+- Reference the feed naturally if it's relevant — bring up posts, gossip, what others did.
+- Remember what ${player.name} has told you in this conversation.
+- Your personality drives EVERYTHING: tone, vocabulary, what you care about, what you ignore.
+- React to ${player.name}'s messages the way YOUR character would — not generically.
+${BANNED_PHRASES_RULE}`;
+}
+
+function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const msgs = dms[char.id] || [];
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    if (bottomRef.current) bottomRef.current.scrollTop = 9999;
+  }, [msgs]);
+
+  async function send() {
+    if (!input.trim() || loading) return;
+    const userMsg = { role:'user', text: input.trim(), id: Date.now() };
+    const newMsgs = [...msgs, userMsg];
+    setDms(d => ({ ...d, [char.id]: newMsgs }));
+    setInput('');
+    setLoading(true);
+    try {
+      // Smart silence: reserved/quiet chars sometimes don't reply
+      const quietPersonalities = ['reserved', 'quiet', 'deadpan', 'minimal'];
+      const isQuiet = quietPersonalities.some(q => (char.personality||'').toLowerCase().includes(q));
+      const silenceChance = isQuiet ? 0.25 : 0.08;
+      if (Math.random() < silenceChance && msgs.length > 0) {
+        // Show "seen" indicator after a delay
+        setTimeout(() => {
+          setDms(d => ({ ...d, [`${char.id}_seen`]: true }));
+          setLoading(false);
+        }, 1800);
+        return;
+      }
+      const systemPrompt = buildSystemPrompt(char, player, allChars, feed, dms);
+      const history = newMsgs.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+      const reply = await window.claude.complete({
+        messages: [
+          { role:'user', content: systemPrompt },
+          { role:'assistant', content: `Understood. I'm ${char.name} and I'm fully in character.` },
+          ...history,
+        ]
+      });
+      const charMsg = { role:'char', text: reply, id: Date.now()+1 };
+      setDms(d => ({ ...d, [char.id]: [...(d[char.id]||[]), charMsg] }));
+    } catch(e) {
+      const errMsg = { role:'char', text: '...', id: Date.now()+1 };
+      setDms(d => ({ ...d, [char.id]: [...(d[char.id]||[]), errMsg] }));
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+      {/* Header */}
+      <div style={{padding:'12px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:12}}>
+        <button onClick={onBack} style={{background:'none', border:'none', color:C.blue, fontSize:16, cursor:'pointer', padding:'0 4px 0 0'}}>‹</button>
+        <Avatar char={char} size={36} />
+        <div>
+          <div style={{display:'flex', alignItems:'center', gap:4}}>
+            <span style={{fontWeight:700, color:C.text}}>{char.name}</span>
+            <CharBadge char={char} />
+          </div>
+          <span style={{color:C.muted, fontSize:12}}>@{char.handle}</span>
+        </div>
+      </div>
+      {/* Messages */}
+      <div ref={bottomRef} style={{flex:1, overflowY:'auto', padding:'16px', display:'flex', flexDirection:'column', gap:10}}>
+        {msgs.length === 0 && (
+          <div style={{textAlign:'center', color:C.muted, fontSize:14, marginTop:40}}>
+            <div style={{fontSize:40, marginBottom:8}}><Avatar char={char} size={60} /></div>
+            <p style={{marginTop:8}}><strong style={{color:C.text}}>{char.name}</strong></p>
+            <p style={{marginTop:4, fontSize:13}}>{char.bio}</p>
+            <p style={{marginTop:12, fontSize:12}}>Start a conversation</p>
+          </div>
+        )}
+        {msgs.map(m => (
+          <div key={m.id} style={{display:'flex', flexDirection: m.role === 'user' ? 'row-reverse' : 'row', gap:8, alignItems:'flex-end'}}>
+            {m.role !== 'user' && <Avatar char={char} size={28} />}
+            <div style={{
+              maxWidth:'75%', padding:'10px 14px', borderRadius: m.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+              background: m.role === 'user' ? C.blue : C.card2, color:'#fff', fontSize:14, lineHeight:1.5,
+            }}>{m.text}</div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{display:'flex', gap:8, alignItems:'flex-end'}}>
+            <Avatar char={char} size={28} />
+            <div style={{padding:'10px 16px', borderRadius:'18px 18px 18px 4px', background:C.card2, color:C.muted, fontSize:14}}>
+              <span style={{animation:'blink 1s infinite'}}>···</span>
+            </div>
+          </div>
+        )}
+        {!loading && dms[`${char.id}_seen`] && msgs.length > 0 && msgs[msgs.length-1].role === 'user' && (
+          <div style={{textAlign:'right', color:C.muted, fontSize:11, padding:'0 4px'}}>Seen ✓</div>
+        )}
+      </div>
+      {/* Input */}
+      <div style={{padding:'10px 12px', borderTop:`1px solid ${C.border}`, display:'flex', gap:8, alignItems:'flex-end'}}>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+          placeholder={`Message ${char.name.split(' ')[0]}...`}
+          style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, borderRadius:20, padding:'10px 14px', color:C.text, fontSize:14, outline:'none'}} />
+        <button onClick={send} disabled={!input.trim() || loading} style={{
+          background: input.trim() ? C.blue : '#333', border:'none', borderRadius:'50%', width:38, height:38,
+          color:'#fff', cursor: input.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+        }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Profile Screen ───────────────────────────────────────────────
+function ProfileScreen({ player, chars, onEditChar, onCreateChar, onCharClick, onShowLog }) {
+  const relationships = chars.map(c => ({
+    char: c,
+    value: (c.relationships?.player ?? Math.round(Math.random()*80 - 20)),
+  }));
+
+  return (
+    <div style={{flex:1, overflowY:'auto'}}>
+      {/* Header banner */}
+      <div style={{height:140, background:'linear-gradient(135deg, #1a1a2e, #2a1a4e, #1a2e1a)', position:'relative', display:'flex', alignItems:'flex-end', padding:'0 16px 0'}}>
+        <div style={{position:'absolute', top:12, right:12, display:'flex', gap:8}}>
+          <div style={{background:'rgba(0,0,0,0.5)', borderRadius:8, padding:'4px 8px', cursor:'pointer', color:C.muted}}>⚙️</div>
+        </div>
+        <div style={{position:'absolute', bottom:-28, left:16}}>
+          <div style={{border:`3px solid ${C.bg}`, borderRadius:'50%'}}>
+            <Avatar char={player} size={64} />
+          </div>
+        </div>
+      </div>
+      <div style={{padding:'36px 16px 16px'}}>
+        <div style={{display:'flex', justifyContent:'flex-end', marginBottom:12}}>
+          <button onClick={() => onEditChar(player)} style={{background:'none', border:`1px solid ${C.border}`, color:C.text, borderRadius:20, padding:'6px 18px', fontSize:13, cursor:'pointer'}}>Edit profile</button>
+        </div>
+        <div style={{display:'flex', alignItems:'center', gap:6}}>
+          <h2 style={{color:C.text, fontSize:20, fontWeight:700}}>{player.name}</h2>
+          <CharBadge char={player} />
+        </div>
+        <p style={{color:C.muted, fontSize:14}}>@{player.handle}</p>
+        <p style={{color:C.text, fontSize:14, marginTop:8, lineHeight:1.5}}>{player.bio}</p>
+        <p style={{color:C.text, fontSize:14, marginTop:8}}><strong style={{color:C.text}}>{fmt(player.followers)}</strong> <span style={{color:C.muted}}>Followers</span></p>
+
+        <div style={{display:'flex', gap:10, marginTop:16}}>
+          <button onClick={onShowLog} style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, color:C.text, borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
+            📋 Actions Log
+          </button>
+          <button style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, color:C.text, borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
+            🎭 Characters
+          </button>
+        </div>
+
+        {/* Social Presence */}
+        <div style={{marginTop:20}}>
+          <h3 style={{color:C.text, fontSize:15, fontWeight:700, marginBottom:10}}>Social Presence</h3>
+          <div style={{background:C.card2, borderRadius:12, padding:'14px'}}>
+            {[['😂','Humor',240.9,'#4dabf7'],['⭐','Aura',170.4,'#22c55e'],['🔥','Drama',88.2,'#f97316']].map(([icon,label,val,color]) => (
+              <div key={label} style={{marginBottom:14, lastChild:{marginBottom:0}}}>
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
+                  <span style={{color:C.text, fontSize:13}}>{icon} {label}</span>
+                  <span style={{color:color, fontSize:12, fontWeight:700}}>{val}%</span>
+                </div>
+                <div style={{height:8, background:'#333', borderRadius:4, overflow:'hidden'}}>
+                  <div style={{width:`${Math.min((val/300)*100,100)}%`, height:'100%', background:color, borderRadius:4}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Relationships */}
+        <div style={{marginTop:20}}>
+          <h3 style={{color:C.text, fontSize:15, fontWeight:700, marginBottom:10}}>Relationships ({chars.length})</h3>
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {relationships.map(({char, value}) => (
+              <div key={char.id} onClick={() => onCharClick(char)} style={{background:C.card2, borderRadius:12, padding:'12px 14px', cursor:'pointer', display:'flex', gap:10, alignItems:'center'}}>
+                <Avatar char={char} size={42} />
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{display:'flex', alignItems:'center', gap:4}}>
+                    <span style={{fontWeight:700, color:C.text, fontSize:14}}>{char.name}</span>
+                    <CharBadge char={char} />
+                  </div>
+                  <p style={{color:C.muted, fontSize:12}}>@{char.handle}</p>
+                  <RelBar value={value} />
+                </div>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill={C.muted}><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* My Characters */}
+        <div style={{marginTop:20, marginBottom:20}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
+            <h3 style={{color:C.text, fontSize:15, fontWeight:700}}>My Characters</h3>
+            <button onClick={onCreateChar} style={{background:C.blue, color:'#fff', border:'none', borderRadius:16, padding:'4px 12px', fontSize:12, cursor:'pointer'}}>+ Create</button>
+          </div>
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {chars.map(char => (
+              <div key={char.id} style={{background:C.card2, borderRadius:12, padding:'12px 14px', display:'flex', gap:10, alignItems:'center'}}>
+                <Avatar char={char} size={42} />
+                <div style={{flex:1}}>
+                  <div style={{display:'flex', alignItems:'center', gap:4}}>
+                    <span style={{fontWeight:700, color:C.text, fontSize:14}}>{char.name}</span>
+                    <CharBadge char={char} />
+                  </div>
+                  <p style={{color:C.muted, fontSize:12}}>@{char.handle}</p>
+                </div>
+                <button onClick={() => onEditChar(char)} style={{background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:12, padding:'4px 10px', fontSize:12, cursor:'pointer'}}>Edit</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Scene system ─────────────────────────────────────────────────
+const SCENE_SETTINGS = [
+  { id:'astronomy', label:'Astronomy Tower', sub:'Late night, just the two of you', emoji:'🌙' },
+  { id:'greathall', label:'Great Hall', sub:'Dinner rush, everyone watching', emoji:'🍽️' },
+  { id:'library', label:'Library', sub:'After hours, quiet and close', emoji:'📚' },
+  { id:'commonroom', label:'Common Room', sub:'Empty, fire dying down', emoji:'🔥' },
+  { id:'corridor', label:'Dark Corridor', sub:'Ran into each other, no witnesses', emoji:'🚪' },
+  { id:'hogsmeade', label:'Hogsmeade', sub:'Three Broomsticks, butterbeer', emoji:'🍺' },
+  { id:'broomcloset', label:'Broom Closet', sub:'Absolutely no one can know', emoji:'🧹' },
+  { id:'quidditch', label:'Quidditch Pitch', sub:'After practice, everyone else gone', emoji:'🏆' },
+];
+const SCENE_VIBES = [
+  { id:'catchup',  label:'Catching up',       emoji:'💬', color:'#4dabf7' },
+  { id:'drama',    label:'Stirring drama',     emoji:'🌪️', color:'#9d5cff' },
+  { id:'flirty',   label:'Flirty tension',     emoji:'🌶️', color:'#f97316' },
+  { id:'fight',    label:'Heated argument',    emoji:'⚡', color:'#ef4444' },
+  { id:'more',     label:'Something more…',   emoji:'🔥', color:'#e91e8c' },
+];
+
+function SceneSetupModal({ char, player, onClose, onStart }) {
+  const [step, setStep] = useState('setup'); // setup | invite | declined
+  const [setting, setSetting] = useState(null);
+  const [vibe, setVibe] = useState(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteResponse, setInviteResponse] = useState(null);
+
+  async function sendInvite() {
+    if (!setting || !vibe) return;
+    setInviteLoading(true);
+    setStep('invite');
+    try {
+      const res = await window.claude.complete({
+        messages:[{ role:'user', content:
+          `You are ${char.name} (@${char.handle}). Personality: ${char.personality}. Description: ${char.description?.slice(0,200)||char.bio}.
+${player.name} (@${player.handle}) just invited you to: ${setting.label} — "${setting.sub}" — vibe: ${vibe.label}.
+Respond in character to this invitation. Be natural, in-character, and specific. 1-2 sentences max. You can accept with enthusiasm, accept with attitude, be ambiguous/coy, or decline (but only if it really fits your personality). NO quotes around your response, just what you'd actually text back.` }]
+      });
+      setInviteResponse(res.trim().replace(/^["']|["']$/g,''));
+      // Detect decline — if response contains "can't", "won't", "no", "not tonight", "busy" etc.
+      const lower = res.toLowerCase();
+      const declined = ['can\'t', 'won\'t', 'not tonight', 'busy', 'not interested', 'leave me', 'go away'].some(w => lower.includes(w)) && !lower.includes('can\'t wait') && !lower.includes('won\'t be late');
+      if (declined) setStep('declined');
+      else setStep('accepted');
+    } catch(e) {
+      setInviteResponse('...fine. But this doesn\'t mean anything.');
+      setStep('accepted');
+    }
+    setInviteLoading(false);
+  }
+
+  return (
+    <div style={{position:'absolute', inset:0, zIndex:200, display:'flex', flexDirection:'column', justifyContent:'flex-end'}}>
+      <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.75)', backdropFilter:'blur(6px)'}} onClick={onClose}/>
+      <div style={{position:'relative', background:C.card, borderRadius:'24px 24px 0 0', padding:'24px 18px 40px', maxHeight:'88%', overflowY:'auto'}}>
+        <div style={{width:36, height:4, background:C.border, borderRadius:2, margin:'0 auto 20px'}}/>
+        <button onClick={onClose} style={{position:'absolute', top:18, right:18, background:C.card2, border:'none', color:C.muted, borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:15, display:'flex', alignItems:'center', justifyContent:'center'}}>×</button>
+
+        {step === 'setup' && <>
+          <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:20}}>
+            <Avatar char={char} size={36}/>
+            <div>
+              <p style={{color:C.text, fontWeight:700, fontSize:15}}>Invite {char.name.split(' ')[0]}</p>
+              <p style={{color:C.muted, fontSize:12}}>Pick a setting and a vibe</p>
+            </div>
+          </div>
+
+          <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>WHERE</p>
+          <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
+            {SCENE_SETTINGS.map(s => (
+              <button key={s.id} onClick={() => setSetting(s)} style={{
+                display:'flex', alignItems:'center', gap:12, background: setting?.id===s.id ? `${C.blue}18` : C.card2,
+                border:`1.5px solid ${setting?.id===s.id ? C.blue : C.border}`, borderRadius:12,
+                padding:'10px 14px', cursor:'pointer', textAlign:'left', transition:'all 0.15s',
+              }}>
+                <span style={{fontSize:20}}>{s.emoji}</span>
+                <div>
+                  <p style={{color:C.text, fontSize:13, fontWeight:600}}>{s.label}</p>
+                  <p style={{color:C.muted, fontSize:11}}>{s.sub}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>VIBE</p>
+          <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:24}}>
+            {SCENE_VIBES.map(v => (
+              <button key={v.id} onClick={() => setVibe(v)} style={{
+                display:'flex', alignItems:'center', gap:6,
+                background: vibe?.id===v.id ? `${v.color}20` : C.card2,
+                border:`1.5px solid ${vibe?.id===v.id ? v.color : C.border}`,
+                borderRadius:20, padding:'7px 14px', cursor:'pointer', transition:'all 0.15s',
+              }}>
+                <span style={{fontSize:14}}>{v.emoji}</span>
+                <span style={{color: vibe?.id===v.id ? v.color : C.text, fontSize:13, fontWeight:600}}>{v.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <button onClick={sendInvite} disabled={!setting || !vibe} style={{
+            width:'100%', background: (setting && vibe) ? C.text : C.card2,
+            color: (setting && vibe) ? C.bg : C.muted,
+            border:'none', borderRadius:14, padding:'14px', fontSize:15, fontWeight:700,
+            cursor: (setting && vibe) ? 'pointer' : 'default', transition:'all 0.2s',
+          }}>Send invite</button>
+        </>}
+
+        {step === 'invite' && inviteLoading && (
+          <div style={{textAlign:'center', padding:'40px 0'}}>
+            <Avatar char={char} size={54}/>
+            <p style={{color:C.muted, fontSize:14, marginTop:16}}>Waiting to hear back…</p>
+          </div>
+        )}
+
+        {(step === 'accepted' || step === 'declined') && inviteResponse && (
+          <div>
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:20}}>
+              <Avatar char={char} size={40}/>
+              <div>
+                <p style={{color:C.text, fontWeight:700}}>{char.name.split(' ')[0]}</p>
+                <p style={{color:C.muted, fontSize:12}}>@{char.handle}</p>
+              </div>
+            </div>
+            <div style={{background:C.card2, borderRadius:14, padding:'14px 16px', marginBottom:20}}>
+              <p style={{color:C.text, fontSize:15, lineHeight:1.65, fontStyle:'italic'}}>"{inviteResponse}"</p>
+            </div>
+            {step === 'accepted' ? (
+              <button onClick={() => onStart(char, setting, vibe)} style={{
+                width:'100%', background:C.blue, color:'#fff', border:'none',
+                borderRadius:14, padding:'14px', fontSize:15, fontWeight:700, cursor:'pointer',
+              }}>Start the scene →</button>
+            ) : (
+              <button onClick={onClose} style={{
+                width:'100%', background:C.card2, color:C.muted, border:`1px solid ${C.border}`,
+                borderRadius:14, padding:'14px', fontSize:15, fontWeight:600, cursor:'pointer',
+              }}>Maybe another time</button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SceneChatScreen({ char, player, setting, vibe, onClose }) {
+  const [msgs, setMsgs] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    if (bottomRef.current) bottomRef.current.scrollTop = 9999;
+  }, [msgs]);
+
+  // Opening line from character
+  useEffect(() => {
+    async function openingLine() {
+      setLoading(true);
+      // Short delay before first line — feels like they just arrived
+      await new Promise(res => setTimeout(res, 2000 + Math.random()*3000));
+      try {
+        const res = await window.claude.complete({
+          messages:[{ role:'user', content: buildScenePrompt('') + '\n\nOpen the scene with a single line. Format: actions in *third person asterisks*, spoken words in "quotes". Hints at inner state through physical tells only — never state thoughts directly. Short and atmospheric.' }]
+        });
+        setMsgs([{ role:'char', text: res.trim().replace(/^["']|["']$/g,''), id: Date.now() }]);
+      } catch(e) {
+        setMsgs([{ role:'char', text: '*glances over, says nothing for a moment.*', id: Date.now() }]);
+      }
+      setLoading(false);
+    }
+    openingLine();
+  }, []);
+
+  function buildScenePrompt(history) {
+    return `You are ${char.name} (@${char.handle}). Personality: ${char.personality}. ${char.description?.slice(0,200)||char.bio}
+
+SCENE: ${setting.label} — ${setting.sub}
+VIBE: ${vibe.label} ${vibe.emoji}
+OTHER PERSON: ${player.name} (@${player.handle}) — ${player.bio}
+
+RESPONSE FORMAT — follow this exactly:
+- Actions go in italics asterisks, third person: *She glances up slowly, saying nothing at first.*
+- Spoken dialogue goes in double quotes: "You're late."
+- Thoughts are NEVER stated directly. At most a very brief physical tell that hints at them: *something flickers across her face* — not "she thinks" or "she wonders".
+- A response might be just dialogue, just an action, or both — whatever feels natural.
+- Keep it SHORT: 1-3 lines total. This is live conversation, not a story.
+- Stay completely in character — personality: ${char.personality}.
+- The vibe is ${vibe.label}. Honor it.
+- If the player writes [something in brackets], treat it as a physical action and react naturally.
+${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
+${BANNED_PHRASES_RULE}`;
+  }
+
+  async function send() {
+    if (!input.trim() || loading) return;
+    const userMsg = { role:'user', text: input.trim(), id: Date.now() };
+    setMsgs(prev => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+    // Realistic typing delay: 4-8 seconds
+    const typingDelay = 4000 + Math.random() * 4000;
+    await new Promise(res => setTimeout(res, typingDelay));
+    try {
+      const history = [...msgs, userMsg].map(m =>
+        m.role === 'user' ? `${player.name}: "${m.text}"` : `${char.name}: ${m.text}`
+      ).join('\n');
+      const res = await window.claude.complete({
+        messages:[{ role:'user', content: buildScenePrompt(history) + `\n\nRespond to: "${userMsg.text}"\nFormat: actions in *third person asterisks*, dialogue in "quotes". No narration. No inner monologue spelled out.` }]
+      });
+      const cleaned = res.trim().replace(/^["']|["']$/g,'');
+      setMsgs(prev => [...prev, { role:'char', text: cleaned, id: Date.now()+1 }]);
+    } catch(e) {}
+    setLoading(false);
+  }
+
+  const vibeColor = vibe.color;
+
+  return (
+    <div style={{position:'absolute', inset:0, zIndex:200, display:'flex', flexDirection:'column', background:C.bg}}>
+      {/* Header */}
+      <div style={{padding:'12px 16px', borderBottom:`1px solid ${C.border}`, background:C.bg, display:'flex', alignItems:'center', gap:10}}>
+        <button onClick={onClose} style={{background:'none', border:'none', color:C.blue, fontSize:22, cursor:'pointer', lineHeight:1}}>×</button>
+        <Avatar char={char} size={34}/>
+        <div style={{flex:1}}>
+          <p style={{color:C.text, fontWeight:700, fontSize:14}}>{char.name.split(' ')[0]}</p>
+          <p style={{color:C.muted, fontSize:11}}>{setting.emoji} {setting.label}</p>
+        </div>
+        <div style={{background:`${vibeColor}18`, border:`1px solid ${vibeColor}44`, borderRadius:20, padding:'4px 10px', display:'flex', alignItems:'center', gap:4}}>
+          <span style={{fontSize:12}}>{vibe.emoji}</span>
+          <span style={{color:vibeColor, fontSize:11, fontWeight:600}}>{vibe.label}</span>
+        </div>
+      </div>
+
+      {/* Scene setting banner */}
+      <div style={{padding:'10px 16px', background:C.card2, borderBottom:`1px solid ${C.border}`}}>
+        <p style={{color:C.muted, fontSize:12, textAlign:'center'}}>{setting.sub}</p>
+      </div>
+
+      {/* Messages */}
+      <div ref={bottomRef} style={{flex:1, overflowY:'auto', padding:'16px 14px', display:'flex', flexDirection:'column', gap:12}}>
+        {msgs.map(m => {
+          const isMe = m.role === 'user';
+          return (
+            <div key={m.id} style={{display:'flex', flexDirection: isMe?'row-reverse':'row', gap:8, alignItems:'flex-end'}}>
+              {!isMe && <Avatar char={char} size={28}/>}
+              {isMe && <Avatar char={player} size={28}/>}
+              <div style={{
+                maxWidth:'76%', padding:'10px 14px',
+                borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                background: isMe ? C.blue : C.card2,
+                color: isMe ? '#fff' : C.text,
+                fontSize:14, lineHeight:1.7,
+              }}>
+                {isMe ? m.text : m.text.split(/(\*[^*]+\*)/g).map((part, i) =>
+                  part.startsWith('*') && part.endsWith('*')
+                    ? <em key={i} style={{color:C.muted, fontStyle:'italic', fontSize:13}}>{part.slice(1,-1)}</em>
+                    : <span key={i}>{part}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {loading && (
+          <div style={{display:'flex', gap:8, alignItems:'flex-end'}}>
+            <Avatar char={char} size={28}/>
+            <div style={{background:C.card2, borderRadius:'18px 18px 18px 4px', padding:'10px 16px'}}>
+              <div style={{display:'flex', gap:4, alignItems:'center'}}>
+                {[0,1,2].map(i => <div key={i} style={{width:6, height:6, borderRadius:'50%', background:C.muted, opacity:0.6, animation:`pulse 1.2s ${i*0.2}s infinite`}}/>)}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div style={{padding:'10px 12px', borderTop:`1px solid ${C.border}`, background:C.bg, display:'flex', gap:8, alignItems:'flex-end'}}>
+        <div style={{flex:1, background:C.card2, borderRadius:20, border:`1px solid ${input.trim() ? vibeColor+'66' : C.border}`, padding:'10px 14px', transition:'border-color 0.2s'}}>
+          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key==='Enter' && send()}
+            placeholder="Say something… or [do something]"
+            style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:14, outline:'none'}}
+          />
+        </div>
+        <button onClick={send} disabled={!input.trim() || loading} style={{
+          background: input.trim() ? vibeColor : C.card2, color:'#fff', border:'none',
+          borderRadius:'50%', width:40, height:40, cursor: input.trim() ? 'pointer' : 'default',
+          display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:18,
+          transition:'background 0.2s',
+        }}>→</button>
+      </div>
+      <style>{`@keyframes pulse { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }`}</style>
+    </div>
+  );
+}
+
+// ─── Character Profile Screen ─────────────────────────────────────
+const CHEMISTRY_LABELS = {
+  default: 'Chaos Co-Conspirators',
+  rivals: 'Sworn Rivals with Unresolved Tension',
+  spicy: 'Spicy Situationship Energy',
+  lovers: 'Star-Crossed Lovers',
+  enemies: 'Enemies with Very Bad Ideas',
+  friends: 'Ride-or-Die Friends',
+};
+const CHEMISTRY_CHIPS = [
+  {id:'rivals', icon:'⚔️', label:'Rivals'},
+  {id:'spicy', icon:'🌶️', label:'Spicy'},
+  {id:'lovers', icon:'💕', label:'Lovers'},
+  {id:'enemies', icon:'😈', label:'Enemies'},
+  {id:'friends', icon:'🤝', label:'Friends'},
+];
+
+function CharProfileScreen({ char, player, onBack, onDM, feed, allChars, onOpenThread }) {
+  const rel = 45 + (char.id.charCodeAt(0) % 40);
+  const [following, setFollowing] = useState(false);
+  const [chemOpen, setChemOpen] = useState(false);
+  const [chemistry, setChemistry] = useState('default');
+  const [feelingExpanded, setFeelingExpanded] = useState(false);
+  const [feeling, setFeeling] = useState(null);
+  const [feelingLoading, setFeelingLoading] = useState(false);
+  const [showSceneSetup, setShowSceneSetup] = useState(false);
+  const [activeScene, setActiveScene] = useState(null); // {setting, vibe}
+
+  // Only show Scene button for real AI characters (not bots/GMZ)
+  const isAIChar = !!char.description && char.id !== '__gmz__';
+
+  const charPosts = feed.filter(p => p.charId === char.id);
+  const [vibes, setVibes] = useState([]);
+  const [vibesLoading, setVibesLoading] = useState(false);
+
+  useEffect(() => {
+    async function loadFeeling() {
+      setFeelingLoading(true);
+      try {
+        const recentContext = feed.slice(0,10).map(p => {
+          const poster = allChars.find(c=>c.id===p.charId);
+          return `@${poster?.handle||p.charId}: "${p.text}"`;
+        }).join('\n');
+        const f = await window.claude.complete({
+          messages:[{ role:'user', content:`You are ${char.name} (@${char.handle}). Personality: ${char.personality}. Description: ${char.description?.slice(0,200)||''}.
+The player is ${player.name} (@${player.handle}) — ${player.bio}.
+Recent campus posts:\n${recentContext}
+
+In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. First person, in character.` }]
+        });
+        setFeeling(f);
+      } catch(e) {
+        setFeeling('Watching everything unfold from a safe distance. Loving it.');
+      }
+      setFeelingLoading(false);
+    }
+
+    async function loadVibes() {
+      setVibesLoading(true);
+      try {
+        const recentContext = feed.slice(0,12).map(p => {
+          const poster = allChars.find(c=>c.id===p.charId);
+          return `@${poster?.handle||p.charId}: "${p.text}"`;
+        }).join('\n');
+        const res = await window.claude.complete({
+          messages:[{ role:'user', content:`You are analyzing ${char.name}'s current emotional state toward ${player.name} based on their personality and recent campus activity.
+
+${char.name} personality: ${char.personality}
+${char.name} description: ${char.description?.slice(0,200)||char.bio}
+Recent campus posts:\n${recentContext}
+
+Return ONLY a JSON array of 2-4 vibe objects, each with:
+- "label": short phrase (2-4 words, e.g. "lowkey obsessed", "genuinely irritated", "pretending not to care", "slightly jealous", "grudging respect", "chaotic energy", "watching closely")
+- "color": one of "blue", "green", "red", "purple", "yellow", "orange"
+- "emoji": single relevant emoji
+
+Example: [{"label":"lowkey obsessed","color":"purple","emoji":"👀"},{"label":"grudging respect","color":"green","emoji":"🫡"}]
+Only output the JSON array, nothing else.` }]
+        });
+        const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
+        setVibes(parsed);
+      } catch(e) {
+        setVibes([{label:'watching closely', color:'blue', emoji:'👁️'}, {label:'hard to read', color:'purple', emoji:'🎭'}]);
+      }
+      setVibesLoading(false);
+    }
+
+    loadFeeling();
+    loadVibes();
+  }, [char.id]);
+
+  const relLabel = CHEMISTRY_LABELS[chemistry] || CHEMISTRY_LABELS.default;
+
+  return (
+    <div style={{flex:1, overflowY:'auto', position:'relative'}}>
+      {/* Banner */}
+      <div style={{height:160, background:`linear-gradient(160deg, #1a1a2e 0%, #2a1a${char.id.charCodeAt(0) % 2 === 0 ? '4e' : '2e'} 100%)`, position:'relative'}}>
+        <button onClick={onBack} style={{position:'absolute', top:12, left:12, background:'rgba(0,0,0,0.55)', border:'none', color:'#fff', borderRadius:'50%', width:34, height:34, cursor:'pointer', fontSize:20, display:'flex', alignItems:'center', justifyContent:'center'}}>‹</button>
+        <div style={{position:'absolute', bottom:-30, left:16, border:`3px solid ${C.bg}`, borderRadius:'50%'}}>
+          <Avatar char={char} size={66} />
+        </div>
+      </div>
+
+      <div style={{padding:'38px 16px 0'}}>
+        {/* Name row */}
+        <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:2}}>
+          <h2 style={{color:C.text, fontSize:20, fontWeight:700}}>{char.name}</h2>
+          <CharBadge char={char} />
+        </div>
+        <p style={{color:C.muted, fontSize:14}}>@{char.handle}</p>
+        <p style={{color:C.text, fontSize:14, marginTop:6, lineHeight:1.5}}>{char.bio}</p>
+        <p style={{marginTop:6, fontSize:14}}><strong style={{color:C.text}}>{fmt(char.followers)}</strong> <span style={{color:C.muted}}>Followers</span></p>
+
+        {/* Following / Message / Scene */}
+        <div style={{display:'flex', gap:10, marginTop:14}}>
+          <button onClick={() => setFollowing(f=>!f)} style={{
+            flex:1, background: following ? C.card2 : 'none',
+            border:`1.5px solid ${C.border}`, color:C.text,
+            borderRadius:25, padding:'10px', fontSize:14, fontWeight:600, cursor:'pointer',
+          }}>{following ? 'Following ✓' : 'Follow'}</button>
+          <button onClick={() => onDM(char)} style={{
+            flex:1, background:C.blue, border:'none', color:'#fff',
+            borderRadius:25, padding:'10px', fontSize:14, fontWeight:700, cursor:'pointer',
+          }}>Message</button>
+          {isAIChar && (
+            <button onClick={() => setShowSceneSetup(true)} style={{
+              flex:1, background:`${C.purple}20`, border:`1.5px solid ${C.purple}44`, color:C.purple,
+              borderRadius:25, padding:'10px', fontSize:14, fontWeight:700, cursor:'pointer',
+            }}>Scene</button>
+          )}
+        </div>
+
+        {/* Current Feeling */}
+        <div style={{marginTop:14, background:C.card2, borderRadius:14, padding:'14px 14px 12px'}}>
+          <div style={{marginBottom:10}}>
+            <span style={{color:C.text, fontWeight:700, fontSize:14}}>🗨️ Current Feeling</span>
+          </div>
+          {feelingLoading ? (
+            <p style={{color:C.muted, fontSize:13}}>Reading the room...</p>
+          ) : (
+            <>
+              <p style={{color:C.yellow, fontSize:13, lineHeight:1.6}}>
+                {feelingExpanded ? feeling : (feeling || '').slice(0, 80) + ((feeling||'').length > 80 ? '...' : '')}
+              </p>
+              {(feeling||'').length > 80 && (
+                <button onClick={() => setFeelingExpanded(e=>!e)} style={{background:'none', border:'none', color:C.yellow, fontSize:13, cursor:'pointer', padding:'4px 0', fontWeight:600}}>
+                  {feelingExpanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Vibe pills */}
+          {(vibesLoading || vibes.length > 0) && (
+            <div style={{marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}`}}>
+              {vibesLoading ? (
+                <p style={{color:C.muted, fontSize:12}}>Vibing...</p>
+              ) : (
+                <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+                  {vibes.map((v, i) => {
+                    const colorMap = { blue:C.blue, green:C.green, red:C.red, purple:C.purple, yellow:C.yellow, orange:C.orange };
+                    const col = colorMap[v.color] || C.blue;
+                    return (
+                      <div key={i} style={{display:'flex', alignItems:'center', gap:4, background:`${col}18`, border:`1px solid ${col}44`, borderRadius:20, padding:'4px 10px'}}>
+                        <span style={{fontSize:12}}>{v.emoji}</span>
+                        <span style={{color:col, fontSize:12, fontWeight:600}}>{v.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Your Relationship */}
+        <div style={{marginTop:10, background:C.card2, borderRadius:14, padding:'14px'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+            <span style={{color:C.text, fontWeight:700, fontSize:14}}>💕 Your Relationship</span>
+          </div>
+          <p style={{color:C.yellow, fontSize:13, fontWeight:600, marginBottom:10}}>{relLabel}</p>
+          <RelBar value={rel} />
+          {/* Change chemistry */}
+          <div style={{marginTop:12, borderTop:`1px solid ${C.border}`, paddingTop:10}}>
+            <button onClick={() => setChemOpen(o=>!o)} style={{background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:8, width:'100%'}}>
+              <span style={{color:C.text, fontSize:13, fontWeight:600}}>Change chemistry</span>
+              <span style={{color:C.muted, marginLeft:'auto'}}>{chemOpen ? '▲' : '▼'}</span>
+            </button>
+            {chemOpen && (
+              <div style={{display:'flex', gap:8, marginTop:10, overflowX:'auto', paddingBottom:4}}>
+                {CHEMISTRY_CHIPS.map(chip => (
+                  <button key={chip.id} onClick={() => setChemistry(chip.id)} style={{
+                    background:'none', border:`1.5px dashed ${chemistry === chip.id ? C.blue : C.border}`,
+                    color: chemistry === chip.id ? C.blue : C.text,
+                    borderRadius:20, padding:'6px 14px', fontSize:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0,
+                  }}>{chip.icon} {chip.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Posts by char */}
+        <div style={{marginTop:16}}>
+          <h3 style={{color:C.text, fontSize:15, fontWeight:700, marginBottom:2}}>Posts by {char.name.split(' ')[0]}</h3>
+        </div>
+      </div>
+
+      {/* Character posts */}
+      {charPosts.length === 0 ? (
+        <p style={{color:C.muted, fontSize:13, padding:'16px', textAlign:'center'}}>No posts yet.</p>
+      ) : (
+        charPosts.map(post => (
+          <PostCard key={post.id} post={post} chars={allChars.filter(c=>c.id!==char.id)} player={char} onCharClick={()=>{}} onOpenThread={onOpenThread} />
+        ))
+      )}
+      <div style={{height:24}}/>
+
+      {/* Scene setup modal */}
+      {showSceneSetup && !activeScene && (
+        <SceneSetupModal
+          char={char} player={player}
+          onClose={() => setShowSceneSetup(false)}
+          onStart={(c, setting, vibe) => { setShowSceneSetup(false); setActiveScene({ setting, vibe }); }}
+        />
+      )}
+
+      {/* Active scene */}
+      {activeScene && (
+        <SceneChatScreen
+          char={char} player={player}
+          setting={activeScene.setting} vibe={activeScene.vibe}
+          onClose={() => setActiveScene(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Edit / Create Character Screen ──────────────────────────────
+function EditCharScreen({ char, onBack, onSave }) {
+  const isNew = !char.id;
+  const [form, setForm] = useState({
+    name: char.name || '',
+    handle: char.handle || '',
+    house: char.house || '',
+    bio: char.bio || '',
+    description: char.description || '',
+    personality: char.personality || '',
+    followers: char.followers || 1000000,
+    followerTier: '1mil+',
+  });
+
+  const tiers = ['100+','1k+','10k+','100k+','250k+','500k+','1mil+'];
+  const tierValues = { '100+':500, '1k+':5000, '10k+':50000, '100k+':200000, '250k+':400000, '500k+':800000, '1mil+':2000000 };
+  const houses = [
+    { id:'slytherin',  label:'Slytherin',  emoji:'🐍' },
+    { id:'gryffindor', label:'Gryffindor', emoji:'🦁' },
+    { id:'ravenclaw',  label:'Ravenclaw',  emoji:'🦅' },
+    { id:'hufflepuff', label:'Hufflepuff', emoji:'🦡' },
+  ];
+  const houseColor = form.house ? HOUSE_COLORS[form.house] : null;
+
+  function up(k,v) { setForm(f => ({...f, [k]:v})); }
+
+  return (
+    <div style={{flex:1, overflowY:'auto'}}>
+      <div style={{padding:'14px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:12}}>
+        <button onClick={onBack} style={{background:'none', border:'none', color:C.blue, fontSize:20, cursor:'pointer'}}>‹</button>
+        <h1 style={{color:C.text, fontSize:18, fontWeight:700}}>{isNew ? 'Create Character' : 'Edit Character'}</h1>
+      </div>
+
+      {/* Banner placeholder */}
+      <div style={{height:120, background: houseColor ? `linear-gradient(135deg, ${houseColor}88, ${houseColor}44)` : 'linear-gradient(135deg, #1a1a2e, #2a1a4e)', position:'relative', display:'flex', alignItems:'center', justifyContent:'center'}}>
+        <div style={{position:'absolute', bottom:-30, left:'50%', transform:'translateX(-50%)', background:C.card2, borderRadius:'50%', border:`3px solid ${houseColor || C.bg}`, width:68, height:68, display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, color: houseColor || C.text, boxShadow: houseColor ? `0 0 0 2px ${C.bg}, 0 0 16px ${houseColor}55` : 'none'}}>
+          {form.name ? form.name[0].toUpperCase() : '?'}
+          <div style={{position:'absolute', bottom:0, right:0, background:C.blue, borderRadius:'50%', width:22, height:22, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#fff', fontWeight:700}}>+</div>
+        </div>
+      </div>
+
+      <div style={{padding:'44px 16px 100px', display:'flex', flexDirection:'column', gap:16}}>
+        {[['Character Name','name','text'],['Handle','handle','text'],].map(([label, key, type]) => (
+          <div key={key}>
+            <label style={{color:C.muted, fontSize:13, marginBottom:6, display:'block'}}>{label}</label>
+            <input value={key==='handle' && form[key] && !form[key].startsWith('@') ? '@'+form[key] : form[key]}
+              onChange={e => up(key, key==='handle' ? e.target.value.replace('@','') : e.target.value)}
+              style={{width:'100%', background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, padding:'12px 14px', color:C.text, fontSize:14, outline:'none'}}
+              placeholder={key==='handle' ? '@handle' : label}
+            />
+          </div>
+        ))}
+
+        <div>
+          <label style={{color:C.muted, fontSize:13, marginBottom:8, display:'block'}}>House</label>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+            {houses.map(h => {
+              const active = form.house === h.id;
+              const hc = HOUSE_COLORS[h.id];
+              return (
+                <button key={h.id} onClick={() => up('house', active ? '' : h.id)} style={{
+                  background: active ? `${hc}22` : C.card2,
+                  border:`1px solid ${active ? hc : C.border}`,
+                  color: active ? hc : C.text,
+                  borderRadius:10, padding:'10px 12px', fontSize:14, cursor:'pointer',
+                  display:'flex', alignItems:'center', gap:8, fontWeight: active ? 700 : 500,
+                }}>
+                  <span style={{fontSize:18}}>{h.emoji}</span>{h.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label style={{color:C.muted, fontSize:13, marginBottom:6, display:'block'}}>Profile bio</label>
+          <textarea value={form.bio} onChange={e => up('bio', e.target.value)} maxLength={1000}
+            style={{width:'100%', background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, padding:'12px 14px', color:C.text, fontSize:14, outline:'none', resize:'none', minHeight:80}}
+            placeholder="Short bio..."
+          />
+          <div style={{textAlign:'right', color:C.muted, fontSize:11}}>{form.bio.length}/1000</div>
+        </div>
+
+        <div>
+          <label style={{color:C.muted, fontSize:13, marginBottom:6, display:'block'}}>Personality (comma-separated traits)</label>
+          <input value={form.personality} onChange={e => up('personality', e.target.value)}
+            style={{width:'100%', background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, padding:'12px 14px', color:C.text, fontSize:14, outline:'none'}}
+            placeholder="e.g. sarcastic, witty, bold"
+          />
+        </div>
+
+        <div>
+          <label style={{color:C.muted, fontSize:13, marginBottom:6, display:'block'}}>Description <span style={{color:'#555'}}>(optional)</span></label>
+          <p style={{color:C.muted, fontSize:12, marginBottom:8}}>Detailed personality, backstory, and relationships to influence their behavior.</p>
+          <textarea value={form.description} onChange={e => up('description', e.target.value)}
+            style={{width:'100%', background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, padding:'12px 14px', color:C.text, fontSize:14, outline:'none', resize:'none', minHeight:120}}
+            placeholder="Describe this character in detail..."
+          />
+        </div>
+
+        <div>
+          <label style={{color:C.muted, fontSize:13, marginBottom:10, display:'block'}}>Follower count</label>
+          <div style={{display:'flex', flexWrap:'wrap', gap:8}}>
+            {tiers.map(tier => (
+              <button key={tier} onClick={() => { up('followerTier', tier); up('followers', tierValues[tier]); }} style={{
+                background: form.followerTier === tier ? C.blue : 'none',
+                border:`1px solid ${form.followerTier === tier ? C.blue : C.border}`,
+                color: form.followerTier === tier ? '#fff' : C.text,
+                borderRadius:20, padding:'6px 14px', fontSize:13, cursor:'pointer',
+              }}>{tier}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{position:'sticky', bottom:0, padding:'12px 16px', background:C.bg, borderTop:`1px solid ${C.border}`}}>
+        <button onClick={() => onSave({...form, id: char.id || form.handle.replace('@','') || Date.now().toString()})} style={{
+          width:'100%', background:C.blue, color:'#fff', border:'none', borderRadius:25, padding:'14px', fontSize:15, fontWeight:700, cursor:'pointer',
+        }}>Save Changes</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Group Chat Screen ────────────────────────────────────────────
+const DEFAULT_GROUP_CHATS = [
+  { id:'gc1', name:'Slytherin Common Room 🐍', members:['zara','sienna'], messages:[
+    { role:'char', charId:'zara', text:'Anyone else notice @siennadrake has been weirdly nice lately. I\'m suspicious.', id:'gm1' },
+    { role:'char', charId:'sienna', text:'I\'m always this nice. You\'re just usually too annoying to notice.', id:'gm2' },
+  ]},
+  { id:'gc2', name:'Quidditch Drama 🏆', members:['eli','rook'], messages:[
+    { role:'char', charId:'eli', text:'that foul call was CRIMINAL and I will die on this hill', id:'gm3' },
+    { role:'char', charId:'rook', text:'you literally fouled first', id:'gm4' },
+    { role:'char', charId:'eli', text:'that is IRRELEVANT', id:'gm5' },
+  ]},
+];
+
+function GroupChatScreen({ group, chars, player, allChars, feed, dms, setGroupChats, onBack }) {
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msgs, setMsgs] = useState(group.messages || []);
+  const bottomRef = useRef(null);
+  const members = group.members.map(id => allChars.find(c => c.id === id)).filter(Boolean);
+
+  useEffect(() => { if (bottomRef.current) bottomRef.current.scrollTop = 9999; }, [msgs]);
+
+  async function send() {
+    if (!input.trim() || loading) return;
+    const userMsg = { role:'user', charId:'player', text: input.trim(), id: Date.now() };
+    const newMsgs = [...msgs, userMsg];
+    setMsgs(newMsgs);
+    setGroupChats(gs => gs.map(g => g.id === group.id ? {...g, messages: newMsgs} : g));
+    setInput('');
+    setLoading(true);
+
+    // Each member may respond, with some chance of silence
+    const recentFeed = feed.slice(0,5).map(p => {
+      const poster = allChars.find(c => c.id === p.charId);
+      return `@${poster?.handle}: "${p.text?.slice(0,60)}"`;
+    }).join('\n');
+
+    const historyStr = newMsgs.slice(-8).map(m => {
+      const sender = m.role === 'user' ? player : allChars.find(c => c.id === m.charId);
+      return `${sender?.name || 'Someone'}: "${m.text}"`;
+    }).join('\n');
+
+    let updatedMsgs = [...newMsgs];
+    for (const member of members) {
+      const quietTypes = ['reserved','quiet','deadpan','minimal'];
+      const isQuiet = quietTypes.some(q => (member.personality||'').includes(q));
+      if (Math.random() < (isQuiet ? 0.4 : 0.15)) continue; // sometimes they don't respond
+
+      try {
+        const otherMembers = members.filter(m => m.id !== member.id).map(m => `${m.name} (@${m.handle}): ${m.personality}`).join('; ');
+        const reply = await window.claude.complete({ messages:[{ role:'user', content:
+          `You are ${member.name} (@${member.handle}) in a group chat called "${group.name}".
+Personality: ${member.personality}. ${member.description?.slice(0,200)}
+Other people in this chat: ${otherMembers}, and ${player.name} (@${player.handle}).
+Recent campus feed:\n${recentFeed}
+Chat history:\n${historyStr}
+${player.name} just said: "${input}"
+Write your response (1-2 sentences, in character). Sometimes address specific people by @handle. Sometimes ignore the question and say something tangential. Be natural.` }]
+        });
+        const charMsg = { role:'char', charId: member.id, text: reply.trim().replace(/^["']|["']$/g,''), id: Date.now() + Math.random() };
+        updatedMsgs = [...updatedMsgs, charMsg];
+        setMsgs([...updatedMsgs]);
+        setGroupChats(gs => gs.map(g => g.id === group.id ? {...g, messages: [...updatedMsgs]} : g));
+        await new Promise(r => setTimeout(r, 800 + Math.random()*1200));
+      } catch(e) {}
+    }
+    setLoading(false);
+  }
+
+  const getChar = id => id === 'player' ? player : allChars.find(c => c.id === id);
+
+  return (
+    <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+      <div style={{padding:'12px 16px', borderBottom:`1px solid ${C.border}`, background:C.bg}}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <button onClick={onBack} style={{background:'none',border:'none',color:C.blue,fontSize:20,cursor:'pointer'}}>‹</button>
+          <div style={{display:'flex', marginRight:8}}>
+            {members.slice(0,3).map((m,i) => <div key={m.id} style={{marginLeft: i>0?-10:0, zIndex:3-i}}><Avatar char={m} size={32}/></div>)}
+          </div>
+          <div>
+            <div style={{color:C.text, fontWeight:700, fontSize:15}}>{group.name}</div>
+            <div style={{color:C.muted, fontSize:12}}>{members.map(m=>m.name.split(' ')[0]).join(', ')}</div>
+          </div>
+        </div>
+      </div>
+      <div ref={bottomRef} style={{flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:8}}>
+        {msgs.map(m => {
+          const sender = getChar(m.charId || (m.role === 'user' ? 'player' : null));
+          const isMe = m.role === 'user';
+          return (
+            <div key={m.id} style={{display:'flex', flexDirection: isMe?'row-reverse':'row', gap:8, alignItems:'flex-end'}}>
+              {!isMe && <Avatar char={sender} size={26}/>}
+              <div style={{maxWidth:'78%'}}>
+                {!isMe && <div style={{color:C.muted, fontSize:11, marginBottom:3, paddingLeft:4}}>{sender?.name?.split(' ')[0]}</div>}
+                <div style={{
+                  padding:'9px 13px', borderRadius: isMe?'16px 16px 4px 16px':'16px 16px 16px 4px',
+                  background: isMe ? C.blue : C.card2, color:'#fff', fontSize:13, lineHeight:1.5,
+                }}>{m.text}</div>
+              </div>
+            </div>
+          );
+        })}
+        {loading && <div style={{color:C.muted, fontSize:13, paddingLeft:8}}>Someone is typing...</div>}
+      </div>
+      <div style={{padding:'10px 12px', borderTop:`1px solid ${C.border}`, display:'flex', gap:8}}>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()}
+          placeholder="Message the group..."
+          style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, borderRadius:20, padding:'10px 14px', color:C.text, fontSize:14, outline:'none'}}/>
+        <button onClick={send} disabled={!input.trim()||loading} style={{
+          background:input.trim()?C.blue:'#333', border:'none', borderRadius:'50%', width:38, height:38,
+          color:'#fff', cursor:input.trim()?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+        }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Compose Post Modal ───────────────────────────────────────────
+function ComposeModal({ chars, player, onClose, onPost }) {
+  const [text, setText] = useState('');
+  const [photo, setPhoto] = useState(null);
+  const [selectedChar, setSelectedChar] = useState(player);
+  const allChars = [player, ...chars];
+  const fileRef = useRef(null);
+
+  function handlePhoto(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setPhoto(ev.target.result);
+    reader.readAsDataURL(file);
+  }
+
+  function submit() {
+    if (!text.trim() && !photo) return;
+    onPost({
+      id: `post-${Date.now()}`,
+      charId: selectedChar.id,
+      text: text.trim(),
+      photo,
+      likes: 0, reposts: 0, comments: 0,
+      timestamp: Date.now(),
+      reply: null,
+    });
+    onClose();
+  }
+
+  return (
+    <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.8)', zIndex:200, display:'flex', flexDirection:'column', justifyContent:'flex-end'}}>
+      <div style={{background:C.card, borderRadius:'20px 20px 0 0', padding:'16px', maxHeight:'85%', display:'flex', flexDirection:'column'}}>
+        {/* Header */}
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+          <button onClick={onClose} style={{background:'none', border:'none', color:C.muted, fontSize:15, cursor:'pointer'}}>Cancel</button>
+          <span style={{color:C.text, fontWeight:700, fontSize:15}}>New Post</span>
+          <button onClick={submit} disabled={!text.trim() && !photo} style={{
+            background: (text.trim() || photo) ? C.blue : '#333', color:'#fff', border:'none',
+            borderRadius:20, padding:'6px 16px', fontSize:14, fontWeight:700, cursor:(text.trim()||photo)?'pointer':'default',
+          }}>Post</button>
+        </div>
+
+        {/* Post as */}
+        <div style={{marginBottom:12}}>
+          <p style={{color:C.muted, fontSize:11, marginBottom:6}}>POST AS</p>
+          <div style={{display:'flex', gap:8, overflowX:'auto', paddingBottom:4}}>
+            {allChars.map(c => (
+              <button key={c.id} onClick={() => setSelectedChar(c)} style={{
+                display:'flex', alignItems:'center', gap:6, background: selectedChar.id === c.id ? C.blue+'22' : C.card2,
+                border:`1.5px solid ${selectedChar.id === c.id ? C.blue : C.border}`,
+                borderRadius:20, padding:'5px 12px', cursor:'pointer', flexShrink:0,
+              }}>
+                <Avatar char={c} size={20} />
+                <span style={{color: selectedChar.id === c.id ? C.blue : C.text, fontSize:12, fontWeight:600}}>{c.name.split(' ')[0]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Text input */}
+        <div style={{display:'flex', gap:10, flex:1}}>
+          <Avatar char={selectedChar} size={38} />
+          <div style={{flex:1}}>
+            <textarea value={text} onChange={e => setText(e.target.value)}
+              placeholder="What's happening?"
+              style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:15, outline:'none', resize:'none', minHeight:80, lineHeight:1.6}}
+            />
+            {/* Photo preview */}
+            {photo && (
+              <div style={{position:'relative', marginTop:8}}>
+                <img src={photo} alt="" style={{width:'100%', borderRadius:12, maxHeight:200, objectFit:'cover'}} />
+                <button onClick={() => setPhoto(null)} style={{position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', color:'#fff', borderRadius:'50%', width:26, height:26, cursor:'pointer', fontSize:14}}>×</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div style={{borderTop:`1px solid ${C.border}`, paddingTop:12, marginTop:8, display:'flex', gap:16, alignItems:'center'}}>
+          <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhoto} />
+          <button onClick={() => fileRef.current.click()} style={{background:'none', border:'none', color:C.blue, cursor:'pointer', display:'flex', alignItems:'center', gap:4, fontSize:13}}>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+            Photo
+          </button>
+          <div style={{marginLeft:'auto', color:C.muted, fontSize:12}}>{280 - text.length}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Event Modal ──────────────────────────────────────────────────
+function EventModal({ event, chars, player, feed, onClose, onSubmit, onLog }) {
+  const [input, setInput] = useState('');
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [currentEvent, setCurrentEvent] = useState(event);
+  const involved = chars.filter(c => currentEvent.chars.includes(c.id));
+
+  function reroll() {
+    const others = EVENT_POOL.filter(e => e.id !== currentEvent.id);
+    setCurrentEvent(others[Math.floor(Math.random() * others.length)]);
+    setInput('');
+  }
+
+  const xp = Math.floor(Math.random() * (currentEvent.xp[1] - currentEvent.xp[0])) + currentEvent.xp[0];
+
+  async function handleSubmit() {
+    if (!input.trim() || loading) return;
+    setLoading(true);
+    try {
+      const charDescs = involved.map(c => `${c.name} (@${c.handle}) — personality: ${c.personality}. Description: ${c.description}`).join('\n');
+      const recentFeedContext = feed ? [...feed].slice(0,8).map(p => {
+        const poster = [...(chars||[]), player].find(c=>c.id===p.charId);
+        return `@${poster?.handle||p.charId}: "${p.text}"`;
+      }).join('\n') : '';
+      const response = await window.claude.complete({
+        messages: [{
+          role:'user',
+          content: `You are narrating a social media event like a dramatic story beat.
+
+CHARACTERS INVOLVED:
+${charDescs}
+
+PLAYER: ${player.name} (@${player.handle}) — ${player.personality}
+
+RECENT FEED CONTEXT:
+${recentFeedContext}
+
+EVENT: "${event.scenario}"
+PLAYER'S ACTION: "${input}"
+
+Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles. Show consequences. Make it feel like something that would blow up on social media. Plain prose only — no headers, no bullet points, no markdown formatting.`
+        }]
+      });
+      const cleaned = response
+        .replace(/^#+\s+.*/gm, '')       // strip # headers
+        .replace(/\*\*(.*?)\*\*/g, '$1') // strip bold
+        .replace(/\*(.*?)\*/g, '$1')     // strip italic
+        .replace(/_{1,2}(.*?)_{1,2}/g, '$1')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      setResult(cleaned);
+      // Generate score changes
+      const followerGain = Math.floor(xp * (1800 + Math.random() * 1200));
+      const statGain = +(Math.random() * 0.3 + 0.1).toFixed(2);
+      const evType = currentEvent.type || 'gossip';
+      const scoreChanges = [
+        { icon:'✨', label:'Experience', value: xp, unit:'', flavor: evType === 'scandal' ? 'Chaos is a ladder, apparently.' : evType === 'tag' ? 'You answered the call.' : evType === 'opportunity' ? 'The window was open. You flew through it.' : 'Drama points well spent.' },
+        { icon:'👥', label:'Followers', value: `+${(followerGain >= 1000 ? (followerGain/1000).toFixed(0)+'K' : followerGain)}`, unit:'', flavor: evType === 'scandal' ? 'Everyone loves a scandal.' : 'Word travels fast on campus.' },
+        { icon:'😂', label:'Humor', value: `+${statGain}`, unit:'%', flavor: 'Your wit is showing.' },
+        { icon:'⭐', label:'Aura', value: `+${(statGain * 0.8).toFixed(2)}`, unit:'%', flavor: 'Presence confirmed.' },
+        ...currentEvent.chars.map(cid => {
+          const delta = +(Math.random() * 1.2 - 0.3).toFixed(2);
+          const flavorMap = { scandal: delta > 0 ? 'Impressed by the chaos.' : 'Not thrilled about this.', gossip: 'Taking notes.', tag: delta > 0 ? 'Appreciated the response.' : 'Was not expecting that.', opportunity: delta > 0 ? 'Respects the move.' : 'Saw what you did there.' };
+          return { avatar: cid, label: `@${cid}`, value: delta, unit:'%', flavor: flavorMap[evType] || 'Watching closely.' };
+        }),
+      ];
+      onLog && onLog({
+        type: 'event',
+        eventType: evType,
+        scenario: currentEvent.scenario,
+        action: input,
+        outcome: response,
+        chars: currentEvent.chars,
+        xp,
+        scoreChanges,
+        timestamp: Date.now(),
+      });
+    } catch(e) {
+      setResult('The drama unfolds... and everyone is watching.');
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{position:'absolute', inset:0, display:'flex', flexDirection:'column', justifyContent:'flex-end', zIndex:100}}>
+      <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.7)', backdropFilter:'blur(6px)'}} onClick={onClose}/>
+      <div style={{position:'relative', background:C.card, borderRadius:'24px 24px 0 0', padding:'24px 18px 36px', maxHeight:'82%', overflowY:'auto'}}>
+
+        {/* drag handle */}
+        <div style={{width:36, height:4, background:C.border, borderRadius:2, margin:'0 auto 20px'}}/>
+
+        <button onClick={onClose} style={{position:'absolute', top:18, right:18, background:C.card2, border:'none', color:C.muted, borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:15, display:'flex', alignItems:'center', justifyContent:'center'}}>×</button>
+
+        {!result ? (
+          <>
+            {/* Type badge + involved chars */}
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
+              {(() => { const t = EVENT_TYPES[currentEvent.type] || EVENT_TYPES.gossip; return (
+                <div style={{display:'flex', alignItems:'center', gap:5, background:`${t.color}18`, border:`1px solid ${t.color}44`, borderRadius:20, padding:'4px 10px'}}>
+                  <span style={{fontSize:13}}>{t.emoji}</span>
+                  <span style={{color:t.color, fontSize:12, fontWeight:700, letterSpacing:'0.04em'}}>{t.label.toUpperCase()}</span>
+                </div>
+              );})()}
+              <div style={{display:'flex', gap:-6, marginLeft:'auto'}}>
+                {involved.map((c,i) => <div key={c.id} style={{marginLeft: i>0 ? -8 : 0}}><Avatar char={c} size={26}/></div>)}
+              </div>
+            </div>
+
+            {/* Scenario */}
+            <div style={{marginBottom:16}}>
+              <p style={{color:C.text, fontSize:15, lineHeight:1.65, fontWeight:500}}>{currentEvent.scenario}</p>
+            </div>
+
+            {/* XP + reroll row */}
+            <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:16}}>
+              <button onClick={reroll} style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, cursor:'pointer', flexShrink:0}} title="Reroll">🎲</button>
+              <div style={{flex:1, background:C.card2, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                <span style={{color:C.muted, fontSize:12}}>XP reward</span>
+                <span style={{color:C.yellow, fontWeight:700, fontSize:13}}>+{currentEvent.xp[0]}–{currentEvent.xp[1]} ✦</span>
+              </div>
+            </div>
+
+            {/* Input */}
+            <textarea value={input} onChange={e => setInput(e.target.value)}
+              placeholder="What do you do?"
+              style={{width:'100%', background:C.card2, border:`1px solid ${input.trim() ? C.blue+'66' : C.border}`, borderRadius:14, padding:'12px 14px', color:C.text, fontSize:14, outline:'none', resize:'none', minHeight:100, marginBottom:14, transition:'border-color 0.2s'}}
+            />
+
+            <button onClick={handleSubmit} disabled={!input.trim() || loading} style={{
+              width:'100%', background: input.trim() ? C.text : C.card2, color: input.trim() ? C.bg : C.muted,
+              border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700,
+              cursor: input.trim() ? 'pointer' : 'default', transition:'background 0.2s, color 0.2s',
+            }}>{loading ? 'Playing out…' : 'Submit'}</button>
+          </>
+        ) : (
+          <div>
+            {/* Outcome header */}
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:16}}>
+              {(() => { const t = EVENT_TYPES[currentEvent.type] || EVENT_TYPES.gossip; return (
+                <div style={{display:'flex', alignItems:'center', gap:5, background:`${t.color}18`, border:`1px solid ${t.color}44`, borderRadius:20, padding:'4px 10px'}}>
+                  <span style={{fontSize:13}}>{t.emoji}</span>
+                  <span style={{color:t.color, fontSize:12, fontWeight:700}}>OUTCOME</span>
+                </div>
+              );})()}
+            </div>
+
+            {/* Quoted action */}
+            <div style={{borderLeft:`3px solid ${C.border}`, paddingLeft:12, marginBottom:14}}>
+              <p style={{color:C.muted, fontSize:12, marginBottom:4}}>YOUR MOVE</p>
+              <p style={{color:C.text, fontSize:13, lineHeight:1.5, fontStyle:'italic'}}>"{input}"</p>
+            </div>
+
+            <div style={{background:C.card2, borderRadius:14, padding:'14px', marginBottom:14}}>
+              <p style={{color:C.text, fontSize:14, lineHeight:1.75}}>{result}</p>
+            </div>
+
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', background:`${C.yellow}12`, border:`1px solid ${C.yellow}33`, borderRadius:12, padding:'12px 16px', marginBottom:18}}>
+              <span style={{color:C.muted, fontSize:13}}>XP earned</span>
+              <span style={{color:C.yellow, fontWeight:700, fontSize:16}}>+{xp} ✦</span>
+            </div>
+
+            <button onClick={onClose} style={{width:'100%', background:C.blue, color:'#fff', border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700, cursor:'pointer'}}>Back to Feed</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Activity Log helpers (shared by Activity > Log tab) ─────────
+function LogScoreRow({ ch, allChars }) {
+  const isNumeric = typeof ch.value === 'number';
+  const positive = isNumeric ? ch.value > 0 : String(ch.value).startsWith('+');
+  const color = positive ? C.green : C.red;
+  const displayVal = isNumeric
+    ? `${ch.value > 0 ? '+':''}${ch.value}${ch.unit||''}`
+    : `${ch.value}${ch.unit||''}`;
+  const relChar = ch.avatar ? allChars.find(c => c.id === ch.avatar) : null;
+  return (
+    <div style={{paddingBottom:12, marginBottom:12, borderBottom:`1px solid ${C.border}`}}>
+      <div style={{display:'flex', alignItems:'center', gap:8}}>
+        {relChar
+          ? <Avatar char={relChar} size={24}/>
+          : <span style={{fontSize:18, width:24, textAlign:'center'}}>{ch.icon}</span>
+        }
+        <span style={{color:C.text, fontWeight:700, fontSize:14, flex:1}}>
+          {relChar ? `@${relChar.handle}` : ch.label}
+        </span>
+        <span style={{color, fontWeight:800, fontSize:15}}>{displayVal}</span>
+      </div>
+      {ch.flavor && <p style={{color:C.muted, fontSize:12, marginTop:4, marginLeft:32, lineHeight:1.4}}>{ch.flavor}</p>}
+    </div>
+  );
+}
+
+function LogEntryCard({ entry, idx, allChars, collapsed, toggle }) {
+  const outcomeKey = `out-${idx}`;
+  const scoreKey   = `score-${idx}`;
+  const evType     = entry.eventType || entry.type;
+  const typeInfo   = EVENT_TYPES[evType] || { label:'Action', color:C.blue, emoji:'✦' };
+
+  const headerMap = {
+    reply:     { color:C.blue,   emoji:'💬', label:'You replied:' },
+    dm:        { color:C.purple, emoji:'✉️',  label:'DM sent' },
+    milestone: { color:C.green,  emoji:'🏆', label:'Milestone completed:' },
+    autopost:  { color:C.muted,  emoji:'📝', label:'Posted to feed' },
+  };
+  const header = entry.type === 'event'
+    ? { color: typeInfo.color, emoji: typeInfo.emoji, label: typeInfo.label + ' event' }
+    : (headerMap[entry.type] || { color:C.blue, emoji:'✦', label:'Action' });
+
+  const char = allChars.find(c => c.id === entry.charId);
+  const outCollapsed   = collapsed[outcomeKey] ?? false;
+  const scoreCollapsed = collapsed[scoreKey]   ?? false;
+
+  return (
+    <div style={{marginBottom:16}}>
+      <div style={{background:`${header.color}10`, border:`1px solid ${header.color}30`, borderRadius:16, padding:'14px 16px', marginBottom:6}}>
+        <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:10}}>
+          <span style={{fontSize:15}}>{header.emoji}</span>
+          <span style={{color:header.color, fontWeight:700, fontSize:13}}>{header.label.toUpperCase()}</span>
+        </div>
+        {entry.type === 'event' && <>
+          <p style={{color:C.muted, fontSize:12, lineHeight:1.4, marginBottom:10}}>{entry.scenario}</p>
+          <div style={{borderLeft:`2px solid ${header.color}60`, paddingLeft:10}}>
+            <p style={{color:C.text, fontSize:14, lineHeight:1.55, fontStyle:'italic'}}>"{entry.action}"</p>
+          </div>
+        </>}
+        {entry.type === 'reply' && char && (
+          <div style={{display:'flex', gap:10, alignItems:'flex-start'}}>
+            <Avatar char={char} size={36}/>
+            <div style={{flex:1}}>
+              <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:4}}>
+                <span style={{fontWeight:700, color:C.text, fontSize:13}}>{char.name}</span>
+                <Verified/>
+                <span style={{color:C.muted, fontSize:12}}>@{char.handle}</span>
+              </div>
+              <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{entry.text}</p>
+            </div>
+          </div>
+        )}
+        {entry.type === 'dm' && char && (
+          <div style={{display:'flex', gap:10, alignItems:'center'}}>
+            <Avatar char={char} size={32}/>
+            <div style={{flex:1}}>
+              <span style={{fontWeight:700, color:C.text, fontSize:13}}>{char.name}</span>
+              <p style={{color:C.muted, fontSize:12, marginTop:2}}>{(entry.text||'').slice(0,80)}…</p>
+            </div>
+          </div>
+        )}
+        {entry.type === 'milestone' && (
+          <p style={{color:C.text, fontSize:14, lineHeight:1.6, fontWeight:500}}>{entry.text}</p>
+        )}
+      </div>
+
+      {entry.outcome && (
+        <div style={{background:C.card2, borderRadius:12, padding:'12px 14px', marginBottom:6}}>
+          <button onClick={() => toggle(outcomeKey)} style={{background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', width:'100%', padding:0, marginBottom: outCollapsed ? 0 : 10}}>
+            <span style={{color:C.blue, fontWeight:700, fontSize:13}}>Outcome</span>
+            <span style={{color:C.muted, fontSize:12}}>{outCollapsed ? '▼' : '▲'}</span>
+          </button>
+          {!outCollapsed && <p style={{color:C.text, fontSize:13, lineHeight:1.75}}>{entry.outcome}</p>}
+        </div>
+      )}
+
+      {entry.scoreChanges?.length > 0 && (
+        <div style={{background:C.card2, borderRadius:12, padding:'12px 14px'}}>
+          <button onClick={() => toggle(scoreKey)} style={{background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', width:'100%', padding:0, marginBottom: scoreCollapsed ? 0 : 14}}>
+            <span style={{color:C.yellow, fontWeight:700, fontSize:13}}>Score Changes</span>
+            <span style={{color:C.muted, fontSize:12}}>{scoreCollapsed ? '▼' : '▲'}</span>
+          </button>
+          {!scoreCollapsed && (
+            <div>
+              {entry.scoreChanges.map((ch, i) => (
+                <LogScoreRow key={i} ch={ch} allChars={allChars}/>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Activity / Progression Screen ───────────────────────────────
+const SKILLS_DATA = [
+  { id:'wit', label:'Witty Banter', desc:'Verbally spar with anyone and win.', max:100 },
+  { id:'aura', label:'Social Aura', desc:'Command attention without trying.', max:100 },
+  { id:'stealth', label:'Social Stealth', desc:'Navigate campus drama invisibly.', max:100 },
+  { id:'chaos', label:'Chaos Theory', desc:'Turn every situation into your advantage.', max:100 },
+];
+
+const MILESTONES_DATA = [
+  { id:'m1', label:'First viral post', xp:50, done:true },
+  { id:'m2', label:'Win a public roast', xp:80, done:true },
+  { id:'m3', label:'Make a rival look foolish', xp:120, done:true },
+  { id:'m4', label:'Start a campus-wide rumor', xp:150, done:false },
+  { id:'m5', label:'Get quoted by GMZ', xp:200, done:false },
+];
+
+const SIDE_QUESTS = [
+  { id:'sq1', label:'Engage in a public "friendly" debate about potion safety with a rival.', xp:55 },
+  { id:'sq2', label:'Start a cryptic post and let the bots speculate for 24hrs.', xp:112 },
+  { id:'sq3', label:'Get a Gryffindor to publicly agree with you about something.', xp:88 },
+];
+
+function NotificationsScreen({ chars, feed }) {
+  const notifs = [
+    { id:1, type:'like', char:chars[0], text:'liked your post', time:'2m' },
+    { id:2, type:'mention', char:chars[1], text:'mentioned you in a post', time:'15m' },
+    { id:3, type:'reply', char:chars[2], text:'replied to your comment', time:'1h' },
+    { id:4, type:'follow', char:chars[3], text:'started following you', time:'3h' },
+    { id:5, type:'like', char:chars[1], text:'liked your reply', time:'5h' },
+  ];
+  return (
+    <div style={{flex:1, overflowY:'auto'}}>
+      <div style={{padding:'16px', borderBottom:`1px solid ${C.border}`}}>
+        <h1 style={{color:C.text, fontSize:22, fontWeight:700}}>Notifications</h1>
+      </div>
+      {notifs.map(n => (
+        <div key={n.id} style={{display:'flex', gap:10, padding:'14px 16px', borderBottom:`1px solid ${C.border}`, alignItems:'center'}}>
+          <div style={{position:'relative'}}>
+            <Avatar char={n.char} size={42} />
+            <div style={{position:'absolute', bottom:-2, right:-2, width:18, height:18, borderRadius:'50%', background: n.type==='like'?'#e91e8c':n.type==='mention'?C.blue:n.type==='reply'?C.purple:C.green, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, border:`2px solid ${C.bg}`}}>
+              {n.type==='like'?'♥':n.type==='mention'?'@':n.type==='reply'?'↩':'➕'}
+            </div>
+          </div>
+          <div style={{flex:1}}>
+            <span style={{fontWeight:700, color:C.text, fontSize:14}}>{n.char?.name} </span>
+            <span style={{color:C.muted, fontSize:14}}>{n.text}</span>
+            <p style={{color:C.muted, fontSize:12, marginTop:2}}>{n.time} ago</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Activity Screen ──────────────────────────────────────────────
+function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenChat, onOpenThread, section, setSection }) {
+  const allChars = [...chars, player];
+  const currentEvent = EVENT_POOL[Math.floor(Date.now()/1000) % EVENT_POOL.length];
+  const activeSection = section || 'posts';
+  const setActiveSection = setSection || (() => {});
+
+  // My posts — anything posted by player
+  const myPosts = feed.filter(p => p.charId === 'player');
+
+  // Recent DM previews — only convos with messages (include GMZ if active)
+  const charsForDms = (dms[GMZ_CHAR.id]||[]).length > 0 ? [GMZ_CHAR, ...chars] : chars;
+  const activeDMs = charsForDms.filter(c => (dms[c.id]||[]).length > 0);
+
+  function timeAgo(ts) {
+    const d = (Date.now() - ts) / 1000;
+    if (d < 60) return `${Math.floor(d)}s`;
+    if (d < 3600) return `${Math.floor(d/60)}m`;
+    if (d < 86400) return `${Math.floor(d/3600)}h`;
+    return `${Math.floor(d/86400)}d`;
+  }
+
+  const tabs = [
+    { id:'posts', label:'My Posts' },
+    { id:'events', label:'Events' },
+    { id:'dms', label:'DMs' },
+    { id:'log', label:'Log' },
+  ];
+
+  // Log tab state
+  const [logCollapsed, setLogCollapsed] = useState({});
+  const [logShowDMs, setLogShowDMs] = useState(false);
+  const toggleLog = (key) => setLogCollapsed(c => ({...c, [key]: !c[key]}));
+  const filteredLog = logShowDMs ? eventLog : eventLog.filter(e => e.type !== 'dm');
+
+  return (
+    <div style={{flex:1, overflowY:'auto', display:'flex', flexDirection:'column'}}>
+      {/* Header */}
+      <div style={{padding:'16px 16px 0', borderBottom:`1px solid ${C.border}`, position:'sticky', top:0, background:C.bg, zIndex:5}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+          <h1 style={{color:C.text, fontSize:22, fontWeight:700}}>Activity</h1>
+          <button onClick={() => onEvent(currentEvent)} style={{
+            background:C.blue, color:'#fff', border:'none', borderRadius:20,
+            padding:'7px 16px', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6,
+          }}>📣 Event</button>
+        </div>
+        {/* Section tabs */}
+        <div style={{display:'flex', gap:0, borderBottom:`1px solid ${C.border}`}}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setActiveSection(t.id)} style={{
+              flex:1, background:'none', border:'none', color: activeSection===t.id ? C.text : C.muted,
+              fontWeight: activeSection===t.id ? 700 : 400, fontSize:14, padding:'10px 0', cursor:'pointer',
+              borderBottom: activeSection===t.id ? `2px solid ${C.blue}` : '2px solid transparent',
+              transition:'all 0.2s',
+            }}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* MY POSTS */}
+      {activeSection === 'posts' && (
+        <div>
+          {myPosts.length === 0 ? (
+            <div style={{padding:'40px 16px', textAlign:'center'}}>
+              <div style={{fontSize:36, marginBottom:12}}>✍️</div>
+              <p style={{color:C.muted, fontSize:14}}>You haven't posted yet.</p>
+              <p style={{color:C.muted, fontSize:13, marginTop:4}}>Hit + on the feed to post something.</p>
+            </div>
+          ) : myPosts.map(post => (
+            <div key={post.id} onClick={() => onOpenThread && onOpenThread(post)} style={{padding:'14px 16px', borderBottom:`1px solid ${C.border}`, cursor:'pointer'}}>
+              <div style={{display:'flex', gap:10}}>
+                <Avatar char={player} size={38} />
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:4}}>
+                    <span style={{fontWeight:700, fontSize:14, color:C.text}}>{player.name}</span>
+                    <CharBadge char={player} />
+                    <span style={{color:C.muted, fontSize:12}}>· {timeAgo(post.timestamp)}</span>
+                  </div>
+                  {post.text && <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{post.text}</p>}
+                  {post.photo && <img src={post.photo} alt="" style={{width:'100%', borderRadius:10, marginTop:6, maxHeight:160, objectFit:'cover'}}/>}
+                  <div style={{display:'flex', gap:16, marginTop:8}}>
+                    <span style={{color:C.muted, fontSize:12}}>💬 {post.comments}</span>
+                    <span style={{color:C.muted, fontSize:12}}>🔁 {fmt(post.reposts)}</span>
+                    <span style={{color:C.muted, fontSize:12}}>♥ {fmt(post.likes)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* EVENTS */}
+      {activeSection === 'events' && (
+        <div>
+          {eventLog.length === 0 ? (
+            <div style={{padding:'40px 16px', textAlign:'center'}}>
+              <div style={{fontSize:36, marginBottom:12}}>📣</div>
+              <p style={{color:C.muted, fontSize:14}}>No events yet.</p>
+              <button onClick={() => onEvent(currentEvent)} style={{marginTop:12, background:C.blue, color:'#fff', border:'none', borderRadius:20, padding:'10px 24px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
+                Trigger your first event
+              </button>
+            </div>
+          ) : eventLog.map((ev, i) => (
+            <div key={i} style={{padding:'16px', borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:'flex', gap:10, alignItems:'flex-start'}}>
+                <div style={{width:38, height:38, borderRadius:'50%', background:'#1a1a3a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0}}>📣</div>
+                <div style={{flex:1}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
+                    <span style={{color:C.muted, fontSize:12}}>Event · {timeAgo(ev.timestamp)}</span>
+                    <span style={{color:C.yellow, fontSize:12, fontWeight:700}}>+{ev.xp} XP</span>
+                  </div>
+                  <p style={{color:C.muted, fontSize:13, lineHeight:1.5, marginBottom:8}}>{ev.scenario}</p>
+                  <div style={{background:C.card2, borderRadius:10, padding:'10px 12px', marginBottom:6}}>
+                    <p style={{color:C.muted, fontSize:11, marginBottom:4}}>YOUR ACTION</p>
+                    <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{ev.action}</p>
+                  </div>
+                  {ev.outcome && (
+                    <div style={{background:'#1a2e1a', borderRadius:10, padding:'10px 12px'}}>
+                      <p style={{color:C.muted, fontSize:11, marginBottom:4}}>OUTCOME</p>
+                      <p style={{color:C.green, fontSize:13, lineHeight:1.5}}>{ev.outcome}</p>
+                    </div>
+                  )}
+                  {/* involved chars */}
+                  <div style={{display:'flex', gap:6, marginTop:10}}>
+                    {ev.chars.map(cid => {
+                      const c = allChars.find(x => x.id === cid);
+                      return c ? <Avatar key={cid} char={c} size={24}/> : null;
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* DMs */}
+      {activeSection === 'dms' && (
+        <div>
+          {activeDMs.length === 0 ? (
+            <div style={{padding:'40px 16px', textAlign:'center'}}>
+              <div style={{fontSize:36, marginBottom:12}}>💬</div>
+              <p style={{color:C.muted, fontSize:14}}>No DM history yet.</p>
+              <p style={{color:C.muted, fontSize:13, marginTop:4}}>Go to Messages to start a conversation.</p>
+            </div>
+          ) : activeDMs.map(char => {
+            const msgs = dms[char.id] || [];
+            const lastMsg = msgs[msgs.length - 1];
+            const prevMsg = msgs[msgs.length - 2];
+            return (
+              <div key={char.id} onClick={() => onOpenChat(char)} style={{padding:'14px 16px', borderBottom:`1px solid ${C.border}`, cursor:'pointer'}}>
+                <div style={{display:'flex', gap:10, alignItems:'flex-start'}}>
+                  <Avatar char={char} size={42}/>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:6}}>
+                      <span style={{fontWeight:700, fontSize:14, color:C.text}}>{char.name}</span>
+                      <Verified/>
+                      <span style={{color:C.muted, fontSize:12}}>@{char.handle}</span>
+                    </div>
+                    {/* Last 2 messages preview */}
+                    <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                      {[prevMsg, lastMsg].filter(Boolean).map((m,i) => {
+                        const isMe = m.role === 'user';
+                        return (
+                          <div key={i} style={{display:'flex', alignItems:'flex-start', gap:6}}>
+                            <div style={{width:22, height:22, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                              {isMe ? <Avatar char={player} size={20}/> : <Avatar char={char} size={20}/>}
+                            </div>
+                            <div style={{
+                              background: isMe ? C.blue+'33' : C.card2,
+                              borderRadius:10, padding:'6px 10px', flex:1,
+                            }}>
+                              <p style={{color: isMe ? C.blue : C.text, fontSize:13, lineHeight:1.4}}>{m.text}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p style={{color:C.muted, fontSize:11, marginTop:6}}>{msgs.length} messages total</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* LOG */}
+      {activeSection === 'log' && (
+        <div>
+          {/* DM filter toggle */}
+          {eventLog.length > 0 && (
+            <div style={{display:'flex', justifyContent:'flex-end', padding:'10px 16px 0'}}>
+              <button onClick={() => setLogShowDMs(s=>!s)} style={{background:C.card2, border:`1px solid ${C.border}`, color:logShowDMs ? C.blue : C.muted, borderRadius:10, padding:'5px 12px', fontSize:12, cursor:'pointer'}}>
+                {logShowDMs ? 'Hide DMs' : 'Show DMs'}
+              </button>
+            </div>
+          )}
+
+          {/* Rewind bar */}
+          {filteredLog.length > 0 && (
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', margin:'10px 14px 4px', padding:'10px 14px', background:`${C.yellow}0a`, border:`1px solid ${C.yellow}22`, borderRadius:14}}>
+              <div style={{display:'flex', alignItems:'center', gap:10}}>
+                <div style={{width:32, height:32, borderRadius:'50%', background:C.card2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16}}>↩</div>
+                <div>
+                  <p style={{color:C.text, fontSize:13, fontWeight:700}}>Rewind</p>
+                  <p style={{color:C.muted, fontSize:11}}>Undo last action</p>
+                </div>
+              </div>
+              <div style={{display:'flex', alignItems:'center', gap:6, background:`${C.yellow}18`, border:`1px solid ${C.yellow}44`, borderRadius:20, padding:'5px 12px'}}>
+                <span style={{fontSize:14}}>💜</span>
+                <span style={{color:C.yellow, fontWeight:700, fontSize:13}}>14</span>
+              </div>
+            </div>
+          )}
+
+          <div style={{padding:'10px 14px'}}>
+            {filteredLog.length === 0 ? (
+              <div style={{textAlign:'center', color:C.muted, fontSize:14, marginTop:60}}>
+                <div style={{fontSize:44, marginBottom:14}}>📋</div>
+                <p style={{fontWeight:600, color:C.text}}>No activity yet</p>
+                <p style={{fontSize:12, marginTop:6}}>Respond to events, reply to posts, or slide into DMs.</p>
+              </div>
+            ) : (
+              [...filteredLog].reverse().map((entry, i) => (
+                <LogEntryCard key={i} entry={entry} idx={i} allChars={allChars} collapsed={logCollapsed} toggle={toggleLog}/>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      <div style={{height:24}}/>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────
+function App() {
+  const [tweaks, setTweakState] = useState(TWEAK_DEFAULTS);
+  C = buildTheme(tweaks);
+  const { tweaksVisible, setTweak } = useTweaks(TWEAK_DEFAULTS, setTweakState);
+
+  // ── Server-side persistence ───────────────────────────────────
+  const _saveTimer = useRef(null);
+
+  function serverSave(state) {
+    clearTimeout(_saveTimer.current);
+    _saveTimer.current = setTimeout(() => {
+      fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      }).catch(() => {});
+    }, 1500);
+  }
+
+  const [chars, setCharsRaw] = useState(DEFAULT_CHARS);
+  const [player, setPlayerRaw] = useState(DEFAULT_PLAYER);
+  const [feed, setFeedRaw] = useState(DEFAULT_FEED);
+  const [dms, setDmsRaw] = useState({});
+  const [groupChats, setGroupChatsRaw] = useState(DEFAULT_GROUP_CHATS);
+  const [eventLog, setEventLogRaw] = useState([]);
+  const [stateLoaded, setStateLoaded] = useState(false);
+
+  // Load saved state from server on startup
+  useEffect(() => {
+    fetch('/api/state').then(r => r.json()).then(saved => {
+      if (saved.chars)      setCharsRaw(saved.chars);
+      if (saved.player)     setPlayerRaw(saved.player);
+      if (saved.feed)       setFeedRaw(saved.feed);
+      if (saved.dms)        setDmsRaw(saved.dms);
+      if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
+      if (saved.eventLog)   setEventLogRaw(saved.eventLog);
+      setStateLoaded(true);
+    }).catch(() => setStateLoaded(true));
+  }, []);
+
+  // Wrapped setters — update state and schedule a server save
+  function setChars(v)      { setCharsRaw(prev      => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars:next,player,feed,dms,groupChats,eventLog}); return next; }); }
+  function setPlayer(v)     { setPlayerRaw(prev     => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player:next,feed,dms,groupChats,eventLog}); return next; }); }
+  function setFeed(v)       { setFeedRaw(prev       => { const next = (typeof v==='function'?v(prev):v).slice(0,60);      serverSave({chars,player,feed:next,dms,groupChats,eventLog}); return next; }); }
+  function setDms(v)        { setDmsRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms:next,groupChats,eventLog}); return next; }); }
+  function setGroupChats(v) { setGroupChatsRaw(prev => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats:next,eventLog}); return next; }); }
+  function setEventLog(v)   { setEventLogRaw(prev   => { const next = (typeof v==='function'?v(prev):v).slice(0,30);      serverSave({chars,player,feed,dms,groupChats,eventLog:next}); return next; }); }
+  const [activeGroupChat, setActiveGroupChat] = useState(null);
+  const [tab, setTab] = useState('feed');
+  const [chatChar, setChatChar] = useState(null);
+  const [viewChar, setViewChar] = useState(null);
+  const [editChar, setEditChar] = useState(null);
+  const [activeEvent, setActiveEvent] = useState(null);
+  const [composing, setComposing] = useState(false);
+  const [threadPost, setThreadPost] = useState(null);
+  const [dmNotifs, setDmNotifs] = useState({});
+  const [activeMatch, setActiveMatch] = useState(null);
+  const [activitySection, setActivitySection] = useState('posts');
+  const [day, setDay] = useState(101);
+  const currentMatch = MATCH_SCHEDULE.find(m => m.day === day && m.status !== 'played');
+  const [navStack, setNavStack] = useState([]); // navigation history for back buttons
+
+  // ── Navigation helpers ────────────────────────────────────────
+  function getNavState() {
+    return { editChar, activeGroupChat, chatChar, viewChar, threadPost, tab };
+  }
+  function pushNav() {
+    setNavStack(s => [...s, getNavState()]);
+  }
+  function goBack() {
+    setNavStack(s => {
+      if (!s.length) return s;
+      const prev = s[s.length - 1];
+      setEditChar(prev.editChar);
+      setActiveGroupChat(prev.activeGroupChat);
+      setChatChar(prev.chatChar);
+      setViewChar(prev.viewChar);
+      setThreadPost(prev.threadPost);
+      setTab(prev.tab);
+      return s.slice(0, -1);
+    });
+  }
+  function handleOpenChat(char) { pushNav(); setChatChar(char); setTab('messages'); }
+  function handleViewChar(char) { pushNav(); setViewChar(char); }
+  function handleEditChar(char) { pushNav(); setEditChar(char); }
+  function handleCreateChar() { pushNav(); setEditChar({ name:'', handle:'', house:'', bio:'', description:'', personality:'', followers:1000000 }); }
+
+  // Proactive DM: char slides into DMs after hot events
+  async function triggerProactiveDM(triggerChar, context) {
+    try {
+      const allChars = [...chars, player];
+      const sysPrompt = buildSystemPrompt(triggerChar, player, allChars, feed, dms);
+      const msg = await window.claude.complete({
+        messages: [
+          { role:'user', content: sysPrompt },
+          { role:'assistant', content: `Understood. I'm ${triggerChar.name}.` },
+          { role:'user', content: `You just saw something happen (${context}). Slide into ${player.name}'s DMs with a short, in-character opening message — something you'd actually say given your personality. 1-2 sentences max.` }
+        ]
+      });
+      const dmMsg = { role:'char', text: msg, id: Date.now() };
+      setDms(d => ({ ...d, [triggerChar.id]: [...(d[triggerChar.id]||[]), dmMsg] }));
+      setDmNotifs(n => ({ ...n, [triggerChar.id]: (n[triggerChar.id]||0) + 1 }));
+    } catch(e) {}
+  }
+
+  // ── Auto-post system ──────────────────────────────────────────
+  useEffect(() => {
+    let active = true;
+    async function generatePost() {
+      if (!active || chars.length === 0) return;
+      // Pick a random char, weighted toward more active personalities
+      const weights = chars.map(c => c.personality?.includes('chaotic') || c.personality?.includes('bold') ? 3 : 1);
+      const total = weights.reduce((a,b) => a+b, 0);
+      let r = Math.random() * total;
+      let char = chars[0];
+      for (let i = 0; i < chars.length; i++) { r -= weights[i]; if (r <= 0) { char = chars[i]; break; } }
+
+      const otherHandles = chars.filter(c => c.id !== char.id).map(c => `@${c.handle}`).join(', ');
+      const recentContext = feed.slice(0,6).map(p => {
+        const poster = [...chars, player].find(c => c.id === p.charId);
+        return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
+      }).join('\n');
+
+      // 35% chance: directed callout at another character (weighted toward rivals)
+      const others = chars.filter(c => c.id !== char.id);
+      const doCallout = Math.random() < 0.35 && others.length > 0;
+      const target = doCallout ? (() => {
+        // Weight toward characters with negative or low relationships
+        const weights = others.map(o => {
+          const rel = char.relationships?.[o.id] ?? 50;
+          return Math.max(1, 100 - rel); // lower relationship = higher weight
+        });
+        const total = weights.reduce((a,b)=>a+b,0);
+        let r = Math.random()*total;
+        for (let i=0; i<others.length; i++) { r-=weights[i]; if(r<=0) return others[i]; }
+        return others[0];
+      })() : null;
+
+      try {
+        const prompt = doCallout && target
+          ? `You are ${char.name} (@${char.handle}), a ${char.personality} college student at Merlin's College of Magic.
+Description: ${char.description}
+Your relationship with @${target.handle} (${target.name}): ${char.relationships?.[target.id] < 30 ? 'rivals/bad blood' : char.relationships?.[target.id] < 60 ? 'complicated' : 'decent but complicated'}.
+
+Recent campus feed:\n${recentContext}
+
+Write ONE social media post that is specifically directed at or about @${target.handle}. Rules:
+- Stay in character (personality: ${char.personality})
+- 1-2 sentences, punchy — can be shade, a callout, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
+- MUST tag @${target.handle} naturally in the text
+- NO hashtags, NO quotes around the post, just the post text`
+          : `You are ${char.name} (@${char.handle}), a ${char.personality} college student at Merlin's College of Magic (wizarding university, HP-inspired, college-aged).
+Description: ${char.description}
+Other people on campus: ${otherHandles}
+
+Recent campus feed posts:\n${recentContext}
+
+Write ONE authentic social media post from ${char.name}'s perspective. Rules:
+- Stay completely in character (personality: ${char.personality})
+- 1-2 sentences max, punchy
+- Optionally tag 0-2 of the other handles if it's natural — do NOT force it
+- Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
+- NO hashtags, NO quotes around the post, JUST the post text
+- Make it feel real and casual, like they just typed it
+${BANNED_PHRASES_RULE}`;
+
+        const raw = await window.claude.complete({ messages:[{ role:'user', content: prompt }] });
+        if (!active) return;
+        const cleanText = raw.trim().replace(/^["']|["']$/g,'');
+        const newPost = {
+          id: `auto-${Date.now()}-${char.id}`,
+          charId: char.id,
+          text: cleanText,
+          likes: Math.floor(Math.random()*500000),
+          reposts: Math.floor(Math.random()*20000),
+          comments: Math.floor(Math.random()*300),
+          timestamp: Date.now(),
+          reply: null,
+          botComments: [],
+          isAutoGenerated: true,
+        };
+        setFeed(f => [newPost, ...f]);
+
+        // 25% chance a second char replies within 8s
+        if (Math.random() < 0.25) {
+          const others = chars.filter(c => c.id !== char.id);
+          if (others.length) {
+            const replier = others[Math.floor(Math.random()*others.length)];
+            setTimeout(async () => {
+              if (!active) return;
+              try {
+                const replyRaw = await window.claude.complete({
+                  messages:[{ role:'user', content:
+                    `You are ${replier.name} (@${replier.handle}), personality: ${replier.personality}.
+@${char.handle} just posted: "${cleanText}"
+Write ONE short reply (1 sentence, in character). Tag @${char.handle} if natural. No quotes, just the reply text.` }]
+                });
+                const replyText = replyRaw.trim().replace(/^["']|["']$/g,'');
+                setFeed(f => f.map(p => p.id === newPost.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
+              } catch(e) {}
+            }, 5000 + Math.random()*8000);
+          }
+        }
+      } catch(e) {}
+    }
+
+    // First post after 20s, then every 45-75s
+    const firstTimer = setTimeout(() => {
+      generatePost();
+      setInterval(generatePost, 45000 + Math.random()*30000);
+    }, 20000);
+
+    // ── GMZ auto-posts ──────────────────────────────────────────
+    // GMZ posts only reactively — see triggerGMZPost called from events/hot threads
+    return () => { active = false; clearTimeout(firstTimer); };
+  }, [chars.length]); // re-run if chars added
+
+  function handleSaveChar(data) {
+    const isNew = !chars.find(c => c.id === data.id) && data.id !== player.id;
+    if (data.id === player.id) {
+      setPlayer(p => ({...p, ...data}));
+    } else if (isNew) {
+      setChars(c => [...c, data]);
+    } else {
+      setChars(c => c.map(ch => ch.id === data.id ? {...ch, ...data} : ch));
+    }
+    setEditChar(null);
+  }
+
+  function handleWatchMatch() { setActiveMatch(currentMatch); }
+
+  function handleMatchPost(text, charId) {
+    const newPost = {
+      id: `match-${Date.now()}-${Math.random()}`,
+      charId: charId || '__gmz__',
+      text,
+      likes: Math.floor(Math.random()*60000 + 5000),
+      reposts: Math.floor(Math.random()*5000),
+      comments: Math.floor(Math.random()*100),
+      timestamp: Date.now(),
+      reply: null,
+      botComments: [],
+    };
+    setFeed(f => [newPost, ...f]);
+  }
+
+  async function handleMatchEnd(score) {
+    // Mark match as played
+    // Trigger character reactions
+    const slyWon = currentMatch && (
+      (currentMatch.home === 'Slytherin' && score.home > score.away) ||
+      (currentMatch.away === 'Slytherin' && score.away > score.home)
+    );
+    const reactionChars = chars.filter(c => isQuidditchPlayer(c)).slice(0,2);
+    for (const char of reactionChars) {
+      try {
+        const won = ((char.bio+''+(char.description||'')).toLowerCase().includes('slytherin')) === slyWon;
+        const raw = await window.claude.complete({ messages:[{ role:'user', content:
+          `You are ${char.name} (@${char.handle}), personality: ${char.personality}. Your team just ${won ? 'won' : 'lost'} a Quidditch match against ${won ? 'Gryffindor' : 'Slytherin'} ${score.home}–${score.away}. Write ONE punchy social media post reaction. In character. No hashtags. 1 sentence.`
+        }]});
+        handleMatchPost(raw.trim().replace(/^["']|["']$/g,''), char.id);
+      } catch(e) {}
+    }
+    // GMZ post-game
+    setTimeout(() => triggerGMZPost(`The match just ended: ${currentMatch?.home} ${score.home} – ${score.away} ${currentMatch?.away}`), 3000);
+    setActiveMatch(null);
+  }
+
+  function handleEvent(ev) {
+    setActiveEvent(ev);
+  }
+
+  async function triggerGMZPost(context) {
+    const recentContext = feed.slice(0,8).map(p => {
+      const poster = [...chars, player, GMZ_CHAR].find(c => c.id === p.charId);
+      return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
+    }).join('\n');
+    const handles = [...chars, player].map(c => `@${c.handle}`).join(', ');
+    try {
+      const raw = await window.claude.complete({
+        messages:[{ role:'user', content:
+          `You are GMZ (@gmz), the most chaotic student gossip account at Merlin's College of Magic. You cover campus drama, Quidditch scandals, relationship gossip, and anything controversial. You write in breathless tabloid style.
+
+Campus accounts: ${handles}
+${context ? `Breaking context: ${context}` : ''}
+Recent campus posts:\n${recentContext}
+
+Write ONE GMZ gossip post. Rules:
+- 1-2 sentences, punchy tabloid energy  
+- Must reference at least one campus account by @handle
+- Start with a hook ("BREAKING:", "SOURCES CONFIRM:", "EXCLUSIVE:", "WITNESSES SAY:", etc.)
+- No hashtags, no quotes, just the post text` }]
+      });
+      const cleanText = raw.trim().replace(/^["']|["']$/g,'');
+      const newPost = {
+        id: `gmz-${Date.now()}`,
+        charId: '__gmz__',
+        text: cleanText,
+        likes: Math.floor(Math.random()*80000 + 5000),
+        reposts: Math.floor(Math.random()*8000 + 500),
+        comments: Math.floor(Math.random()*200 + 20),
+        timestamp: Date.now(),
+        reply: null,
+        botComments: [],
+        isGMZ: true,
+      };
+      setFeed(f => [newPost, ...f]);
+    } catch(e) {}
+  }
+
+  // GMZ slides into player's DMs after dramatic events
+  async function triggerGMZDM(context) {
+    try {
+      const raw = await window.claude.complete({
+        messages:[{ role:'user', content:
+          `You are GMZ (@gmz), the most chaotic student gossip account at Merlin's College of Magic. You cover campus drama and you are not above DMing students directly to fish for quotes, dirt, or exclusive angles.
+
+You're DMing ${player.name} (@${player.handle}) right now. Context: ${context}
+
+Write ONE short DM (1-2 sentences max). Pick ONE angle:
+- fishing for an exclusive quote ("our sources say... care to confirm?")
+- offering to "tell their side" before posting something damaging
+- asking who they're rooting for / what really happened
+- light pressure ("we're going to post in 20 min, last chance to comment")
+- conspiratorial gossip ("between us... [theory]")
+
+Tone: tabloid, breathless, slightly menacing in a fun way, lowercase casual mixed with ALL CAPS for emphasis. No greeting, no signoff, just the message itself. No quotes around it.
+${BANNED_PHRASES_RULE}` }]
+      });
+      const text = raw.trim().replace(/^["']|["']$/g,'');
+      const dmMsg = { role:'char', text, id: Date.now() };
+      setDms(d => ({ ...d, [GMZ_CHAR.id]: [...(d[GMZ_CHAR.id]||[]), dmMsg] }));
+      setDmNotifs(n => ({ ...n, [GMZ_CHAR.id]: (n[GMZ_CHAR.id]||0) + 1 }));
+    } catch(e) {}
+  }
+
+  function handleEventSubmit() {
+    const ev = activeEvent;
+    const involved = chars.filter(c => ev.chars.includes(c.id));
+    const newPosts = involved.map(char => ({
+      id: `gen-${Date.now()}-${char.id}`,
+      charId: char.id,
+      text: `...still thinking about what just happened.`,
+      likes: Math.floor(Math.random()*100000),
+      reposts: Math.floor(Math.random()*5000),
+      comments: Math.floor(Math.random()*200),
+      timestamp: Date.now(),
+      reply: null,
+      botComments: [],
+    }));
+    setFeed(f => [...newPosts, ...f]);
+    setActiveEvent(null);
+    // Proactive DM: 40% chance a reactive char slides in
+    const reactiveChars = chars.filter(c => !['reserved','quiet'].some(q => (c.personality||'').includes(q)));
+    if (reactiveChars.length && Math.random() < 0.4) {
+      const pick = reactiveChars[Math.floor(Math.random()*reactiveChars.length)];
+      setTimeout(() => triggerProactiveDM(pick, `the event: ${ev.scenario.slice(0,60)}`), 3000);
+    }
+    // GMZ: 50% chance to cover a completed event after a short delay
+    if (Math.random() < 0.5) {
+      setTimeout(() => triggerGMZPost(`A dramatic event just unfolded involving ${ev.chars.map(id => chars.find(c=>c.id===id)?.handle || id).join(' and ')}: "${ev.scenario.slice(0,100)}"`), 8000 + Math.random()*10000);
+    }
+    // GMZ DM: 35% chance for scandals, 25% for opportunities, 15% otherwise — they want a quote
+    const dmChance = ev.type === 'scandal' ? 0.35 : ev.type === 'opportunity' ? 0.25 : 0.15;
+    if (Math.random() < dmChance) {
+      const ctx = `${player.name} just got involved in this situation: "${ev.scenario.slice(0,160)}". The other people involved: ${ev.chars.map(id => chars.find(c=>c.id===id)?.handle || id).join(', ')}.`;
+      setTimeout(() => triggerGMZDM(ctx), 14000 + Math.random()*16000);
+    }
+  }
+
+  // Show loading screen until save file is read
+  if (!stateLoaded) return (
+    <div style={{background:'#111', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', fontSize:16, fontFamily:'-apple-system, sans-serif'}}>
+      ✦ Loading...
+    </div>
+  );
+
+  // Determine what to show
+  let screenContent;
+  if (editChar !== null) {
+    screenContent = <EditCharScreen char={editChar} onBack={goBack} onSave={handleSaveChar} />;
+  } else if (activeGroupChat) {
+    screenContent = (
+      <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+        <GroupChatScreen group={activeGroupChat} chars={chars} player={player} allChars={[...chars, player]} feed={feed} dms={dms} setGroupChats={setGroupChats} onBack={goBack} />
+        <BottomNav tab={tab} setTab={t => { setTab(t); setActiveGroupChat(null); setNavStack([]); }} dmNotifs={dmNotifs} />
+      </div>
+    );
+  } else if (chatChar && tab === 'messages') {
+    screenContent = (
+      <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+        <ChatScreen char={chatChar} player={player} allChars={[...chars, player, GMZ_CHAR]} feed={feed} dms={dms} setDms={setDms} onBack={goBack} />
+        <BottomNav tab={tab} setTab={t => { setTab(t); setChatChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
+      </div>
+    );
+  } else if (viewChar) {
+    screenContent = (
+      <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+        <CharProfileScreen char={viewChar} player={player} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} />
+        <BottomNav tab={tab} setTab={t => { setTab(t); setViewChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
+      </div>
+    );
+  } else if (threadPost) {
+    screenContent = (
+      <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+        <PostThreadView post={threadPost} chars={chars} player={player} onBack={goBack} onCharClick={handleViewChar} feed={feed} />
+        <BottomNav tab={tab} setTab={t => { setTab(t); setThreadPost(null); setNavStack([]); }} dmNotifs={dmNotifs} />
+      </div>
+    );
+  } else {
+    const mainScreen = (() => {
+      switch(tab) {
+        case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} />;
+        case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
+        case 'messages': return <MessagesScreen chars={chars} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
+        case 'notifications': return <NotificationsScreen chars={chars} feed={feed} />;
+        case 'profile': return <ProfileScreen player={player} chars={chars} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} />;
+        default: return null;
+      }
+    })();
+
+    screenContent = (
+      <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+        {mainScreen}
+        <BottomNav tab={tab} setTab={setTab} dmNotifs={dmNotifs} />
+      </div>
+    );
+  }
+
+  const isMobile = window.innerWidth <= 480;
+  const appContent = (
+    <div style={{display:'flex', flexDirection:'column', height:'100%', background:C.bg, position:'relative', overflow:'hidden'}}>
+      {screenContent}
+        {activeMatch && (
+          <LiveMatchModal match={activeMatch} chars={chars} player={player} onClose={() => setActiveMatch(null)} onPostToFeed={handleMatchPost} onMatchEnd={handleMatchEnd} />
+        )}
+        {activeEvent && (
+          <EventModal event={activeEvent} chars={chars} player={player} feed={feed} onClose={() => setActiveEvent(null)} onSubmit={handleEventSubmit} onLog={(entry) => setEventLog(l => [entry, ...l])} />
+        )}
+        {composing && (
+          <ComposeModal chars={chars} player={player} onClose={() => setComposing(false)} onPost={post => {
+            setFeed(f => [post, ...f]);
+            setComposing(false);
+            // Player posts: simulate growing engagement
+            if (post.charId === 'player') {
+              const ticks = [
+                { delay: 1500,  l: 240,  r: 8,   c: 1 },
+                { delay: 4000,  l: 1200, r: 22,  c: 3 },
+                { delay: 8500,  l: 4800, r: 64,  c: 7 },
+                { delay: 14000, l: 12400,r: 180, c: 14 },
+                { delay: 22000, l: 28000,r: 410, c: 24 },
+                { delay: 34000, l: 56000,r: 820, c: 38 },
+              ];
+              ticks.forEach(t => setTimeout(() => {
+                const jitter = (n) => Math.max(0, Math.round(n * (0.85 + Math.random()*0.3)));
+                setFeed(f => f.map(p => p.id === post.id
+                  ? {...p, likes: jitter(t.l), reposts: jitter(t.r), comments: jitter(t.c)}
+                  : p));
+              }, t.delay));
+            }
+          }} />
+        )}
+      </div>
+  );
+
+  return (
+    <>
+    {isMobile ? (
+      <div style={{
+        width: '100vw', height: '100vh',
+        background: C.bg, display: 'flex', flexDirection: 'column',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        overflow: 'hidden',
+      }}>
+        {appContent}
+      </div>
+    ) : (
+      <IOSDevice dark={tweaks.darkMode}>{appContent}</IOSDevice>
+    )}
+    {tweaksVisible && (
+      <TweaksPanel>
+        <TweakToggle label="Dark mode" value={tweaks.darkMode} onChange={v => setTweak('darkMode', v)} />
+        <TweakSection label="Accent color" />
+        <TweakColor label="Accent" value={tweaks.accentColor} onChange={v => setTweak('accentColor', v)} />
+        <TweakSection label="Feed" />
+        <TweakSlider label="Font size" value={tweaks.fontSize} min={12} max={18} step={1} onChange={v => setTweak('fontSize', v)} />
+        <TweakToggle label="Compact feed" value={tweaks.compactFeed} onChange={v => setTweak('compactFeed', v)} />
+      </TweaksPanel>
+    )}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<div id="root"></div>
+<style>
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+</style>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "socials-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A private playable Socials web app.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

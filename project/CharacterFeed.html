@@ -197,6 +197,7 @@ const DEFAULT_CHARS = [
 ];
 
 const DEFAULT_PLAYER = { id:'player', name:'Nova', handle:'nova', house:'slytherin', bio:'Slytherin. Main character energy. Questionable decisions since year one.', followers:196800000, description:'The player. Responds to everything, instigates selectively.', personality:'curious, bold, unpredictable, witty' };
+const DEFAULT_DAY = 1;
 
 const DEFAULT_FEED = [
   { id:'p1', charId:'sienna', text:'If one more person uses "team bonding" as an excuse to skip mandatory study hall I will personally owl the dean.', likes:231800, reposts:9400, comments:77, timestamp: Date.now()-3600000*2, reply:null,
@@ -1445,7 +1446,7 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
 }
 
 // ─── Profile Screen ───────────────────────────────────────────────
-function ProfileScreen({ player, chars, onEditChar, onCreateChar, onCharClick, onShowLog }) {
+function ProfileScreen({ player, chars, onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
   const relationships = chars.map(c => ({
     char: c,
     value: (c.relationships?.player ?? Math.round(Math.random()*80 - 20)),
@@ -1484,6 +1485,10 @@ function ProfileScreen({ player, chars, onEditChar, onCreateChar, onCharClick, o
             🎭 Characters
           </button>
         </div>
+
+        <button onClick={onResetGame} style={{width:'100%', marginTop:10, background:`${C.red}14`, border:`1px solid ${C.red}44`, color:C.red, borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, cursor:'pointer'}}>
+          Start fresh
+        </button>
 
         {/* Social Presence */}
         <div style={{marginTop:20}}>
@@ -3020,7 +3025,24 @@ function App() {
   const [dms, setDmsRaw] = useState({});
   const [groupChats, setGroupChatsRaw] = useState(DEFAULT_GROUP_CHATS);
   const [eventLog, setEventLogRaw] = useState([]);
+  const [day, setDayRaw] = useState(DEFAULT_DAY);
   const [stateLoaded, setStateLoaded] = useState(false);
+
+  function cloneDefault(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function freshGameState() {
+    return {
+      chars: cloneDefault(DEFAULT_CHARS),
+      player: cloneDefault(DEFAULT_PLAYER),
+      feed: cloneDefault(DEFAULT_FEED),
+      dms: {},
+      groupChats: cloneDefault(DEFAULT_GROUP_CHATS),
+      eventLog: [],
+      day: DEFAULT_DAY,
+    };
+  }
 
   // Load saved state from server on startup
   useEffect(() => {
@@ -3031,17 +3053,19 @@ function App() {
       if (saved.dms)        setDmsRaw(saved.dms);
       if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
       if (saved.eventLog)   setEventLogRaw(saved.eventLog);
+      if (typeof saved.day === 'number') setDayRaw(saved.day);
       setStateLoaded(true);
     }).catch(() => setStateLoaded(true));
   }, []);
 
   // Wrapped setters — update state and schedule a server save
-  function setChars(v)      { setCharsRaw(prev      => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars:next,player,feed,dms,groupChats,eventLog}); return next; }); }
-  function setPlayer(v)     { setPlayerRaw(prev     => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player:next,feed,dms,groupChats,eventLog}); return next; }); }
-  function setFeed(v)       { setFeedRaw(prev       => { const next = (typeof v==='function'?v(prev):v).slice(0,60);      serverSave({chars,player,feed:next,dms,groupChats,eventLog}); return next; }); }
-  function setDms(v)        { setDmsRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms:next,groupChats,eventLog}); return next; }); }
-  function setGroupChats(v) { setGroupChatsRaw(prev => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats:next,eventLog}); return next; }); }
-  function setEventLog(v)   { setEventLogRaw(prev   => { const next = (typeof v==='function'?v(prev):v).slice(0,30);      serverSave({chars,player,feed,dms,groupChats,eventLog:next}); return next; }); }
+  function setChars(v)      { setCharsRaw(prev      => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars:next,player,feed,dms,groupChats,eventLog,day}); return next; }); }
+  function setPlayer(v)     { setPlayerRaw(prev     => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player:next,feed,dms,groupChats,eventLog,day}); return next; }); }
+  function setFeed(v)       { setFeedRaw(prev       => { const next = (typeof v==='function'?v(prev):v).slice(0,60);      serverSave({chars,player,feed:next,dms,groupChats,eventLog,day}); return next; }); }
+  function setDms(v)        { setDmsRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms:next,groupChats,eventLog,day}); return next; }); }
+  function setGroupChats(v) { setGroupChatsRaw(prev => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats:next,eventLog,day}); return next; }); }
+  function setEventLog(v)   { setEventLogRaw(prev   => { const next = (typeof v==='function'?v(prev):v).slice(0,30);      serverSave({chars,player,feed,dms,groupChats,eventLog:next,day}); return next; }); }
+  function setDay(v)        { setDayRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats,eventLog,day:next}); return next; }); }
   const [activeGroupChat, setActiveGroupChat] = useState(null);
   const [tab, setTab] = useState('feed');
   const [chatChar, setChatChar] = useState(null);
@@ -3053,9 +3077,35 @@ function App() {
   const [dmNotifs, setDmNotifs] = useState({});
   const [activeMatch, setActiveMatch] = useState(null);
   const [activitySection, setActivitySection] = useState('posts');
-  const [day, setDay] = useState(101);
   const currentMatch = MATCH_SCHEDULE.find(m => m.day === day && m.status !== 'played');
   const [navStack, setNavStack] = useState([]); // navigation history for back buttons
+
+  function handleResetGame() {
+    const ok = window.confirm('Start fresh? This clears the saved feed, DMs, activity log, and character edits for this hosted app.');
+    if (!ok) return;
+    const next = freshGameState();
+    setCharsRaw(next.chars);
+    setPlayerRaw(next.player);
+    setFeedRaw(next.feed);
+    setDmsRaw(next.dms);
+    setGroupChatsRaw(next.groupChats);
+    setEventLogRaw(next.eventLog);
+    setDayRaw(next.day);
+    setActiveGroupChat(null);
+    setChatChar(null);
+    setViewChar(null);
+    setEditChar(null);
+    setActiveEvent(null);
+    setComposing(false);
+    setThreadPost(null);
+    setDmNotifs({});
+    setActiveMatch(null);
+    setActivitySection('posts');
+    setTab('profile');
+    setNavStack([]);
+    fetch('/api/state', { method:'DELETE' }).catch(() => {});
+    serverSave(next);
+  }
 
   // ── Navigation helpers ────────────────────────────────────────
   function getNavState() {
@@ -3411,7 +3461,7 @@ ${BANNED_PHRASES_RULE}` }]
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
         case 'notifications': return <NotificationsScreen chars={chars} feed={feed} />;
-        case 'profile': return <ProfileScreen player={player} chars={chars} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} />;
+        case 'profile': return <ProfileScreen player={player} chars={chars} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return null;
       }
     })();

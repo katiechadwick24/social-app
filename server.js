@@ -198,6 +198,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Reset saved game state ────────────────────────────────────
+  if (req.url === '/api/state' && req.method === 'DELETE') {
+    try {
+      fs.rmSync(STATE_FILE, { force: true });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{"ok":true}');
+    } catch(e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
   // ── Static files ──────────────────────────────────────────────
   let pathname = new URL(req.url, `http://${req.headers.host || 'localhost'}`).pathname;
   pathname = decodeURIComponent(pathname);

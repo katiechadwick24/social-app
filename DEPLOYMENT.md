@@ -13,6 +13,7 @@ This app is ready to run as a small hosted Node web app.
    - Health check path: `/healthz`
 4. Add environment variables:
    - `ANTHROPIC_API_KEY`: your Anthropic API key
+   - `ANTHROPIC_MODEL`: `claude-haiku-4-5-20251001`
    - `APP_PASSWORD`: a private password for the site
    - `STATE_FILE`: `/var/data/save.json` if you add a Render persistent disk
 5. Optional but recommended: add a persistent disk mounted at `/var/data`.
@@ -25,6 +26,7 @@ Create a `.env` file next to `server.js`:
 
 ```env
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
+ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 APP_PASSWORD=optional-local-password
 STATE_FILE=save.json
 ```

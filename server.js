@@ -7,6 +7,7 @@ const os    = require('os');
 loadEnvFile(path.join(__dirname, '.env'));
 
 const API_KEY     = process.env.ANTHROPIC_API_KEY || '';
+const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const PORT        = Number(process.env.PORT || 3000);
 const PROJECT_DIR = path.join(__dirname, 'project');
@@ -74,7 +75,7 @@ function askForPassword(res) {
 function callClaude(messages) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
+      model: CLAUDE_MODEL,
       max_tokens: 1024,
       messages,
     });

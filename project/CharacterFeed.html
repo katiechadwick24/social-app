@@ -190,54 +190,133 @@ function BotAvatar({ bot, size=36 }) {
 
 // ─── Default data ─────────────────────────────────────────────────
 const DEFAULT_CHARS = [
-  { id:'zara', name:'Zara Voss', handle:'zaravoss', house:'slytherin', bio:'Slytherin. Sharp aim, sharper mouth. Here for the chaos, not the consequences.', followers:4200000, description:'Zara is a 20-year-old Slytherin at Merlin\'s College of Magic (wizarding university). She\'s on the competitive dueling circuit, notorious for trash talk that somehow never crosses the line. She\'s brilliant, bored easily, and treats every social interaction like a sport. She has a dry, cutting sense of humor and zero patience for people who can\'t keep up. She is not malicious — she\'s honest, which is somehow worse.', personality:'sarcastic, witty, bold, competitive, irreverent', relationships:{eli: 62, sienna: -30, rook: 55} },
-  { id:'eli', name:'Eli Cross', handle:'elicross', house:'gryffindor', bio:'Gryffindor beater. Professionally chaotic. Not sorry.', followers:2800000, description:'Eli is a 21-year-old Gryffindor at Merlin\'s College. He plays Quidditch like he lives — aggressively and with no clear plan. He\'s impulsive, funny, and somehow always at the center of drama he swears he didn\'t start. He has a loud personality with a surprisingly soft core he\'d die before admitting. He and Zara have the most unhinged rivalry-flirtation dynamic on campus.', personality:'flirty, chaotic, impulsive, charming, loud', relationships:{zara: 62, sienna: 45, rook: -20} },
-  { id:'sienna', name:'Sienna Drake', handle:'siennadrake', house:'ravenclaw', bio:'Ravenclaw. Running this whole operation. You\'re all extras.', followers:8900000, description:'Sienna is a 22-year-old Ravenclaw. Student council president, top of her year, and effortlessly socially dominant. She\'s not mean — she\'s strategic, which is more dangerous. She weaponizes compliments and always knows exactly how every room sees her. She has a complicated history with basically everyone on campus.', personality:'calculating, poised, queen bee, strategic, precise', relationships:{zara: -30, eli: 45, rook: 15} },
-  { id:'rook', name:'Rook', handle:'rookrunner', house:'hufflepuff', bio:'hufflepuff. watches everything. says almost nothing.', followers:1100000, description:'Rook is a 20-year-old Hufflepuff at Merlin\'s College. Quiet, perceptive, and chronically online in a way nobody expected from someone who seems so detached in person. They notice everything happening on campus before it happens and react to almost none of it publicly. Their posts are infrequent, cryptic, and always somehow perfectly timed. Dry humor, minimal energy. Surprisingly loyal to people who earn it.', personality:'deadpan, perceptive, reserved, dry humor, observant', relationships:{zara: 55, eli: -20, sienna: 15} },
+  { id:'havoc', name:'Havoc Fang', handle:'havocfang', house:'gryffindor', team:'Gryffindor', position:'Beater', bio:'Gryffindor Beater. Bad influence with aim.', followers:2800000, description:`Havoc Fang plays like subtlety personally insulted him. Gryffindor's Beater is blunt, smug, physical, and usually one bad decision away from making someone else's afternoon worse. He likes reactions, pushes buttons on purpose, and will escalate a situation if the escalation is funnier than the apology.
+
+He is not soft, cryptic, or romantic with strangers. Havoc can be loud, rude, amused, casually social, or annoyingly magnetic, but he does not polish himself into something easier to like. His loyalty is rough-edged and practical: if he backs someone, he backs them with his whole body, terrible timing included.
+
+Rowan Cade is his best friend, trusted idiot, and favorite accomplice in bad judgment. Briar Rowe has his respect, which does not stop him from annoying her constantly. Callum Pike gets less mercy, mostly because Callum reacts beautifully. Havoc minds his own business badly, hits hard, laughs low, and treats restraint like a suggestion someone else can try first.`, personality:'blunt, smug, physical, provocative, loyal, reactive, rough-edged, funny when inconvenient, casually magnetic, bad at minding his business', relationships:{rowan: 88, briar: 48, callum: -24, silas: -38} },
+  { id:'silas', name:'Silas Montague', handle:'silasmontague', house:'slytherin', team:'Slytherin', position:'Quidditch captain', bio:'Slytherin captain. Control issue with teeth.', followers:3900000, description:`Silas Montague is Slytherin VII and the Slytherin Quidditch captain, which means he treats the team like a war machine with uniforms and a comment section. He is rude, competitive, controlled, and allergic to wasted talent. He cares about winning, discipline, leverage, and making Gryffindor look stupid in public.
+
+Silas does not hate chaos. He hates chaos he cannot aim. Hogwarts Quidditch is fought on the pitch and the timeline: match clips, quote-tweets, gossip accounts, edits, and post-match narratives. He pretends to despise spectacle because most people are bad at using it, but he knows attention can be shaped into pressure if the right person is holding the knife.
+
+Protection, from Silas, rarely looks warm. It looks like captaincy, asset management, a sharp correction before a weakness becomes visible, or a threat delivered to whoever mistook his player for an opening. His private complication is Briar Rowe: Gryffindor's captain, disciplined enough to interest him and irritating enough to make him sharper than he means to be. He calls it tactical recognition. It is not.`, personality:'rude, competitive, controlled, disciplined, strategic, sharp-tongued, protective, calculating, impatient with waste, quietly obsessive', relationships:{briar: 34, havoc: -38, callum: -18, rowan: -12} },
+  { id:'callum', name:'Callum Pike', handle:'callumpike', house:'gryffindor', team:'Gryffindor', position:'Chaser', bio:'Gryffindor Chaser. Clean, cruel, reliable.', followers:1900000, description:`Callum Pike is Gryffindor's reliable Chaser, fast enough to punish a gap and disciplined enough to pretend speed is not the point. He plays like every movement has to justify itself: clean lines, sharp passes, no wasted angles, no applause for almost. Blunt to the edge of cruelty, Callum believes respect should be earned through structure, execution, and staying useful when everyone else gets loud.
+
+He has little patience for chaos players, especially the kind Havoc Fang and Rowan Cade keep enabling into team-wide nonsense. Havoc makes disorder look effective through force; Rowan makes it look clever through timing. Callum hates both versions because they work more often than they should, and because Briar Rowe still has to captain around the mess. For Briar, he is one of the dependable ones, which is both pride and trap.
+
+Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Rowle: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{briar: 64, havoc: -24, rowan: -12, silas: -18} },
+  { id:'briar', name:'Briar Rowe', handle:'briarrowe', house:'gryffindor', team:'Gryffindor', position:'Quidditch Captain / Keeper', bio:'Gryffindor Keeper. Never off duty.', followers:3100000, description:`Briar Rowe leads from the goalposts like she can see the whole pitch and the whole problem forming three moves early. Sharp, competitive, and blunt, she is Gryffindor's Quidditch captain and Keeper: the one who has to turn bravery into structure before someone mistakes impulse for a plan. She likes clean strategy, hard discipline, and players who understand that talent still has to answer to the scoreboard.
+
+Every mistake that reaches Briar becomes public within seconds: a goal conceded, a clip posted, a comment thread deciding what it means. She notices hesitation, overcommitment, injury, ego, distraction, and which teammate is watching the timeline instead of the Quaffle. Havoc Fang and Rowan Cade irritate her because they are too good to be so easily baited, too useful to keep wasting themselves on noise.
+
+Briar is tired of being the structure everyone else gets to rebel against. She absorbs panic before anyone sees it, then gets called cold for not shaking. Her private complication is Silas Montague, Slytherin's captain, whose discipline and field awareness are irritatingly difficult to dismiss.`, personality:'sharp, competitive, blunt, disciplined, watchful, strategic, controlling, exhausted, proud, tactically ruthless', relationships:{callum: 64, havoc: 48, rowan: 46, silas: 34} },
+  { id:'rowan', name:'Rowan Cade', handle:'rowancade', house:'gryffindor', team:'Gryffindor', position:'Chaser', bio:'Gryffindor Chaser. Smiles before the trap.', followers:2400000, description:`Rowan Cade is a Gryffindor Chaser with fast hands, a sharp mouth, and a gift for looking harmless until someone has already made the wrong move. He is athletic, shameless, and observant in a way people often notice too late. His humor has teeth, but he is not a mascot, not flamboyant, and not here to narrate everyone else's chaos from the sidelines.
+
+On the pitch, Rowan is a tempo thief. He changes pace, baits bad angles, pulls defenders out of shape, and makes stronger players misread the next second. He likes being underestimated because underestimated people get closer, hear more, and get blamed last. Off the pitch, he reads rooms the same way: who flinched, who lied too quickly, who needs a push, who needs covering.
+
+Havoc Fang is his best friend, which means shoulder shoves, stolen food, ugly laughter, and wordless trust. Rowan is loyal, but never obedient; he will back a bad idea, redirect a worse one, and smile through the part where everyone realizes he was never just tagging along. Under the charm is a private hunger to be wanted without becoming useful furniture. He never says darling. Ever.`, personality:'sharp, athletic, shameless, observant, sly, loyal but not obedient, funny with teeth, underestimated, tactical, restless, guarded', relationships:{havoc: 88, briar: 46, callum: -12, silas: -12} },
+  { id:'milo', name:'Milo Vale', handle:'milovale', house:'gryffindor', team:'Gryffindor', position:'Reserve Chaser', bio:'Gryffindor reserve. Charm with no brakes.', followers:950000, description:`Milo Vale is Gryffindor's loudest bad idea in a younger-year body: pretty, impulsive, overconfident, and allergic to thinking a second time before speaking. He flirts like he is throwing sparks into dry grass, not because he has a plan, but because attention feels like proof he exists. If a room goes quiet, Milo takes it personally.
+
+He is a Gryffindor reserve Chaser with quick hands, raw talent, and no useful respect for consequences. Coaches see potential. Captains see paperwork. Older students see a boy trying very hard to look like he already belongs at their table. Milo can make people laugh before they decide whether to be angry, which is useful right up until it becomes the reason everything gets worse.
+
+Under the charm is a dangerous hunger to be chosen before he is ready. Milo will volunteer for the dare, take the bait, flirt with the wrong person, and turn embarrassment into a performance before anyone can hurt him with it. He is not subtle, not secretly wise, and not built for quiet suffering. He is bright, reckless, funny, and one applause line away from learning a lesson the hard way.`, personality:'flirty, chaotic, impulsive, charming, loud, reckless, attention-hungry, funny under pressure, overconfident, approval-seeking', relationships:{briar: -18, havoc: 32, rowan: 28, callum: -22, theo: 44} },
+  { id:'elara', name:'Elara March', handle:'elaramarch', house:'gryffindor', team:'Gryffindor', position:'Former Beater', bio:'Gryffindor alumna. Old flame, live wire.', followers:2100000, description:`Elara March is the kind of girl people remember standing too close to danger and looking bored by it. A former Gryffindor Beater, she left the pitch after an injury but never lost the habit of entering rooms like impact is still her first language. She is proud, sharp, physical, and far too socially fluent to be reduced to anyone's jealous ex.
+
+She and Havoc Fang were never soft, never simple, and maybe never official enough to give people clean language for it. Still, everyone knew the shape of them: heat, history, insults that landed because they had earned the right, and a public rhythm that made sense until it did not. Elara liked being the girl who could stand in that fire. She liked being impossible to pity.
+
+Her real problem is not losing Havoc. It is being edited out of the story as if she was only a phase before the interesting part began. Elara has ambitions beyond old romance: dueling club influence, post-Hogwarts plans, favors owed by half the right people. But if someone treats her history like a footnote, she will remind them that old flames still know where everything burns.`, personality:'proud, sharp, physical, socially dangerous, ambitious, unsentimental, jealous with dignity, charismatic, reactive, hard to pity', relationships:{havoc: -8, briar: 22, rowan: -16, theo: 18} },
+  { id:'theo', name:'Theo Bell', handle:'theobell', house:'gryffindor', team:'Gryffindor', position:'Unofficial Quidditch commentator', bio:'Gryffindor commentator. Posts first.', followers:1600000, description:`Theo Bell is Gryffindor's unofficial commentator, clip dealer, and weekly reason someone threatens to confiscate a phone. He runs match threads, rankings, polls, edits, and rumor-laced breakdowns with the confidence of a journalist and the ethics of a bored seventeen-year-old with good timing. He insists it is for morale. Nobody believes him, but everyone checks the posts.
+
+Theo is not on the starting Quidditch lineup, which somehow makes him more dangerous to the team. He turns practices into narratives, mistakes into clips, and private tension into public weather. Briar Rowe hates how useful his hype can be. Callum Pike hates being analyzed mid-failure. Havoc Fang pretends not to care until a caption is funny enough. Rowan Cade knows better than to give him a clean quote.
+
+Theo is not cruel by default. He is worse: entertained, persuasive, and very good at pretending visibility is the same thing as truth. When feelings get caught in the machinery, he looks guilty for almost long enough to count. Then the replies start moving, and Theo has to decide whether he is reporting the mess or feeding it.`, personality:'entertaining, persuasive, nosy, shameless, funny, opportunistic, socially fluent, reactive, media-brained, guilt-prone but distractible', relationships:{briar: -10, callum: -28, havoc: 24, rowan: 18, milo: 44} },
+  { id:'jude', name:'Jude Warrington', handle:'judewarrington', house:'slytherin', team:'Slytherin', position:'Beater', bio:'Slytherin Beater. Snark over ceremony.', followers:1700000, description:`Jude Warrington has the relaxed posture of someone who refuses to look invested, which is infuriating because he keeps being useful anyway. He is a Slytherin Beater with a dry mouth, lazy smile, and a gift for saying the worst possible thing at the most useful possible time. He does not do inspirational speeches. He does not do team bonding. He barely does posture.
+
+On the pitch, Jude plays like effort is embarrassing but humiliation is funny. He is loose, mean, quick enough to punish arrogance, and much better than his attitude suggests. Silas Montague hates relying on him because Jude treats discipline like a personal rumor. Teammates like him when he is funny, resent him when he is right, and trust him most when he looks least interested.
+
+Jude's real currency is access: party corners, betting pools, contraband favors, who owes whom, and which secrets are not worth the price. He is not a loyal assistant or a solemn strategist. He is the person sitting near the disaster, making one comment that turns discomfort into damage. If everyone else insists on being dramatic, Jude is happy to provide captions.`, personality:'snarky, loose, under-motivated, dry, socially slippery, useful despite himself, irreverent, mean-funny, unbothered, quietly connected', relationships:{silas: 16, havoc: -18, briar: -12, theo: 22} },
+  { id:'tamsin', name:'Tamsin Cade', handle:'tamsincade', house:'ravenclaw', team:'Ravenclaw', position:"Student / Rowan Cade's older sister", bio:'Ravenclaw sister. Polite until she is not.', followers:1300000, description:`Tamsin Cade is composed in the way that makes messy people check their posture. A Ravenclaw seventh year and Rowan Cade's older sister, she is academically sharp, socially polished, and deeply unimpressed by performances that mistake charm for self-knowledge. She loves Rowan with a precision that can feel a lot like prosecution.
+
+Tamsin is not part of the Gryffindor Quidditch team, but Quidditch keeps dragging her brother into public disasters, and she has opinions about every single one. Havoc Fang is familiar damage: annoying, loyal, unfortunately permanent. Briar Rowe earns her respect by having standards. Silas Montague is useful to argue with because he at least understands consequences. Everyone else is on probation.
+
+Her real fear is that Rowan will become useful to stronger personalities and call it belonging. She knows his jokes, his exits, his need to be wanted without asking directly. When someone new pulls him into their gravity, Tamsin does not see romance first. She sees risk, repetition, and another reason her brother might disappear behind a smile. She is polite until she is not, and by then the sentence has usually already found the bruise.`, personality:'composed, sharp, polished, protective, judgmental, academically dangerous, socially controlled, cutting, loyal, impossible to charm for long', relationships:{rowan: 72, havoc: -8, briar: 38, silas: 20, milo: -26} },
 ];
 
-const DEFAULT_PLAYER = { id:'player', name:'Nova', handle:'nova', house:'slytherin', bio:'Slytherin. Main character energy. Questionable decisions since year one.', followers:196800000, description:'The player. Responds to everything, instigates selectively.', personality:'curious, bold, unpredictable, witty' };
+const DEFAULT_PLAYER = { id:'player', name:'Keres Valen', handle:'keresvalen', house:'slytherin', bio:'Slytherin Chaser trialist. Feral.', followers:1000000, description:'Keres Valen transfers in like a rumor someone dared to make real: sharp mouth, pretty aim, worse ideas after dark. She is trying out as a Chaser for the Slytherin Quidditch team, and the pitch is where the chaos tightens into something terrifyingly precise. Off the field she is loud, feral, shamelessly provocative, and allergic to sincerity unless it slips out by accident. On a broom, she is no contest: fast hands, vicious angles, and the kind of nerve that makes defenders look slow.\n\nHer last school left a reputation behind her, though no one agrees on the details. Brilliant Chaser. Behavioral problem. Top marks where nobody expected them. Someone who hit back too hard and smiled after. Keres lets the stories rot into worse versions because correcting people would mean caring, and she would rather joke about chewing electrical wires than admit anything touched her.\n\nShe does not cow easily, breaks rules she thinks are stupid, and if someone hits first, socially or physically, she hits harder with no remorse. Foul her on the field and she will foul back. Threaten her people and she throws punches first, asks questions later. She rubs most people wrong at first because the front is good: flirt like a dare, laugh like a weapon, never blink first. But under the bad attitude is a devoted student, a dangerous protector, and a girl most embarrassed by the rare moments she means exactly what she says.', personality:'feral, provocative, sharp-tongued, fearless, volatile, protective, shameless, competitive, defiant, witty, reckless, loyal, secretly studious, allergic to sincerity, viciously playful, rule-breaking, flirtatious, hard to embarrass, quick to retaliate, precise under pressure' };
 const DEFAULT_DAY = 1;
+const DEFAULT_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
+const FRESH_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
+const LOCAL_STATE_KEY = 'socials-app-state-v2';
 
 const DEFAULT_FEED = [
-  { id:'p1', charId:'sienna', text:'If one more person uses "team bonding" as an excuse to skip mandatory study hall I will personally owl the dean.', likes:231800, reposts:9400, comments:77, timestamp: Date.now()-3600000*2, reply:null,
+  { id:'p1', charId:'briar', text:'team bonding is not a synonym for "let havoc invent a new disciplinary category."', likes:231800, reposts:9400, comments:77, timestamp: Date.now()-3600000*2, reply:null,
     botComments:[
-      {bot:'libraryghoul', text:'subtweeting the entire quidditch house rn 👀', likes:4200},
-      {bot:'sortinghat404', text:'she has a LIST and she\'s working through it alphabetically', likes:8800},
-      {bot:'pumpkinjuiced', text:'i mean. ravenclaw student council energy is unmatched.', likes:1200},
+      {bot:'libraryghoul', text:'captain rowe has discovered quotation marks and she is using them as weapons', likes:4200},
+      {bot:'sortinghat404', text:'gryffindor practice sounds legally unsafe again', likes:8800},
+      {bot:'pumpkinjuiced', text:'keeper captain exhaustion is a full academic field now', likes:1200},
     ]},
-  { id:'p2', charId:'zara', text:'the Gryffindors lost the practice match and somehow it\'s still everyone else\'s problem to hear about', likes:165000, reposts:7200, comments:44, timestamp: Date.now()-3600000*3, reply:null,
+  { id:'p2', charId:'silas', text:'gryffindor keeps calling it instinct because calling it poor structure would hurt their feelings.', likes:165000, reposts:7200, comments:44, timestamp: Date.now()-3600000*3, reply:null,
     botComments:[
-      {bot:'quafflewasted', text:'she said what she said and the broom closet has EARS', likes:3300},
-      {bot:'crylittlerunt', text:'gryff tears taste like butterbeer ngl', likes:5100},
-      {bot:'mothballin', text:'EXCUSE ME @zaravoss girl we demand a recount', likes:890},
+      {bot:'quafflewasted', text:'slytherin captain woke up and chose public team review', likes:3300},
+      {bot:'crylittlerunt', text:'someone check on gryffindor group chat immediately', likes:5100},
+      {bot:'mothballin', text:'@silasmontague saying this before the match is INSANE work', likes:890},
     ]},
-  { id:'p3', charId:'eli', text:'I didn\'t start the thing in the Astronomy Tower. I was simply there when it started.', likes:89000, reposts:3100, comments:33, timestamp: Date.now()-3600000*4, reply:null,
+  { id:'p3', charId:'havoc', text:'i did not start it. i improved it.', likes:89000, reposts:3100, comments:33, timestamp: Date.now()-3600000*4, reply:null,
     botComments:[
-      {bot:'broombroke', text:'this is his entire personality and i love him for it 💗', likes:6700},
-      {bot:'sortinghat404', text:'the innocent bystander to chaos pipeline 😭', likes:9200},
-      {bot:'libraryghoul', text:'interesting how it\'s ALWAYS him though', likes:4400},
+      {bot:'broombroke', text:'this is a confession wearing a fake mustache', likes:6700},
+      {bot:'sortinghat404', text:'havoc fang legal defense fund when', likes:9200},
+      {bot:'libraryghoul', text:'interesting how he is always near the improvement', likes:4400},
     ]},
-  { id:'p4', charId:'zara', text:'some of you need to be studied by the Department of Mysteries', likes:610000, reposts:51000, comments:20, timestamp: Date.now()-3600000*5,
-    reply:{ charId:'eli', text:'@zaravoss volunteering myself obviously. I\'m fascinating.' },
+  { id:'p4', charId:'rowan', text:'some of you show your whole strategy because nobody asked nicely enough.', likes:610000, reposts:51000, comments:20, timestamp: Date.now()-3600000*5,
+    reply:{ charId:'callum', text:'@rowancade some of us have strategies worth showing.' },
     botComments:[
-      {bot:'gmz', text:'BREAKING: @zaravoss issues public threat to 40% of campus', likes:22000},
-      {bot:'mothballin', text:'girl is she talking about the charms incident bc 😭', likes:1400},
-      {bot:'pumpkinjuiced', text:'the way @elicross jumped in immediately 💀 he\'s so obvious', likes:18500},
-      {bot:'quafflewasted', text:'he really said pick me. king behavior honestly', likes:7700},
+      {bot:'gmz', text:'BREAKING: @rowancade calls out the entire pitch with one sentence', likes:22000},
+      {bot:'mothballin', text:'callum pike took this personally in under four seconds', likes:1400},
+      {bot:'pumpkinjuiced', text:'the gryffindor chaser room is not beating the tension allegations', likes:18500},
+      {bot:'quafflewasted', text:'he smiled before typing this. i know it.', likes:7700},
     ]},
-  { id:'p5', charId:'rook', text:'interesting night in the astronomy tower. won\'t elaborate.', likes:44200, reposts:2800, comments:12, timestamp: Date.now()-3600000*6, reply:null,
+  { id:'p5', charId:'callum', text:'reliability is not boring. it is why half of you still have a scoreboard to hide behind.', likes:44200, reposts:2800, comments:12, timestamp: Date.now()-3600000*6, reply:null,
     botComments:[
-      {bot:'sortinghat404', text:'ROOK. WHAT HAPPENED. ELABORATE NOW.', likes:14000},
-      {bot:'broombroke', text:'i will pay actual galleons for context 💗', likes:8800},
-      {bot:'wetcatlooks', text:'the restraint the mystery the audacity', likes:3300},
+      {bot:'sortinghat404', text:'callum pike motivational poster but make it hostile', likes:14000},
+      {bot:'broombroke', text:'he said stop being messy and start being useful', likes:8800},
+      {bot:'wetcatlooks', text:'somebody praise him before he starts diagramming failures', likes:3300},
     ]},
-  { id:'p6', charId:'sienna', text:'Constructive criticism: maybe consider being more interesting. Just a thought.', likes:502000, reposts:18000, comments:301, timestamp: Date.now()-3600000*7, reply:null,
+  { id:'p6', charId:'briar', text:'constructive criticism: stop calling it pressure if one comment thread can ruin your footwork.', likes:502000, reposts:18000, comments:301, timestamp: Date.now()-3600000*7, reply:null,
     botComments:[
-      {bot:'gmz', text:'Sienna Drake said what she said and will not be taking owls', likes:31000},
-      {bot:'crylittlerunt', text:'the audacity is immaculate honestly', likes:5500},
-      {bot:'pumpkinjuiced', text:'okay but she\'s right though and that\'s why it hurts', likes:12200},
-      {bot:'libraryghoul', text:'WHO is she talking about. drop the name bestie.', likes:44000},
+      {bot:'gmz', text:'Briar Rowe said fix your feet before you subtweet the ref', likes:31000},
+      {bot:'crylittlerunt', text:'the captain tone is lethal actually', likes:5500},
+      {bot:'pumpkinjuiced', text:'okay but she is right and that is why everyone is quiet', likes:12200},
+      {bot:'libraryghoul', text:'WHO is she talking about. drop the practice footage.', likes:44000},
+    ]},
+  { id:'p7', charId:'theo', text:'new ranking thread later. if you are upset by your placement, consider performing better publicly.', likes:138000, reposts:9600, comments:188, timestamp: Date.now()-3600000*8, reply:null,
+    botComments:[
+      {bot:'gmz', text:'Theo Bell is threatening spreadsheet violence again', likes:18100},
+      {bot:'quafflewasted', text:'ranking thread day should be a school holiday honestly', likes:6400},
+      {bot:'wetcatlooks', text:'he says publicly like he did not invent the audience', likes:5200},
+    ]},
+  { id:'p8', charId:'jude', text:'team bonding update: everyone still has a personality problem but at least the snacks improved.', likes:99000, reposts:4300, comments:61, timestamp: Date.now()-3600000*9, reply:null,
+    botComments:[
+      {bot:'libraryghoul', text:'slytherin morale officer found unemployed in a ditch', likes:4100},
+      {bot:'mothballin', text:'jude is allergic to sincerity and unfortunately correct', likes:7900},
+      {bot:'sortinghat404', text:'snacks confirmed as the real captain', likes:3300},
+    ]},
+  { id:'p9', charId:'milo', text:'if the plan was bad why did everyone look at me when it worked for three whole seconds', likes:124000, reposts:5200, comments:94, timestamp: Date.now()-3600000*10, reply:{ charId:'briar', text:'@milovale because those were the three seconds before it stopped working.' },
+    botComments:[
+      {bot:'broombroke', text:'milo vale discovering consequences in real time', likes:11700},
+      {bot:'pumpkinjuiced', text:'briar replied like a teacher marking a crime scene', likes:9300},
+      {bot:'quafflewasted', text:'reserve chaser confidence remains medically concerning', likes:4400},
+    ]},
+  { id:'p10', charId:'elara', text:'funny how everyone loves history until it remembers their address.', likes:221000, reposts:12000, comments:143, timestamp: Date.now()-3600000*11, reply:null,
+    botComments:[
+      {bot:'gmz', text:'Elara March has entered the group chat and the temperature changed', likes:24000},
+      {bot:'crylittlerunt', text:'old flame posting is a contact sport', likes:6800},
+      {bot:'libraryghoul', text:'this is either about havoc or everyone and both are bad', likes:15100},
+    ]},
+  { id:'p11', charId:'tamsin', text:'a reminder that charm is not a substitute for self-awareness, though I understand the confusion.', likes:188000, reposts:8400, comments:112, timestamp: Date.now()-3600000*12, reply:null,
+    botComments:[
+      {bot:'sortinghat404', text:'ravenclaw elder sister energy just hit the timeline', likes:12200},
+      {bot:'mothballin', text:'rowan cade come collect your prosecutor', likes:5100},
+      {bot:'wetcatlooks', text:'polite until she is not is a threat format', likes:7600},
     ]},
 ];
 
@@ -288,56 +367,56 @@ const EVENT_TYPES = {
 const EVENT_POOL = [
   // ── SCANDAL ──────────────────────────────────────────────────────
   { id:'ev1', type:'scandal',
-    scenario:'GMZ just dropped a post claiming @zaravoss deliberately sabotaged @elicross\'s broom before the last match — and tagged you as a "possible witness." The thread is already at 5K reposts.',
-    chars:['zara','eli'], xp:[140,240] },
+    scenario:'GMZ just dropped a post claiming @havocfang turned a routine Beater drill into an "unregistered public safety incident" — and tagged you as a possible witness. The thread is already at 5K reposts.',
+    chars:['havoc'], xp:[140,240] },
   { id:'ev2', type:'scandal',
-    scenario:'@siennadrake just subtweeted someone for "riding social clout they didn\'t earn" — and the entire school is convinced it\'s about you. She hasn\'t confirmed or denied.',
-    chars:['sienna'], xp:[120,200] },
+    scenario:'@silasmontague just subtweeted someone for mistaking "attention" for "leverage" — and half the school thinks he means you. He has not corrected them.',
+    chars:['silas'], xp:[120,200] },
   { id:'ev3', type:'scandal',
-    scenario:'A GMZ source claims there\'s a betting ring on who @rookrunner\'s private account is going to post about next — and your name is the current favorite. Rook has said nothing.',
-    chars:['rook'], xp:[100,180] },
+    scenario:'A GMZ source claims there is a betting ring on whether @briarrowe benches someone before the next match. Your name is somehow in the replies.',
+    chars:['briar'], xp:[100,180] },
   { id:'ev4', type:'scandal',
-    scenario:'Someone screenshotted a DM that\'s allegedly from @elicross saying he let Gryffindor lose the scrimmage on purpose. He\'s denying everything. Everyone\'s tagging you for comment.',
-    chars:['eli'], xp:[130,220] },
+    scenario:'Someone screenshotted a DM allegedly from @callumpike calling half the Gryffindor offense "decorative." He is denying nothing. Everyone is tagging you for comment.',
+    chars:['callum'], xp:[130,220] },
 
   // ── GOSSIP ───────────────────────────────────────────────────────
   { id:'ev5', type:'gossip',
-    scenario:'@zaravoss posted "interesting night" with zero context and @rookrunner liked it within 4 seconds. The internet has exactly one theory and it involves you.',
-    chars:['zara','rook'], xp:[80,160] },
+    scenario:'@rowancade posted "interesting angle" with zero context and @havocfang liked it within 4 seconds. The internet has exactly one theory and it involves you.',
+    chars:['rowan','havoc'], xp:[80,160] },
   { id:'ev6', type:'gossip',
-    scenario:'teatime__ just posted that @siennadrake was seen leaving the library with @elicross at 2am during exam week. No one knows what to do with this information.',
-    chars:['sienna','eli'], xp:[90,160] },
+    scenario:'teatime__ just posted that @briarrowe and @silasmontague had a very civilized argument near the pitch at 2am. No one knows what to do with this information.',
+    chars:['briar','silas'], xp:[90,160] },
   { id:'ev7', type:'gossip',
-    scenario:'QuaffleKing started a poll: "who wins in a duel, @zaravoss or @elicross" — it\'s 50/50 and both of them are publicly ignoring it, which is somehow making it worse.',
-    chars:['zara','eli'], xp:[70,140] },
+    scenario:'QuaffleKing started a poll: "who wins in a fight, @havocfang or @callumpike if Callum finally snaps" — it is 50/50 and both of them are ignoring it badly.',
+    chars:['havoc','callum'], xp:[70,140] },
   { id:'ev8', type:'gossip',
-    scenario:'@rookrunner posted a single ":)" at 3am. No caption, no context. It has 44K likes. @siennadrake screenshot it. The whole school is trying to decode it.',
-    chars:['rook','sienna'], xp:[60,130] },
+    scenario:'@rowancade posted a single ":)" at 3am. No caption, no context. It has 44K likes. @briarrowe screenshot it. The whole school is trying to decode it.',
+    chars:['rowan','briar'], xp:[60,130] },
 
   // ── DIRECT TAG ───────────────────────────────────────────────────
   { id:'ev9', type:'tag',
-    scenario:'@zaravoss just replied to your last post with "this energy is why Slytherin keeps winning" and now half the school is @-ing you waiting to see if you clap back.',
-    chars:['zara'], xp:[100,180] },
+    scenario:'@silasmontague just replied to your last post with "this energy is why Slytherin keeps winning" and now half the school is @-ing you waiting to see if you clap back.',
+    chars:['silas'], xp:[100,180] },
   { id:'ev10', type:'tag',
-    scenario:'@elicross tagged you in a post: "found someone who actually talks game instead of just playing it 👀" — no other context. @siennadrake has already liked it.',
-    chars:['eli','sienna'], xp:[110,190] },
+    scenario:'@havocfang tagged you in a post: "found someone who actually talks game instead of just playing it" — no other context. @rowancade has already liked it.',
+    chars:['havoc','rowan'], xp:[110,190] },
   { id:'ev11', type:'tag',
-    scenario:'@siennadrake publicly invited you to co-sign her new "campus standards" post. It\'s beautifully worded. It is also absolutely a trap.',
-    chars:['sienna'], xp:[120,200] },
+    scenario:'@briarrowe publicly invited you to co-sign her new "team standards" post. It is beautifully worded. It is also absolutely a trap.',
+    chars:['briar'], xp:[120,200] },
   { id:'ev12', type:'tag',
-    scenario:'@rookrunner posted a cryptic "some people just get it" and tagged exactly two accounts: you and @zaravoss. No explanation. Both fandoms are losing their minds.',
-    chars:['rook','zara'], xp:[90,170] },
+    scenario:'@rowancade posted a cryptic "some people just get it" and tagged exactly two accounts: you and @havocfang. No explanation. Both fandoms are losing their minds.',
+    chars:['rowan','havoc'], xp:[90,170] },
 
   // ── OPPORTUNITY ──────────────────────────────────────────────────
   { id:'ev13', type:'opportunity',
-    scenario:'@elicross and @zaravoss are mid-argument in the replies of a GMZ post and both of them are absolutely wrong about the same thing. The window to humiliate both at once is open.',
-    chars:['eli','zara'], xp:[130,230] },
+    scenario:'@havocfang and @callumpike are mid-argument in the replies of a GMZ post and both of them are absolutely wrong about the same thing. The window to humiliate both at once is open.',
+    chars:['havoc','callum'], xp:[130,230] },
   { id:'ev14', type:'opportunity',
-    scenario:'@siennadrake\'s perfectly curated "study aesthetic" post has one fatal flaw — a background detail only you would notice. You could say nothing. Or you could say everything.',
-    chars:['sienna'], xp:[100,180] },
+    scenario:'@silasmontague\'s perfectly controlled match analysis post has one fatal flaw — a background detail only you would notice. You could say nothing. Or you could say everything.',
+    chars:['silas'], xp:[100,180] },
   { id:'ev15', type:'opportunity',
-    scenario:'@rookrunner just silently unfollowed someone and the entire school noticed. You\'re one of the few who knows why. Say something or let the chaos cook?',
-    chars:['rook'], xp:[80,160] },
+    scenario:'@briarrowe just silently unfollowed someone and the entire school noticed. You are one of the few who knows why. Say something or let the chaos cook?',
+    chars:['briar'], xp:[80,160] },
 ];
 
 // ─── Relationship bar ─────────────────────────────────────────────
@@ -1446,11 +1525,18 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
 }
 
 // ─── Profile Screen ───────────────────────────────────────────────
-function ProfileScreen({ player, chars, onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
-  const relationships = chars.map(c => ({
-    char: c,
-    value: (c.relationships?.player ?? Math.round(Math.random()*80 - 20)),
-  }));
+function ProfileScreen({ player, chars, socialPresence, onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
+  const relationships = chars
+    .filter(c => c.relationships && Object.prototype.hasOwnProperty.call(c.relationships, 'player'))
+    .map(c => ({
+      char: c,
+      value: c.relationships.player,
+    }));
+  const socialRows = [
+    ['😂','Humor',socialPresence?.humor ?? 0,'#4dabf7'],
+    ['⭐','Aura',socialPresence?.aura ?? 0,'#22c55e'],
+    ['🔥','Drama',socialPresence?.drama ?? 0,'#f97316'],
+  ];
 
   return (
     <div style={{flex:1, overflowY:'auto'}}>
@@ -1494,7 +1580,7 @@ function ProfileScreen({ player, chars, onEditChar, onCreateChar, onCharClick, o
         <div style={{marginTop:20}}>
           <h3 style={{color:C.text, fontSize:15, fontWeight:700, marginBottom:10}}>Social Presence</h3>
           <div style={{background:C.card2, borderRadius:12, padding:'14px'}}>
-            {[['😂','Humor',240.9,'#4dabf7'],['⭐','Aura',170.4,'#22c55e'],['🔥','Drama',88.2,'#f97316']].map(([icon,label,val,color]) => (
+            {socialRows.map(([icon,label,val,color]) => (
               <div key={label} style={{marginBottom:14, lastChild:{marginBottom:0}}}>
                 <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
                   <span style={{color:C.text, fontSize:13}}>{icon} {label}</span>
@@ -1510,8 +1596,13 @@ function ProfileScreen({ player, chars, onEditChar, onCreateChar, onCharClick, o
 
         {/* Relationships */}
         <div style={{marginTop:20}}>
-          <h3 style={{color:C.text, fontSize:15, fontWeight:700, marginBottom:10}}>Relationships ({chars.length})</h3>
+          <h3 style={{color:C.text, fontSize:15, fontWeight:700, marginBottom:10}}>Relationships ({relationships.length})</h3>
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {relationships.length === 0 && (
+              <div style={{background:C.card2, borderRadius:12, padding:'14px', color:C.muted, fontSize:13}}>
+                No current relationships yet.
+              </div>
+            )}
             {relationships.map(({char, value}) => (
               <div key={char.id} onClick={() => onCharClick(char)} style={{background:C.card2, borderRadius:12, padding:'12px 14px', cursor:'pointer', display:'flex', gap:10, alignItems:'center'}}>
                 <Avatar char={char} size={42} />
@@ -1867,7 +1958,8 @@ const CHEMISTRY_CHIPS = [
 ];
 
 function CharProfileScreen({ char, player, onBack, onDM, feed, allChars, onOpenThread }) {
-  const rel = 45 + (char.id.charCodeAt(0) % 40);
+  const hasPlayerRel = !!char.relationships && Object.prototype.hasOwnProperty.call(char.relationships, 'player');
+  const rel = hasPlayerRel ? char.relationships.player : 0;
   const [following, setFollowing] = useState(false);
   const [chemOpen, setChemOpen] = useState(false);
   const [chemistry, setChemistry] = useState('default');
@@ -1940,7 +2032,7 @@ Only output the JSON array, nothing else.` }]
     loadVibes();
   }, [char.id]);
 
-  const relLabel = CHEMISTRY_LABELS[chemistry] || CHEMISTRY_LABELS.default;
+  const relLabel = hasPlayerRel ? (CHEMISTRY_LABELS[chemistry] || CHEMISTRY_LABELS.default) : 'No Current Relationship';
 
   return (
     <div style={{flex:1, overflowY:'auto', position:'relative'}}>
@@ -2214,14 +2306,20 @@ function EditCharScreen({ char, onBack, onSave }) {
 
 // ─── Group Chat Screen ────────────────────────────────────────────
 const DEFAULT_GROUP_CHATS = [
-  { id:'gc1', name:'Slytherin Common Room 🐍', members:['zara','sienna'], messages:[
-    { role:'char', charId:'zara', text:'Anyone else notice @siennadrake has been weirdly nice lately. I\'m suspicious.', id:'gm1' },
-    { role:'char', charId:'sienna', text:'I\'m always this nice. You\'re just usually too annoying to notice.', id:'gm2' },
+  { id:'gc1', name:'Slytherin Common Room 🐍', members:['silas','jude'], messages:[
+    { role:'char', charId:'silas', text:'If anyone sees another match edit with the wrong formation tagged as analysis, report it for public indecency.', id:'gm1' },
+    { role:'char', charId:'jude', text:'reporting it for being boring first but sure', id:'gm2' },
   ]},
-  { id:'gc2', name:'Quidditch Drama 🏆', members:['eli','rook'], messages:[
-    { role:'char', charId:'eli', text:'that foul call was CRIMINAL and I will die on this hill', id:'gm3' },
-    { role:'char', charId:'rook', text:'you literally fouled first', id:'gm4' },
-    { role:'char', charId:'eli', text:'that is IRRELEVANT', id:'gm5' },
+  { id:'gc2', name:'Gryffindor Quidditch 🏆', members:['havoc','briar','callum','rowan','milo','theo'], messages:[
+    { role:'char', charId:'briar', text:'Practice is not optional just because the timeline found a new joke.', id:'gm3' },
+    { role:'char', charId:'havoc', text:'what if the joke improves morale', id:'gm4' },
+    { role:'char', charId:'callum', text:'It does not.', id:'gm5' },
+    { role:'char', charId:'rowan', text:'depends who falls for it first.', id:'gm6' },
+    { role:'char', charId:'milo', text:'I could test it', id:'gm7' },
+    { role:'char', charId:'theo', text:'For documentation purposes, please do.', id:'gm8' },
+  ]},
+  { id:'gc3', name:'Ravenclaw Study Hall 📚', members:['tamsin'], messages:[
+    { role:'char', charId:'tamsin', text:'If this is about Quidditch drama, cite your sources before wasting my evening.', id:'gm9' },
   ]},
 ];
 
@@ -2424,7 +2522,7 @@ function ComposeModal({ chars, player, onClose, onPost }) {
 }
 
 // ─── Event Modal ──────────────────────────────────────────────────
-function EventModal({ event, chars, player, feed, onClose, onSubmit, onLog }) {
+function EventModal({ event, chars, player, feed, onClose, onSubmit, onLog, onSocialPresenceGain }) {
   const [input, setInput] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -2479,17 +2577,24 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
       const followerGain = Math.floor(xp * (1800 + Math.random() * 1200));
       const statGain = +(Math.random() * 0.3 + 0.1).toFixed(2);
       const evType = currentEvent.type || 'gossip';
+      const socialGain = {
+        humor: +(statGain * (evType === 'tag' ? 1.2 : evType === 'opportunity' ? 0.9 : 1)).toFixed(2),
+        aura: +(statGain * (evType === 'opportunity' ? 1.3 : 0.8)).toFixed(2),
+        drama: +(statGain * (evType === 'scandal' ? 1.6 : evType === 'gossip' ? 1.2 : 0.7)).toFixed(2),
+      };
       const scoreChanges = [
         { icon:'✨', label:'Experience', value: xp, unit:'', flavor: evType === 'scandal' ? 'Chaos is a ladder, apparently.' : evType === 'tag' ? 'You answered the call.' : evType === 'opportunity' ? 'The window was open. You flew through it.' : 'Drama points well spent.' },
         { icon:'👥', label:'Followers', value: `+${(followerGain >= 1000 ? (followerGain/1000).toFixed(0)+'K' : followerGain)}`, unit:'', flavor: evType === 'scandal' ? 'Everyone loves a scandal.' : 'Word travels fast on campus.' },
-        { icon:'😂', label:'Humor', value: `+${statGain}`, unit:'%', flavor: 'Your wit is showing.' },
-        { icon:'⭐', label:'Aura', value: `+${(statGain * 0.8).toFixed(2)}`, unit:'%', flavor: 'Presence confirmed.' },
+        { icon:'😂', label:'Humor', value: `+${socialGain.humor}`, unit:'%', flavor: 'Your wit is showing.' },
+        { icon:'⭐', label:'Aura', value: `+${socialGain.aura}`, unit:'%', flavor: 'Presence confirmed.' },
+        { icon:'🔥', label:'Drama', value: `+${socialGain.drama}`, unit:'%', flavor: evType === 'scandal' ? 'Mess travels beautifully.' : 'The timeline noticed.' },
         ...currentEvent.chars.map(cid => {
           const delta = +(Math.random() * 1.2 - 0.3).toFixed(2);
           const flavorMap = { scandal: delta > 0 ? 'Impressed by the chaos.' : 'Not thrilled about this.', gossip: 'Taking notes.', tag: delta > 0 ? 'Appreciated the response.' : 'Was not expecting that.', opportunity: delta > 0 ? 'Respects the move.' : 'Saw what you did there.' };
           return { avatar: cid, label: `@${cid}`, value: delta, unit:'%', flavor: flavorMap[evType] || 'Watching closely.' };
         }),
       ];
+      onSocialPresenceGain && onSocialPresenceGain(socialGain);
       onLog && onLog({
         type: 'event',
         eventType: evType,
@@ -3008,7 +3113,29 @@ function App() {
   // ── Server-side persistence ───────────────────────────────────
   const _saveTimer = useRef(null);
 
+  function isFileMode() {
+    return window.location.protocol === 'file:';
+  }
+
+  function saveLocalState(state) {
+    try {
+      window.localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(state));
+    } catch(e) {}
+  }
+
+  function loadLocalState() {
+    try {
+      return JSON.parse(window.localStorage.getItem(LOCAL_STATE_KEY) || '{}');
+    } catch(e) {
+      return {};
+    }
+  }
+
   function serverSave(state) {
+    if (isFileMode()) {
+      saveLocalState(state);
+      return;
+    }
     clearTimeout(_saveTimer.current);
     _saveTimer.current = setTimeout(() => {
       fetch('/api/state', {
@@ -3019,6 +3146,19 @@ function App() {
     }, 1500);
   }
 
+  function serverSaveNow(state) {
+    if (isFileMode()) {
+      saveLocalState(state);
+      return;
+    }
+    clearTimeout(_saveTimer.current);
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+    }).catch(() => {});
+  }
+
   const [chars, setCharsRaw] = useState(DEFAULT_CHARS);
   const [player, setPlayerRaw] = useState(DEFAULT_PLAYER);
   const [feed, setFeedRaw] = useState(DEFAULT_FEED);
@@ -3026,26 +3166,50 @@ function App() {
   const [groupChats, setGroupChatsRaw] = useState(DEFAULT_GROUP_CHATS);
   const [eventLog, setEventLogRaw] = useState([]);
   const [day, setDayRaw] = useState(DEFAULT_DAY);
+  const [socialPresence, setSocialPresenceRaw] = useState(DEFAULT_SOCIAL_PRESENCE);
   const [stateLoaded, setStateLoaded] = useState(false);
 
   function cloneDefault(value) {
     return JSON.parse(JSON.stringify(value));
   }
 
-  function freshGameState() {
+  function clearPlayerRelationships(list) {
+    return list.map(char => {
+      if (!char.relationships || !Object.prototype.hasOwnProperty.call(char.relationships, 'player')) return char;
+      const { player: _playerRelationship, ...relationships } = char.relationships;
+      return { ...char, relationships };
+    });
+  }
+
+  function freshGameState({ preserveProfiles = false } = {}) {
+    const freshChars = preserveProfiles ? clearPlayerRelationships(cloneDefault(chars)) : cloneDefault(DEFAULT_CHARS);
     return {
-      chars: cloneDefault(DEFAULT_CHARS),
-      player: cloneDefault(DEFAULT_PLAYER),
+      chars: freshChars,
+      player: preserveProfiles ? cloneDefault(player) : cloneDefault(DEFAULT_PLAYER),
       feed: cloneDefault(DEFAULT_FEED),
       dms: {},
       groupChats: cloneDefault(DEFAULT_GROUP_CHATS),
       eventLog: [],
       day: DEFAULT_DAY,
+      socialPresence: preserveProfiles ? cloneDefault(FRESH_SOCIAL_PRESENCE) : cloneDefault(DEFAULT_SOCIAL_PRESENCE),
     };
   }
 
   // Load saved state from server on startup
   useEffect(() => {
+    if (isFileMode()) {
+      const saved = loadLocalState();
+      if (saved.chars)      setCharsRaw(saved.chars);
+      if (saved.player)     setPlayerRaw(saved.player);
+      if (saved.feed)       setFeedRaw(saved.feed);
+      if (saved.dms)        setDmsRaw(saved.dms);
+      if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
+      if (saved.eventLog)   setEventLogRaw(saved.eventLog);
+      if (typeof saved.day === 'number') setDayRaw(saved.day);
+      if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
+      setStateLoaded(true);
+      return;
+    }
     fetch('/api/state').then(r => r.json()).then(saved => {
       if (saved.chars)      setCharsRaw(saved.chars);
       if (saved.player)     setPlayerRaw(saved.player);
@@ -3054,18 +3218,28 @@ function App() {
       if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
       if (saved.eventLog)   setEventLogRaw(saved.eventLog);
       if (typeof saved.day === 'number') setDayRaw(saved.day);
+      if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
       setStateLoaded(true);
     }).catch(() => setStateLoaded(true));
   }, []);
 
   // Wrapped setters — update state and schedule a server save
-  function setChars(v)      { setCharsRaw(prev      => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars:next,player,feed,dms,groupChats,eventLog,day}); return next; }); }
-  function setPlayer(v)     { setPlayerRaw(prev     => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player:next,feed,dms,groupChats,eventLog,day}); return next; }); }
-  function setFeed(v)       { setFeedRaw(prev       => { const next = (typeof v==='function'?v(prev):v).slice(0,60);      serverSave({chars,player,feed:next,dms,groupChats,eventLog,day}); return next; }); }
-  function setDms(v)        { setDmsRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms:next,groupChats,eventLog,day}); return next; }); }
-  function setGroupChats(v) { setGroupChatsRaw(prev => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats:next,eventLog,day}); return next; }); }
-  function setEventLog(v)   { setEventLogRaw(prev   => { const next = (typeof v==='function'?v(prev):v).slice(0,30);      serverSave({chars,player,feed,dms,groupChats,eventLog:next,day}); return next; }); }
-  function setDay(v)        { setDayRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats,eventLog,day:next}); return next; }); }
+  function setChars(v)      { setCharsRaw(prev      => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars:next,player,feed,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
+  function setPlayer(v)     { setPlayerRaw(prev     => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player:next,feed,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
+  function setFeed(v)       { setFeedRaw(prev       => { const next = (typeof v==='function'?v(prev):v).slice(0,60);      serverSave({chars,player,feed:next,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
+  function setDms(v)        { setDmsRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms:next,groupChats,eventLog,day,socialPresence}); return next; }); }
+  function setGroupChats(v) { setGroupChatsRaw(prev => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats:next,eventLog,day,socialPresence}); return next; }); }
+  function setEventLog(v)   { setEventLogRaw(prev   => { const next = (typeof v==='function'?v(prev):v).slice(0,30);      serverSave({chars,player,feed,dms,groupChats,eventLog:next,day,socialPresence}); return next; }); }
+  function setDay(v)        { setDayRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats,eventLog,day:next,socialPresence}); return next; }); }
+  function setSocialPresence(v) { setSocialPresenceRaw(prev => { const next = typeof v==='function'?v(prev):v;             serverSave({chars,player,feed,dms,groupChats,eventLog,day,socialPresence:next}); return next; }); }
+
+  function addSocialPresence(gains) {
+    setSocialPresence(prev => ({
+      humor: Math.min(300, +(Number(prev?.humor || 0) + Number(gains?.humor || 0)).toFixed(2)),
+      aura: Math.min(300, +(Number(prev?.aura || 0) + Number(gains?.aura || 0)).toFixed(2)),
+      drama: Math.min(300, +(Number(prev?.drama || 0) + Number(gains?.drama || 0)).toFixed(2)),
+    }));
+  }
   const [activeGroupChat, setActiveGroupChat] = useState(null);
   const [tab, setTab] = useState('feed');
   const [chatChar, setChatChar] = useState(null);
@@ -3081,9 +3255,9 @@ function App() {
   const [navStack, setNavStack] = useState([]); // navigation history for back buttons
 
   function handleResetGame() {
-    const ok = window.confirm('Start fresh? This clears the saved feed, DMs, activity log, and character edits for this hosted app.');
+    const ok = window.confirm('Start fresh? This clears the saved feed, DMs, activity log, social presence, and current relationships. Your profile and character edits stay.');
     if (!ok) return;
-    const next = freshGameState();
+    const next = freshGameState({ preserveProfiles: true });
     setCharsRaw(next.chars);
     setPlayerRaw(next.player);
     setFeedRaw(next.feed);
@@ -3091,6 +3265,7 @@ function App() {
     setGroupChatsRaw(next.groupChats);
     setEventLogRaw(next.eventLog);
     setDayRaw(next.day);
+    setSocialPresenceRaw(next.socialPresence);
     setActiveGroupChat(null);
     setChatChar(null);
     setViewChar(null);
@@ -3103,8 +3278,7 @@ function App() {
     setActivitySection('posts');
     setTab('profile');
     setNavStack([]);
-    fetch('/api/state', { method:'DELETE' }).catch(() => {});
-    serverSave(next);
+    serverSaveNow(next);
   }
 
   // ── Navigation helpers ────────────────────────────────────────
@@ -3461,7 +3635,7 @@ ${BANNED_PHRASES_RULE}` }]
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
         case 'notifications': return <NotificationsScreen chars={chars} feed={feed} />;
-        case 'profile': return <ProfileScreen player={player} chars={chars} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
+        case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return null;
       }
     })();
@@ -3482,7 +3656,7 @@ ${BANNED_PHRASES_RULE}` }]
           <LiveMatchModal match={activeMatch} chars={chars} player={player} onClose={() => setActiveMatch(null)} onPostToFeed={handleMatchPost} onMatchEnd={handleMatchEnd} />
         )}
         {activeEvent && (
-          <EventModal event={activeEvent} chars={chars} player={player} feed={feed} onClose={() => setActiveEvent(null)} onSubmit={handleEventSubmit} onLog={(entry) => setEventLog(l => [entry, ...l])} />
+          <EventModal event={activeEvent} chars={chars} player={player} feed={feed} onClose={() => setActiveEvent(null)} onSubmit={handleEventSubmit} onLog={(entry) => setEventLog(l => [entry, ...l])} onSocialPresenceGain={addSocialPresence} />
         )}
         {composing && (
           <ComposeModal chars={chars} player={player} onClose={() => setComposing(false)} onPost={post => {

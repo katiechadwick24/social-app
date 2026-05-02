@@ -162,6 +162,13 @@ function fmt(n) {
   return String(n);
 }
 
+function playerReplyLikes(nested = true) {
+  const min = nested ? 900 : 1800;
+  const max = nested ? 14000 : 32000;
+  const viralBump = Math.random() < 0.12 ? 18000 + Math.random() * 42000 : 0;
+  return Math.floor(min + Math.random() * (max - min) + viralBump);
+}
+
 function findCharByHandle(handle, allChars = []) {
   const clean = (handle || '').replace('@','').toLowerCase();
   return allChars.find(c => (c.handle || '').toLowerCase() === clean);
@@ -258,8 +265,27 @@ const DEFAULT_PRONOUNS_BY_ID = {
   __gmz__:'they/them',
 };
 
+const DEFAULT_HOUSE_BY_ID = {
+  player:'Slytherin',
+  havoc:'Gryffindor',
+  silas:'Slytherin',
+  callum:'Gryffindor',
+  briar:'Gryffindor',
+  rowan:'Gryffindor',
+  milo:'Gryffindor',
+  elara:'Gryffindor',
+  theo:'Gryffindor',
+  jude:'Slytherin',
+  tamsin:'Ravenclaw',
+};
+
 function pronounsFor(char) {
   return (char?.pronouns || DEFAULT_PRONOUNS_BY_ID[char?.id] || 'they/them').trim();
+}
+
+function houseFor(char) {
+  const raw = char?.house || DEFAULT_HOUSE_BY_ID[char?.id] || '';
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : '';
 }
 
 function pronounRoster(chars = []) {
@@ -269,8 +295,20 @@ function pronounRoster(chars = []) {
     .join('; ');
 }
 
+function houseRoster(chars = []) {
+  return chars
+    .filter(Boolean)
+    .map(c => {
+      const house = houseFor(c) || 'unknown house';
+      const team = c.team || house;
+      const position = c.position ? `, ${c.position}` : '';
+      return `${c.name} (@${c.handle}): ${house}${team ? `, ${team}` : ''}${position}`;
+    })
+    .join('; ');
+}
+
 function pronounRule(chars = []) {
-  return `PRONOUN RULE: Use these exact third-person pronouns and do not infer from names, vibes, teams, or usernames. ${pronounRoster(chars)}. This only controls third-person references like he/she/they/him/her/them; direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. If a character is mentioned by @handle, keep their pronouns consistent.`;
+  return `IDENTITY RULE: Use these exact third-person pronouns and house/team facts. Do not infer from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. This controls third-person references and house logic; direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. If a character is mentioned by @handle, keep their pronouns and house/team consistent. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
 }
 
 function compressImageFile(file, { maxSize = 720, quality = 0.78 } = {}) {
@@ -333,6 +371,8 @@ CANON AND FACT RULES:
 - If a character would not know something, they cannot state it as fact. They may speculate, ask, misread, subtweet, gossip, or say "rumor is", but keep uncertainty visible.
 - GMZ and gossip accounts can exaggerate public rumors, but they still cannot create hard canon. Frame unconfirmed claims as rumor, alleged sightings, sources, or timeline speculation.
 - Prefer reacting to visible app evidence: the post text, tags, replies, likes, clips, screenshots, current relationship notes, and recent messages.
+- Trash talk is normal Quidditch culture, not a social crime. Characters can insult rival houses, rival teams, plays, captains, training, habits, and public mistakes. Do not make them act shocked that someone talked trash unless the line crosses a real personal boundary.
+- Preserve house and team logic. Treat house/team like pronouns: exact, sticky, and not guessable from vibes. If a character is on Gryffindor, Slytherin, Ravenclaw, or Hufflepuff, they should not talk about that house or team like outsiders. They can roast their own side, but it should sound like "we/us/our team/my captain/our mess", not "they/them/Gryffindor is boring" unless they are clearly quoting or distancing as a joke. Rival houses can and should use "they/them" and be openly smug. Do not write "Slytherin could never", "Gryffindor could never", etc. if someone from that house just did the thing in the visible thread.
 - When context is thin, stay broad, teasing, evasive, or ask a pointed question instead of filling the gap with invented lore.
 
 ANTI-AI PATTERNS:
@@ -366,7 +406,7 @@ CHARACTER TONE BALANCE:
 - Jude should undercut drama with captions, snark, and low-effort menace rather than moralizing.
 - Theo should post like the mess has analytics. He should chase the funny angle, not just the severe one.
 - Tamsin and Elara can be composed or dangerous without becoming humorless.
-- Silas should stay controlled and tactical. Do not make him openly needy, defensive, or romantic on main.
+- Silas should stay controlled and tactical. Do not make him openly needy, defensive, or romantic on main. He should absolutely enjoy Gryffindor trash talk, especially if Keres is targeting Gryffindor's structure, habits, or players. He may correct sloppy logic, but he should not become protective of Gryffindor or offended on their behalf.
 - Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", "let's see it", "prove it", or agreeing after being insulted. He should track the actual logic of the exchange, not randomly defend Havoc or accuse Keres of judging if she is clearly appreciating the chaos.
 - Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.`;
 
@@ -378,7 +418,7 @@ function playerStance(char, player, relationshipOverride) {
     ? 'No fixed relationship score with Keres yet; use the character profile and recent visible context without hard flipping.'
     : `Current relationship score with @${player.handle}: ${rel}/100. Keep this consistent across the thread.`;
   const fixed = {
-    silas: 'Silas is controlled, strategic, and hard to impress. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction.',
+    silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain, so he is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction.',
     callum: 'Callum is proud, exacting, and competitive. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess.',
     havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action.',
     rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery.',
@@ -392,7 +432,10 @@ function playerStance(char, player, relationshipOverride) {
   const relationshipNuance = char.id === 'tamsin' && rel > 0
     ? 'Because Tamsin and Keres currently have positive trust, she can still be sharp, but she should not treat normal Slytherin-vs-Gryffindor trash talk as weird, betrayal, or overstepping. She respects directness and information exchange; skepticism should be precise, not random hostility.'
     : '';
-  return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
+  const teamLine = char.team || char.house
+    ? `TEAM CONTINUITY: ${char.name} is ${char.team ? `on ${char.team}` : `in ${char.house}`}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic. They may roast their own side, but not like an outsider. If discussing a rival team/house, trash talk is allowed and expected.`
+    : '';
+  return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} ${teamLine} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
 }
 
 function cleanGeneratedText(text = '') {
@@ -1395,7 +1438,7 @@ Return ONLY SILENCE or the reply text.`
       const botPlayerEntry = {
         bot: '__player__',
         text,
-        likes: 0,
+        likes: playerReplyLikes(true),
         isPlayer: true,
         timestamp: baseTs + 0.1,
         replyTo: bot.handle,
@@ -1438,7 +1481,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
     const playerEntry = {
       charId: player.id,
       text,
-      likes: 0,
+      likes: playerReplyLikes(target.kind !== 'post'),
       timestamp: target.kind === 'post' ? Date.now() : baseTs + 0.1,
       replyTo: target.handle || char?.handle,
       nestedReply: target.kind !== 'post',
@@ -1671,7 +1714,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
             const playerEntry = {
               charId: player.id,
               text: playerReply,
-              likes: 0,
+              likes: playerReplyLikes(true),
               timestamp: replyBaseTs + 0.1,
               replyTo: cChar.handle,
               nestedReply: true,
@@ -1802,7 +1845,7 @@ ${BANNED_PHRASES_RULE}`
           setReplyingToBot(null);
           // Optimistically add player reply
           const replyBaseTs = Number(bc.timestamp || post.timestamp || Date.now());
-          const playerEntry = { bot: '__player__', text: playerReply, likes: 0, isPlayer: true, timestamp: replyBaseTs + 0.1, replyTo: bot.handle, nestedReply: true };
+          const playerEntry = { bot: '__player__', text: playerReply, likes: playerReplyLikes(true), isPlayer: true, timestamp: replyBaseTs + 0.1, replyTo: bot.handle, nestedReply: true };
           setBotComments(prev => {
             const next = [...prev];
             next.splice(i + 1, 0, playerEntry);
@@ -2310,10 +2353,13 @@ function MessagesScreen({ chars, player, dms, onOpenChat, dmNotifs = {}, setDmNo
             const memberChars = gc.members.map(id => id === 'player' ? player : chars.find(c => c.id === id)).filter(Boolean);
             const lastMsg = gc.messages[gc.messages.length - 1];
             const lastSender = lastMsg ? (lastMsg.charId === 'player' ? player : chars.find(c=>c.id===lastMsg.charId) || null) : null;
+            const groupNotifKey = `group:${gc.id}`;
+            const notifCount = dmNotifs[groupNotifKey] || 0;
+            const hasUnread = notifCount > 0;
             return (
-              <div key={gc.id} onClick={() => onOpenGroup(gc)} style={{
+              <div key={gc.id} onClick={() => { setDmNotifs && setDmNotifs(n => ({...n, [groupNotifKey]: 0})); onOpenGroup(gc); }} style={{
                 display:'flex', gap:12, padding:'12px 16px', borderBottom:`1px solid ${C.border}`,
-                cursor:'pointer', alignItems:'center',
+                cursor:'pointer', alignItems:'center', background: hasUnread ? C.card2 : 'transparent',
               }}>
                 <div style={{position:'relative', width:48, height:48, flexShrink:0}}>
                   {memberChars.slice(0,2).map((m,i) => (
@@ -2328,6 +2374,11 @@ function MessagesScreen({ chars, player, dms, onOpenChat, dmNotifs = {}, setDmNo
                     {lastMsg ? `${lastSender?.name?.split(' ')[0] || 'Someone'}: ${lastMsg.text}` : 'Start the conversation'}
                   </p>
                 </div>
+                {hasUnread && (
+                  <div style={{background:C.blue, color:'#fff', minWidth:22, height:22, borderRadius:999, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, padding:'0 6px'}}>
+                    {notifCount}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -3523,7 +3574,7 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, setGroupCh
 
   async function send() {
     if (!input.trim() || loading) return;
-    const userMsg = { role:'user', charId:'player', text: input.trim(), id: Date.now() };
+    const userMsg = { role:'user', charId:'player', text: input.trim(), id: Date.now(), ts: Date.now() };
     const newMsgs = [...msgs, userMsg];
     setMsgs(newMsgs);
     setGroupChats(gs => gs.map(g => g.id === group.id ? {...g, messages: newMsgs} : g));
@@ -3562,7 +3613,7 @@ ${player.name} just said: "${input}"
 Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Sometimes address specific people by @handle. Sometimes ignore the question and say something tangential. Be natural.
 ${BANNED_PHRASES_RULE}` }]
         });
-        const charMsg = { role:'char', charId: member.id, text: cleanGeneratedText(reply), id: Date.now() + Math.random() };
+        const charMsg = { role:'char', charId: member.id, text: cleanGeneratedText(reply), id: Date.now() + Math.random(), ts: Date.now() };
         updatedMsgs = [...updatedMsgs, charMsg];
         setMsgs([...updatedMsgs]);
         setGroupChats(gs => gs.map(g => g.id === group.id ? {...g, messages: [...updatedMsgs]} : g));
@@ -4856,6 +4907,90 @@ ${BANNED_PHRASES_RULE}` }
       }, 9000 + idx * 7000 + Math.random()*8000);
     });
   }
+
+  async function triggerGroupChatPopIn(group, context = 'the group chat has gone quiet') {
+    if (!group || !(group.members || []).includes('player')) return;
+    const allChars = [...chars, player];
+    const members = (group.members || []).map(id => allChars.find(c => c.id === id)).filter(Boolean);
+    const aiMembers = members.filter(m => m.id !== player.id);
+    if (!aiMembers.length) return;
+
+    const recentMessages = (group.messages || []).slice(-10);
+    const lastMsg = recentMessages[recentMessages.length - 1];
+    const lastSpeakerId = lastMsg?.role === 'user' ? 'player' : lastMsg?.charId;
+    const candidates = aiMembers.filter(m => m.id !== lastSpeakerId);
+    const pool = candidates.length ? candidates : aiMembers;
+    const weighted = pool.map(member => {
+      let w = 1 + Math.random();
+      if (/chaotic|shameless|loud|nosy|restless|funny|provocative|reactive|opportunistic/i.test(member.personality || '')) w += 1.2;
+      if (/quiet|composed|controlled|disciplined|reserved/i.test(member.personality || '')) w -= 0.35;
+      return { member, w };
+    }).sort((a,b) => b.w - a.w);
+    const member = weighted[0]?.member;
+    if (!member) return;
+
+    const recentFeed = feed.slice(0,5).map(p => {
+      const poster = allChars.find(c => c.id === p.charId) || GMZ_CHAR;
+      return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
+    }).join('\n');
+    const historyStr = recentMessages.map(m => {
+      const sender = m.role === 'user' ? player : allChars.find(c => c.id === m.charId);
+      return `${sender?.name || 'Someone'}: "${m.text}"`;
+    }).join('\n');
+    const otherMembers = members.filter(m => m.id !== member.id).map(m => `${m.name} (@${m.handle}; pronouns: ${pronounsFor(m)}; house/team: ${houseFor(m) || 'unknown'}${m.position ? `, ${m.position}` : ''})`).join('; ');
+
+    try {
+      const reply = await window.claude.complete({ messages:[{ role:'user', content:
+        `You are ${member.name} (@${member.handle}; pronouns: ${pronounsFor(member)}) in a group chat called "${group.name}".
+Personality: ${member.personality}. ${member.description?.slice(0,220)}
+Other people in this chat: ${otherMembers}.
+${pronounRule([member, player, ...members])}
+${CHARACTER_TONE_RULE}
+${playerStance(member, player)}
+Recent campus feed:
+${recentFeed || '(quiet feed)'}
+Recent group chat history:
+${historyStr || '(new group chat)'}
+
+The chat went quiet. Pop back in naturally because of this context: ${context}
+Write ONE short in-character group chat message. It can revive the bit, @someone, ask a messy question, flirt, complain, gossip, or drag the conversation sideways. It should feel like a person came back after a lull, not like a formal announcement. 4-22 words. No quotes.
+${BANNED_PHRASES_RULE}` }]
+      });
+      const clean = cleanGeneratedText(reply);
+      if (!clean) return;
+      const charMsg = { role:'char', charId: member.id, text: clean, id: Date.now() + Math.random(), ts: Date.now(), revived: true };
+      setGroupChats(gs => gs.map(g => g.id === group.id
+        ? { ...g, messages: [...(g.messages || []), charMsg], lastAutoPingAt: Date.now() }
+        : g
+      ));
+      if (activeGroupChat?.id !== group.id) {
+        setDmNotifs(n => ({ ...n, [`group:${group.id}`]: (n[`group:${group.id}`] || 0) + 1 }));
+      }
+    } catch(e) {}
+  }
+
+  useEffect(() => {
+    if (!stateLoaded || !chars.length) return;
+    if (editChar || activeEvent || activeMatch || composing) return;
+    const timer = setTimeout(() => {
+      const now = Date.now();
+      const eligibleGroups = (groupChats || []).filter(group => {
+        if (!(group.members || []).includes('player')) return false;
+        if (activeGroupChat?.id === group.id) return false;
+        const aiCount = (group.members || []).filter(id => id !== 'player' && chars.some(c => c.id === id)).length;
+        if (!aiCount) return false;
+        if (group.lastAutoPingAt && now - group.lastAutoPingAt < 180000) return false;
+        const last = (group.messages || [])[Math.max(0, (group.messages || []).length - 1)];
+        const lastTs = Number(last?.ts || (typeof last?.id === 'number' ? last.id : 0));
+        return !lastTs || now - lastTs > 65000;
+      });
+      if (!eligibleGroups.length) return;
+      if (Math.random() > 0.62) return;
+      const group = eligibleGroups[Math.floor(Math.random() * eligibleGroups.length)];
+      triggerGroupChatPopIn(group, 'someone saw the recent campus feed and could not leave the chat dead');
+    }, 65000 + Math.random() * 90000);
+    return () => clearTimeout(timer);
+  }, [stateLoaded, groupChats, activeGroupChat, chars, feed, dms, editChar, activeEvent, activeMatch, composing]);
 
   // ── Auto-post system ──────────────────────────────────────────
   useEffect(() => {

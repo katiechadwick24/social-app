@@ -1011,6 +1011,94 @@ Return ONLY SILENCE or the reply text.`
     return items;
   }, [charComments, botComments]);
 
+  function submitPostReply() {
+    const text = replyText.trim();
+    if (!text) return;
+    const playerEntry = {
+      charId: player.id,
+      text,
+      likes: 0,
+      timestamp: Date.now(),
+      replyTo: char?.handle,
+    };
+    setCharComments(prev => [...prev, playerEntry]);
+    setReplyText('');
+    setReplyOpen(false);
+    triggerCharacterFollowups({
+      playerText: text,
+      targetChar: char,
+      sourceText: post.text,
+      baseTs: playerEntry.timestamp,
+      mode: 'main',
+    });
+  }
+
+  async function triggerCharacterFollowups({ playerText, targetChar, sourceText, baseTs, mode = 'main', excludeIds = [] }) {
+    const mentionedHandles = new Set(
+      Array.from((playerText || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase())
+    );
+    const transcript = mergedReplies.slice(-8).map(item => {
+      if (item.kind === 'char') {
+        const speaker = allChars.find(c => c.id === item.data.charId);
+        return `@${speaker?.handle || '?'}: "${item.data.text}"`;
+      }
+      const speaker = getBotById(item.data.bot);
+      return `@${speaker?.handle || '?'}: "${item.data.text}"`;
+    }).join('\n');
+    const excluded = new Set(excludeIds);
+    const candidatePool = chars.filter(c => c.id !== player.id && !excluded.has(c.id));
+    const tagged = candidatePool.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
+    const target = targetChar && targetChar.id !== player.id && targetChar.id !== '__gmz__' ? [targetChar] : [];
+    const charged = [...candidatePool]
+      .filter(c => c.id !== post.charId && !target.some(t => t.id === c.id) && !tagged.some(t => t.id === c.id))
+      .sort((a,b) => Math.abs((b.relationships?.player ?? 50) - 50) - Math.abs((a.relationships?.player ?? 50) - 50));
+    const wantedCount = mode === 'direct' ? 1 + Math.floor(Math.random()*2) : 2 + Math.floor(Math.random()*2);
+    const responders = [...target, ...tagged, ...charged]
+      .filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i)
+      .slice(0, wantedCount);
+    if (!responders.length) return;
+
+    try {
+      const roster = responders.map((c,i) => `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. Relationship with @${player.handle}: ${c.relationships?.player ?? 'unknown'}/100.`).join('\n');
+      const res = await window.claude.complete({
+        messages:[{ role:'user', content:
+          `A social media thread is active at Merlin's College of Magic.
+
+Original post by @${char?.handle}: "${post.text}"
+${sourceText && sourceText !== post.text ? `Relevant comment being answered: "${sourceText}"` : ''}
+Recent thread:
+${transcript || '(no earlier replies shown)'}
+
+${player.name} (@${player.handle}) just commented: "${playerText}"
+
+${pronounRule([player, char, ...responders])}
+${CHARACTER_TONE_RULE}
+
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
+
+Characters in order:
+${roster}
+
+Each reply 6-24 words. Use @handles when responding directly. Keep it conversational and varied. Do not make everyone angry. No hashtags. No quotes around replies.
+${BANNED_PHRASES_RULE}
+Return ONLY a JSON array of ${responders.length} strings, in order.`
+        }]
+      });
+      const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
+      const replies = responders.map((c, i) => ({
+        charId: c.id,
+        text: cleanGeneratedText(parsed[i] || ''),
+        likes: Math.floor(Math.random()*12000),
+        timestamp: baseTs + 90000 + i*45000 + Math.floor(Math.random()*45000),
+        replyTo: player.handle,
+        nestedReply: false,
+      })).filter(r => r.text);
+      replies.forEach((reply, i) => {
+        setTimeout(() => setCharComments(prev => [...prev, reply]), 800 + i*(900 + Math.random()*700));
+      });
+    } catch(e) {}
+  }
+
   return (
     <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minHeight:0}}>
     <div style={{flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', paddingBottom:bottomSafe(96)}}>
@@ -1137,6 +1225,14 @@ ${BANNED_PHRASES_RULE}`
                 next.splice((insertAt < 0 ? i + 1 : insertAt) + 1, 0, reply);
                 return next;
               });
+              triggerCharacterFollowups({
+                playerText: playerReply,
+                targetChar: null,
+                sourceText: cc.text,
+                baseTs: replyBaseTs + 0.25,
+                mode: 'direct',
+                excludeIds: [cChar.id],
+              });
             } catch(e) {}
             setCharReplyLoading(false);
           }
@@ -1235,8 +1331,15 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
             setBotComments(prev => {
               const next = [...prev];
               const insertAt = next.findIndex(c => c === playerEntry) + 1;
-              next.splice(insertAt, 0, { bot: bc.bot, text: res.trim(), likes: Math.floor(Math.random()*3000), timestamp: replyBaseTs + 0.2, replyTo: player.handle, nestedReply: true });
+              next.splice(insertAt, 0, { bot: bc.bot, text: cleanGeneratedText(res), likes: Math.floor(Math.random()*3000), timestamp: replyBaseTs + 0.2, replyTo: player.handle, nestedReply: true });
               return next;
+            });
+            triggerCharacterFollowups({
+              playerText: playerReply,
+              targetChar: null,
+              sourceText: bc.text,
+              baseTs: replyBaseTs + 0.25,
+              mode: 'direct',
             });
           } catch(e) {}
           setBotReplyLoading(false);
@@ -1311,36 +1414,64 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
       {(loadingChars || loadingBots) && mergedReplies.length > 0 && (
         <p style={{color:C.muted, fontSize:12, padding:'10px 16px', textAlign:'center', fontStyle:'italic'}}>more replies coming in...</p>
       )}
-      <div style={{height: replyOpen ? 220 : 180}}/>
+      <div style={{height: replyOpen ? 170 : 130}}/>
     </div>
 
-    {/* Reply input bar */}    {replyOpen && (
-      <div style={{borderTop:`1px solid ${C.border}`, background:C.bg, padding:'10px 12px', display:'flex', gap:8, alignItems:'flex-end'}}>
-        <Avatar char={player} size={30}/>
-        <div style={{flex:1, background:C.card2, borderRadius:20, border:`1px solid ${replyText.trim() ? C.blue+'66' : C.border}`, padding:'9px 14px', transition:'border-color 0.2s'}}>
-          <input
+    {/* Reply input bar */}
+    {replyOpen && (
+      <div style={{
+        borderTop:`1px solid ${C.border}`,
+        background:C.bg,
+        padding:`10px 12px ${bottomSafe(10)} 12px`,
+        display:'flex',
+        gap:10,
+        alignItems:'flex-end',
+        boxShadow:'0 -10px 24px rgba(0,0,0,0.28)',
+        flexShrink:0,
+        zIndex:8,
+      }}>
+        <Avatar char={player} size={34}/>
+        <div style={{
+          flex:1,
+          minWidth:0,
+          background:C.card2,
+          borderRadius:18,
+          border:`1px solid ${replyText.trim() ? C.blue+'66' : C.border}`,
+          padding:'10px 13px',
+          transition:'border-color 0.2s',
+        }}>
+          <textarea
             ref={replyInputRef}
             value={replyText}
             onChange={e => setReplyText(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Escape') { setReplyOpen(false); setReplyText(''); }
-              if (e.key === 'Enter' && replyText.trim()) {
-                setBotComments(prev => [...prev, { bot:'__player__', text: replyText.trim(), likes:0, isPlayer:true, timestamp: Date.now(), replyTo: char?.handle }]);
-                setReplyText(''); setReplyOpen(false);
+              if (e.key === 'Enter' && !e.shiftKey && replyText.trim()) {
+                e.preventDefault();
+                submitPostReply();
               }
             }}
             placeholder={`Reply to @${char?.handle}…`}
-            style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:14, outline:'none'}}
+            rows={1}
+            style={{
+              width:'100%',
+              minHeight:42,
+              maxHeight:96,
+              resize:'none',
+              background:'none',
+              border:'none',
+              color:C.text,
+              fontSize:15,
+              lineHeight:1.35,
+              outline:'none',
+              display:'block',
+            }}
           />
         </div>
         <button
-          onClick={() => {
-            if (!replyText.trim()) return;
-            setBotComments(prev => [...prev, { bot:'__player__', text: replyText.trim(), likes:0, isPlayer:true, timestamp: Date.now(), replyTo: char?.handle }]);
-            setReplyText(''); setReplyOpen(false);
-          }}
+          onClick={submitPostReply}
           disabled={!replyText.trim()}
-          style={{background: replyText.trim() ? C.blue : C.card2, color:'#fff', border:'none', borderRadius:'50%', width:42, height:42, cursor: replyText.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0}}>
+          style={{background: replyText.trim() ? C.blue : C.card2, color:'#fff', border:'none', borderRadius:'50%', width:48, height:48, minWidth:48, cursor: replyText.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0}}>
           →
         </button>
       </div>

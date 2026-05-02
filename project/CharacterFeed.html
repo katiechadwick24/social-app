@@ -349,6 +349,8 @@ const CHARACTER_TONE_RULE = `
 CHARACTER TONE BALANCE:
 - Not every character should sound angry, hostile, or wounded.
 - These are college-aged students. They are not polished adults, staff members, or career strategists. Even the serious ones can be petty, bored, horny, sleep-deprived, impulsive, dramatic, or stupid about someone hot.
+- Keres is visibly hot, provocative, and talented. People notice. Attraction, curiosity, thirst, showing off, jealousy, trying not to look impressed, and stupid flirting should regularly color posts/replies, especially when photos of her are posted. Do not sanitize this into abstract respect.
+- Not everyone is attracted to Keres, but even non-attracted characters can notice the social effect of her looks, confidence, and bad-idea energy.
 - Most public chatter should feel alive: jokes, thirst, teasing, bad ideas, overreactions, petty side comments, stupid observations, flirtation, and people replying because they are bored.
 - Do not make the whole cast sound like captains giving discipline speeches. Quidditch matters, but they also have classes, dorm drama, parties, crushes, petty rivalries, gossip, bad sleep, snacks, bets, deleted posts, and terrible judgment.
 - Many replies should be playful, amused, flirty, unserious, awkward, distracted, smug, curious, or charmingly stupid. A character can be sharp without being furious.
@@ -364,10 +366,10 @@ CHARACTER TONE BALANCE:
 - Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", or agreeing after being insulted unless he twists it into a challenge.
 - Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.`;
 
-function playerStance(char, player) {
+function playerStance(char, player, relationshipOverride) {
   if (!char || !player) return '';
   const fallbackRel = { havoc:36, silas:18, callum:-10, briar:16, rowan:28, milo:22, elara:-6, theo:24, jude:14, tamsin:-8 };
-  const rel = char.relationships?.player ?? fallbackRel[char.id];
+  const rel = relationshipOverride ?? char.relationships?.player ?? fallbackRel[char.id];
   const relLine = rel === undefined
     ? 'No fixed relationship score with Keres yet; use the character profile and recent visible context without hard flipping.'
     : `Current relationship score with @${player.handle}: ${rel}/100. Keep this consistent across the thread.`;
@@ -383,7 +385,7 @@ function playerStance(char, player) {
     theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred. He should sound like someone making the thread funnier while pretending it is journalism.',
     elara: 'Elara is proud, socially dangerous, and hard to pity. She reacts to being erased or underestimated, but she can be charismatic, funny, and lethal without monologuing.'
   }[char.id] || '';
-  return `KERES CONTINUITY: ${relLine} ${fixed}`;
+  return `KERES CONTINUITY: ${relLine} ${fixed} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
 }
 
 function cleanGeneratedText(text = '') {
@@ -467,13 +469,50 @@ function loggedRelationshipAddsByChar(eventLog = {}) {
   }, {});
 }
 
-function effectivePlayerRelationship(char, eventLog = []) {
+function clamp(num, min, max) {
+  return Math.max(min, Math.min(max, num));
+}
+
+function scoreDmExchange(messages = []) {
+  if (!Array.isArray(messages) || messages.length === 0) return 0;
+  const positive = /(honest|honesty|respect|appreciate|value|trust|alliance|ally|study|share|useful|decent case|moves you up|right people|boundary|understand|works|after dinner|good point|fair enough|thank|prefer|practice|quiet|secret)/i;
+  const strongPositive = /(secret alliance|great ally|moves you up|value honesty|respect the boundary|decent case|right people|study in peace|share and vice versa)/i;
+  const flirtyPositive = /(hot|pretty|beautiful|gorgeous|babe|angle|cheekbones|flirt|kiss|date|attractive|staring|can't look away|good girl|filthy)/i;
+  const negative = /(hate|leave me|go away|don't trust|do not trust|annoying|stupid|threat|harass|harassing|back off|shut up|idiot|pathetic)/i;
+
+  let total = 0;
+  messages.forEach(msg => {
+    if (!msg || typeof msg.text !== 'string') return;
+    const text = msg.text;
+    const fromChar = msg.role === 'char';
+    if (strongPositive.test(text)) total += fromChar ? 0.85 : 0.65;
+    else if (positive.test(text)) total += fromChar ? 0.45 : 0.3;
+    if (flirtyPositive.test(text)) total += fromChar ? 0.55 : 0.35;
+    if (negative.test(text)) total -= fromChar ? 0.45 : 0.3;
+  });
+
+  const exchangeBonus = messages.length >= 6 ? 0.8 : messages.length >= 3 ? 0.35 : 0;
+  return +clamp(total + exchangeBonus, -10, 12).toFixed(2);
+}
+
+function dmRelationshipAddsByChar(dms = {}) {
+  return Object.entries(dms || {}).reduce((acc, [charId, messages]) => {
+    if (!Array.isArray(messages)) return acc;
+    const score = scoreDmExchange(messages);
+    if (score !== 0) acc[charId] = score;
+    return acc;
+  }, {});
+}
+
+function effectivePlayerRelationship(char, eventLog = [], dms = {}) {
   const loggedAdds = loggedRelationshipAddsByChar(eventLog);
+  const dmAdds = dmRelationshipAddsByChar(dms);
   const hasSaved = !!char?.relationships && Object.prototype.hasOwnProperty.call(char.relationships, 'player');
   const hasLogged = Object.prototype.hasOwnProperty.call(loggedAdds, char?.id);
+  const hasDm = Object.prototype.hasOwnProperty.call(dmAdds, char?.id);
   return {
-    hasRelationship: hasSaved || hasLogged,
-    value: +((Number(char?.relationships?.player || 0) + Number(loggedAdds[char?.id] || 0)).toFixed(2)),
+    hasRelationship: hasSaved || hasLogged || hasDm,
+    value: +((Number(char?.relationships?.player || 0) + Number(loggedAdds[char?.id] || 0) + Number(dmAdds[char?.id] || 0)).toFixed(2)),
   };
 }
 
@@ -959,7 +998,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       : `${author?.name} (@${author?.handle}) posted: "${post.text}"`;
     const hotTransferContext = /transfer|new girl|new transfer|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(post.text || '');
     const attractionRule = hotTransferContext
-      ? `\nCONTEXT NOTE: This thread is about ${player.name} as a striking new transfer with talent, attitude, and a reputation. The campus default is excitement, curiosity, attraction, competitive interest, and people trying not to look impressed. A few characters can be wary or test her, but do NOT make everyone bully, insult, or tear her down. Most reactions should be positive, intrigued, thirsty, amused, or impressed in each character's own voice.`
+      ? `\nCONTEXT NOTE: This thread is about ${player.name} as a striking new transfer with talent, attitude, and a reputation. The campus default is excitement, curiosity, attraction, competitive interest, and people trying not to look impressed. Do not underplay the fact that she is hot, especially if a photo is involved; let thirst, jealousy, showing off, dumb flirting, and people being embarrassingly normal about it enter the thread. A few characters can be wary or test her, but do NOT make everyone bully, insult, or tear her down. Most reactions should be positive, intrigued, thirsty, amused, or impressed in each character's own voice.`
       : '';
     const embarrassmentRule = embarrassmentContext
       ? `\nEMBARRASSMENT NOTE: Someone publicly fumbled, exposed themself, apologized badly, looked foolish, or handed the timeline an opening. At least one custom character should call it out, tease them, sharpen the moment, or make the social consequence visible. It can be funny, dry, protective, flirty, or cruel depending on the character, but do not let the embarrassing moment pass unnoticed.`
@@ -2218,6 +2257,7 @@ function buildSystemPrompt(char, player, allChars, feed, dms) {
     ? `\nYou and ${player.name} have been talking. Here are your recent exchanges — reference them naturally if relevant:\n` +
       pastMsgs.slice(-10).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n')
     : '';
+  const effectiveRel = effectivePlayerRelationship(char, [], dms).value;
 
   return `You are ${char.name} (@${char.handle}), a real person with a social media presence.
 
@@ -2228,7 +2268,8 @@ FULL DESCRIPTION: ${char.description}
 
 ${pronounRule(allChars)}
 ${CHARACTER_TONE_RULE}
-${playerStance(char, player)}
+${playerStance(char, player, effectiveRel)}
+Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%.
 
 YOUR RELATIONSHIPS WITH OTHERS:
 ${relLines || 'No known relationships yet.'}
@@ -2412,9 +2453,9 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
 }
 
 // ─── Profile Screen ───────────────────────────────────────────────
-function ProfileScreen({ player, chars, socialPresence, eventLog = [], onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
+function ProfileScreen({ player, chars, socialPresence, eventLog = [], dms = {}, onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
   const relationships = chars
-    .map(c => ({ char: c, ...effectivePlayerRelationship(c, eventLog) }))
+    .map(c => ({ char: c, ...effectivePlayerRelationship(c, eventLog, dms) }))
     .filter(r => r.hasRelationship);
   const socialRows = [
     ['😂','Humor',socialPresence?.humor ?? 0,'#4dabf7'],
@@ -2911,8 +2952,8 @@ function relationshipStageLabel(value) {
   return 'Bad Blood';
 }
 
-function CharProfileScreen({ char, player, eventLog = [], onBack, onDM, feed, allChars, onOpenThread }) {
-  const { hasRelationship: hasPlayerRel, value: rel } = effectivePlayerRelationship(char, eventLog);
+function CharProfileScreen({ char, player, eventLog = [], dms = {}, onBack, onDM, feed, allChars, onOpenThread }) {
+  const { hasRelationship: hasPlayerRel, value: rel } = effectivePlayerRelationship(char, eventLog, dms);
   const [following, setFollowing] = useState(false);
   const [chemOpen, setChemOpen] = useState(false);
   const [chemistry, setChemistry] = useState('default');
@@ -2937,14 +2978,17 @@ function CharProfileScreen({ char, player, eventLog = [], onBack, onDM, feed, al
           const poster = allChars.find(c=>c.id===p.charId);
           return `@${poster?.handle||p.charId}: "${p.text}"`;
         }).join('\n');
+        const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
         const f = await window.claude.complete({
           messages:[{ role:'user', content:`You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. Description: ${char.description?.slice(0,200)||''}.
 The player is ${player.name} (@${player.handle}) — ${player.bio}.
 ${pronounRule([char, player, ...allChars])}
-${playerStance(char, player)}
+${playerStance(char, player, rel)}
+Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
 Recent campus posts:\n${recentContext}
+${dmContext ? `\nRecent private DMs with ${player.name}:\n${dmContext}` : ''}
 
-In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. First person, in character. Use the pronouns listed above exactly.` }]
+In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. If the DMs show trust, alliance, flirting, attraction, or honesty, reflect that instead of resetting to neutral. First person, in character. Use the pronouns listed above exactly.` }]
         });
         setFeeling(f);
       } catch(e) {
@@ -2960,14 +3004,17 @@ In 1 punchy sentence (under 20 words), describe your current feeling right now s
           const poster = allChars.find(c=>c.id===p.charId);
           return `@${poster?.handle||p.charId}: "${p.text}"`;
         }).join('\n');
+        const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
         const res = await window.claude.complete({
           messages:[{ role:'user', content:`You are analyzing ${char.name}'s current emotional state toward ${player.name} based on their personality and recent campus activity.
 ${pronounRule([char, player, ...allChars])}
-${playerStance(char, player)}
+${playerStance(char, player, rel)}
+Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
 
 ${char.name} personality: ${char.personality}
 ${char.name} description: ${char.description?.slice(0,200)||char.bio}
 Recent campus posts:\n${recentContext}
+${dmContext ? `\nRecent private DMs with ${player.name}:\n${dmContext}` : ''}
 
 Return ONLY a JSON array of 2-4 vibe objects, each with:
 - "label": short phrase (2-4 words, e.g. "lowkey obsessed", "genuinely irritated", "pretending not to care", "slightly jealous", "grudging respect", "chaotic energy", "watching closely")
@@ -2987,7 +3034,7 @@ Only output the JSON array, nothing else.` }]
 
     loadFeeling();
     loadVibes();
-  }, [char.id]);
+  }, [char.id, rel, dms]);
 
   const relLabel = hasPlayerRel
     ? (chemistry === 'default' ? relationshipStageLabel(rel) : CHEMISTRY_LABELS[chemistry] || CHEMISTRY_LABELS.default)
@@ -5039,9 +5086,10 @@ ${BANNED_PHRASES_RULE}`
       </div>
     );
   } else if (viewChar) {
+    const liveViewChar = chars.find(c => c.id === viewChar.id) || (player.id === viewChar.id ? player : viewChar);
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <CharProfileScreen char={viewChar} player={player} eventLog={eventLog} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} />
+        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setViewChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );
@@ -5059,7 +5107,7 @@ ${BANNED_PHRASES_RULE}`
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} setGroupChats={setGroupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
-        case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} eventLog={eventLog} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
+        case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} eventLog={eventLog} dms={dms} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return null;
       }
     })();

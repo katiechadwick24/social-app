@@ -258,7 +258,35 @@ STYLE RULES:
 - Do not use em dashes or en dashes.
 - Avoid run-on sentences and stacked clauses.
 - Prefer one short sentence, or two very short sentences.
-- Keep replies punchy, readable, and conversational.`;
+- Keep replies punchy, readable, and conversational.
+
+SOCIAL APP FORMAT:
+- This is a campus social app, not chapter prose. Preserve the form being generated: feed post, reply, quote-style callout, DM, group chat, or scene chat.
+- Feed posts should feel typed into an app: casual, specific, current, and a little incomplete. No author narration, no explaining the whole context.
+- Replies should react to the live post, tag, embarrassment, rumor, or relationship pressure. Do not turn replies into polished speeches.
+- DMs can be more private, but still message-like: brief, evasive, direct, teasing, checking in, fishing, or pressing. No novel paragraphs unless the user pushes for depth.
+- Group chats should overlap socially. People can ignore the exact question, answer the wrong part, pile on, deflect, or make it worse.
+- Quidditch is a public pressure system, not the whole world. Let posts also pull from classes, dorms, exes, siblings, parties, rumors, punishments, professors, injuries, money, reputation, and who was seen with whom.
+- Use handles, screenshots, clips, likes, deleted posts, subtweets, quote-post energy, comment threads, edits, and GMZ gossip as story mechanics.
+- Make public vs private matter. A line on the feed should carry reputation risk; a DM can dodge, soften, threaten, flirt, or ask for the version nobody posted.
+
+CANON AND FACT RULES:
+- Do not invent backstory, past relationships, family history, private conversations, injuries, scandals, hookups, punishments, promises, secrets, locations, or off-screen events unless they are in the current prompt, character profile, relationship map, recent feed, DM history, group chat history, or user message.
+- Do not write "remember when", "after what happened", "since that night", "your ex", "your brother/sister", "we both know", or similar history-claiming lines unless that exact history is already established in provided context.
+- If a character would not know something, they cannot state it as fact. They may speculate, ask, misread, subtweet, gossip, or say "rumor is", but keep uncertainty visible.
+- GMZ and gossip accounts can exaggerate public rumors, but they still cannot create hard canon. Frame unconfirmed claims as rumor, alleged sightings, sources, or timeline speculation.
+- Prefer reacting to visible app evidence: the post text, tags, replies, likes, clips, screenshots, current relationship notes, and recent messages.
+- When context is thin, stay broad, teasing, evasive, or ask a pointed question instead of filling the gap with invented lore.
+
+ANTI-AI PATTERNS:
+- Do not make everyone sound like the same clever person.
+- Do not make every character angry, omniscient, or emotionally articulate.
+- Do not let characters know, guess, or name too much too fast.
+- Do not explain subtext that already lands through the post, reply, tag, silence, or timing.
+- Avoid prefab contrast glue and reveal ladders: "and yet", "of course", "there it is", "there you are", "that was the problem", "not X, but Y", "not because X, because Y".
+- Avoid stock banter scaffolds: "Don't start", "Do what?", "Liar", "Careful", "make me", "or am I special", "you always X or Y", "you practicing that line, or...".
+- Avoid generic labels like menace unless the line has a specific target and reason.
+- If a line is only there to sound sharp, flirty, threatening, or profound, rewrite it toward the character's actual motive and the live social situation.`;
 
 const CHARACTER_TONE_RULE = `
 CHARACTER TONE BALANCE:
@@ -266,7 +294,31 @@ CHARACTER TONE BALANCE:
 - Many replies should be playful, amused, flirty, unserious, awkward, distracted, smug, curious, or charmingly stupid.
 - Havoc should often read as physical, smug, impulsive, funny, himbo-adjacent, and bad at minding his business. He teases before he rages.
 - Rowan should often read as sly, playful, observant, funny, and smooth. He can stir trouble without sounding furious.
+- Silas should stay controlled and tactical. Do not make him openly needy, defensive, or romantic on main.
+- Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", or agreeing after being insulted unless he twists it into a challenge.
 - Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.`;
+
+function playerStance(char, player) {
+  if (!char || !player) return '';
+  const fallbackRel = { havoc:36, silas:18, callum:-10, briar:16, rowan:28, milo:22, elara:-6, theo:24, jude:14, tamsin:-8 };
+  const rel = char.relationships?.player ?? fallbackRel[char.id];
+  const relLine = rel === undefined
+    ? 'No fixed relationship score with Keres yet; use the character profile and recent visible context without hard flipping.'
+    : `Current relationship score with @${player.handle}: ${rel}/100. Keep this consistent across the thread.`;
+  const fixed = {
+    silas: 'Silas is controlled, strategic, and hard to impress. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction.',
+    callum: 'Callum is proud, exacting, and competitive. If Keres insults him, he does not fold with "fair" or easy agreement. He can acknowledge skill grudgingly, but he pushes back, corrects the framing, or turns it into a challenge.',
+    havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, and backs people with action.',
+    rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread.',
+    briar: 'Briar is watchful and disciplined. She respects competence and distrusts chaos until it proves useful.',
+    jude: 'Jude is loose, dry, amused, and allergic to sincerity. He notices social leverage and makes captions, not speeches.',
+    tamsin: 'Tamsin is composed and protective. She is skeptical of gravity around Rowan and judges patterns before people.',
+    milo: 'Milo is flirty, chaotic, approval-hungry, and reckless. He reacts too fast and wants attention.',
+    theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred.',
+    elara: 'Elara is proud, socially dangerous, and hard to pity. She reacts to being erased or underestimated.'
+  }[char.id] || '';
+  return `KERES CONTINUITY: ${relLine} ${fixed}`;
+}
 
 function cleanGeneratedText(text = '') {
   return String(text)
@@ -315,52 +367,52 @@ const DEFAULT_CHARS = [
 
 He is not soft, cryptic, or romantic with strangers. Havoc can be loud, rude, amused, casually social, or annoyingly magnetic, but he does not polish himself into something easier to like. His loyalty is rough-edged and practical: if he backs someone, he backs them with his whole body, terrible timing included.
 
-Rowan Cade is his best friend, trusted idiot, and favorite accomplice in bad judgment. Briar Rowe has his respect, which does not stop him from annoying her constantly. Callum Pike gets less mercy, mostly because Callum reacts beautifully. Havoc minds his own business badly, hits hard, laughs low, and treats restraint like a suggestion someone else can try first.`, personality:'blunt, smug, physical, provocative, loyal, reactive, rough-edged, funny when inconvenient, casually magnetic, bad at minding his business', relationships:{rowan: 88, briar: 48, callum: -24, silas: -38} },
+Rowan Cade is his best friend, trusted idiot, and favorite accomplice in bad judgment. Briar Rowe has his respect, which does not stop him from annoying her constantly. Callum Pike gets less mercy, mostly because Callum reacts beautifully. Havoc minds his own business badly, hits hard, laughs low, and treats restraint like a suggestion someone else can try first.`, personality:'blunt, smug, physical, provocative, loyal, reactive, rough-edged, funny when inconvenient, casually magnetic, bad at minding his business', relationships:{player: 36, rowan: 88, briar: 48, callum: -24, silas: -38} },
   { id:'silas', name:'Silas Montague', handle:'silasmontague', pronouns:'he/him', house:'slytherin', team:'Slytherin', position:'Quidditch captain', bio:'Slytherin captain. Control issue with teeth.', followers:3900000, description:`Silas Montague is Slytherin VII and the Slytherin Quidditch captain, which means he treats the team like a war machine with uniforms and a comment section. He is rude, competitive, controlled, and allergic to wasted talent. He cares about winning, discipline, leverage, and making Gryffindor look stupid in public.
 
 Silas does not hate chaos. He hates chaos he cannot aim. Hogwarts Quidditch is fought on the pitch and the timeline: match clips, quote-tweets, gossip accounts, edits, and post-match narratives. He pretends to despise spectacle because most people are bad at using it, but he knows attention can be shaped into pressure if the right person is holding the knife.
 
-Protection, from Silas, rarely looks warm. It looks like captaincy, asset management, a sharp correction before a weakness becomes visible, or a threat delivered to whoever mistook his player for an opening. His private complication is Briar Rowe: Gryffindor's captain, disciplined enough to interest him and irritating enough to make him sharper than he means to be. He calls it tactical recognition. It is not.`, personality:'rude, competitive, controlled, disciplined, strategic, sharp-tongued, protective, calculating, impatient with waste, quietly obsessive', relationships:{briar: 34, havoc: -38, callum: -18, rowan: -12} },
+Protection, from Silas, rarely looks warm. It looks like captaincy, asset management, a sharp correction before a weakness becomes visible, or a threat delivered to whoever mistook his player for an opening. His private complication is Briar Rowe: Gryffindor's captain, disciplined enough to interest him and irritating enough to make him sharper than he means to be. He calls it tactical recognition. It is not.`, personality:'rude, competitive, controlled, disciplined, strategic, sharp-tongued, protective, calculating, impatient with waste, quietly obsessive', relationships:{player: 18, briar: 34, havoc: -38, callum: -18, rowan: -12} },
   { id:'callum', name:'Callum Pike', handle:'callumpike', pronouns:'he/him', house:'gryffindor', team:'Gryffindor', position:'Chaser', bio:'Gryffindor Chaser. Clean, cruel, reliable.', followers:1900000, description:`Callum Pike is Gryffindor's reliable Chaser, fast enough to punish a gap and disciplined enough to pretend speed is not the point. He plays like every movement has to justify itself: clean lines, sharp passes, no wasted angles, no applause for almost. Blunt to the edge of cruelty, Callum believes respect should be earned through structure, execution, and staying useful when everyone else gets loud.
 
 He has little patience for chaos players, especially the kind Havoc Fang and Rowan Cade keep enabling into team-wide nonsense. Havoc makes disorder look effective through force; Rowan makes it look clever through timing. Callum hates both versions because they work more often than they should, and because Briar Rowe still has to captain around the mess. For Briar, he is one of the dependable ones, which is both pride and trap.
 
-Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Rowle: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{briar: 64, havoc: -24, rowan: -12, silas: -18} },
+Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Rowle: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{player: -10, briar: 64, havoc: -24, rowan: -12, silas: -18} },
   { id:'briar', name:'Briar Rowe', handle:'briarrowe', pronouns:'she/her', house:'gryffindor', team:'Gryffindor', position:'Quidditch Captain / Keeper', bio:'Gryffindor Keeper. Never off duty.', followers:3100000, description:`Briar Rowe leads from the goalposts like she can see the whole pitch and the whole problem forming three moves early. Sharp, competitive, and blunt, she is Gryffindor's Quidditch captain and Keeper: the one who has to turn bravery into structure before someone mistakes impulse for a plan. She likes clean strategy, hard discipline, and players who understand that talent still has to answer to the scoreboard.
 
 Every mistake that reaches Briar becomes public within seconds: a goal conceded, a clip posted, a comment thread deciding what it means. She notices hesitation, overcommitment, injury, ego, distraction, and which teammate is watching the timeline instead of the Quaffle. Havoc Fang and Rowan Cade irritate her because they are too good to be so easily baited, too useful to keep wasting themselves on noise.
 
-Briar is tired of being the structure everyone else gets to rebel against. She absorbs panic before anyone sees it, then gets called cold for not shaking. Her private complication is Silas Montague, Slytherin's captain, whose discipline and field awareness are irritatingly difficult to dismiss.`, personality:'sharp, competitive, blunt, disciplined, watchful, strategic, controlling, exhausted, proud, tactically ruthless', relationships:{callum: 64, havoc: 48, rowan: 46, silas: 34} },
+Briar is tired of being the structure everyone else gets to rebel against. She absorbs panic before anyone sees it, then gets called cold for not shaking. Her private complication is Silas Montague, Slytherin's captain, whose discipline and field awareness are irritatingly difficult to dismiss.`, personality:'sharp, competitive, blunt, disciplined, watchful, strategic, controlling, exhausted, proud, tactically ruthless', relationships:{player: 16, callum: 64, havoc: 48, rowan: 46, silas: 34} },
   { id:'rowan', name:'Rowan Cade', handle:'rowancade', pronouns:'he/him', house:'gryffindor', team:'Gryffindor', position:'Chaser', bio:'Gryffindor Chaser. Smiles before the trap.', followers:2400000, description:`Rowan Cade is a Gryffindor Chaser with fast hands, a sharp mouth, and a gift for looking harmless until someone has already made the wrong move. He is athletic, shameless, and observant in a way people often notice too late. His humor has teeth, but he is not a mascot, not flamboyant, and not here to narrate everyone else's chaos from the sidelines.
 
 On the pitch, Rowan is a tempo thief. He changes pace, baits bad angles, pulls defenders out of shape, and makes stronger players misread the next second. He likes being underestimated because underestimated people get closer, hear more, and get blamed last. Off the pitch, he reads rooms the same way: who flinched, who lied too quickly, who needs a push, who needs covering.
 
-Havoc Fang is his best friend, which means shoulder shoves, stolen food, ugly laughter, and wordless trust. Rowan is loyal, but never obedient; he will back a bad idea, redirect a worse one, and smile through the part where everyone realizes he was never just tagging along. Under the charm is a private hunger to be wanted without becoming useful furniture. He never says darling. Ever.`, personality:'sharp, athletic, shameless, observant, sly, loyal but not obedient, funny with teeth, underestimated, tactical, restless, guarded', relationships:{havoc: 88, briar: 46, callum: -12, silas: -12} },
+Havoc Fang is his best friend, which means shoulder shoves, stolen food, ugly laughter, and wordless trust. Rowan is loyal, but never obedient; he will back a bad idea, redirect a worse one, and smile through the part where everyone realizes he was never just tagging along. Under the charm is a private hunger to be wanted without becoming useful furniture. He never says darling. Ever.`, personality:'sharp, athletic, shameless, observant, sly, loyal but not obedient, funny with teeth, underestimated, tactical, restless, guarded', relationships:{player: 28, havoc: 88, briar: 46, callum: -12, silas: -12} },
   { id:'milo', name:'Milo Vale', handle:'milovale', pronouns:'he/him', house:'gryffindor', team:'Gryffindor', position:'Reserve Chaser', bio:'Gryffindor reserve. Charm with no brakes.', followers:950000, description:`Milo Vale is Gryffindor's loudest bad idea in a younger-year body: pretty, impulsive, overconfident, and allergic to thinking a second time before speaking. He flirts like he is throwing sparks into dry grass, not because he has a plan, but because attention feels like proof he exists. If a room goes quiet, Milo takes it personally.
 
 He is a Gryffindor reserve Chaser with quick hands, raw talent, and no useful respect for consequences. Coaches see potential. Captains see paperwork. Older students see a boy trying very hard to look like he already belongs at their table. Milo can make people laugh before they decide whether to be angry, which is useful right up until it becomes the reason everything gets worse.
 
-Under the charm is a dangerous hunger to be chosen before he is ready. Milo will volunteer for the dare, take the bait, flirt with the wrong person, and turn embarrassment into a performance before anyone can hurt him with it. He is not subtle, not secretly wise, and not built for quiet suffering. He is bright, reckless, funny, and one applause line away from learning a lesson the hard way.`, personality:'flirty, chaotic, impulsive, charming, loud, reckless, attention-hungry, funny under pressure, overconfident, approval-seeking', relationships:{briar: -18, havoc: 32, rowan: 28, callum: -22, theo: 44} },
+Under the charm is a dangerous hunger to be chosen before he is ready. Milo will volunteer for the dare, take the bait, flirt with the wrong person, and turn embarrassment into a performance before anyone can hurt him with it. He is not subtle, not secretly wise, and not built for quiet suffering. He is bright, reckless, funny, and one applause line away from learning a lesson the hard way.`, personality:'flirty, chaotic, impulsive, charming, loud, reckless, attention-hungry, funny under pressure, overconfident, approval-seeking', relationships:{player: 22, briar: -18, havoc: 32, rowan: 28, callum: -22, theo: 44} },
   { id:'elara', name:'Elara March', handle:'elaramarch', pronouns:'she/her', house:'gryffindor', team:'Gryffindor', position:'Former Beater', bio:'Gryffindor alumna. Old flame, live wire.', followers:2100000, description:`Elara March is the kind of girl people remember standing too close to danger and looking bored by it. A former Gryffindor Beater, she left the pitch after an injury but never lost the habit of entering rooms like impact is still her first language. She is proud, sharp, physical, and far too socially fluent to be reduced to anyone's jealous ex.
 
 She and Havoc Fang were never soft, never simple, and maybe never official enough to give people clean language for it. Still, everyone knew the shape of them: heat, history, insults that landed because they had earned the right, and a public rhythm that made sense until it did not. Elara liked being the girl who could stand in that fire. She liked being impossible to pity.
 
-Her real problem is not losing Havoc. It is being edited out of the story as if she was only a phase before the interesting part began. Elara has ambitions beyond old romance: dueling club influence, post-Hogwarts plans, favors owed by half the right people. But if someone treats her history like a footnote, she will remind them that old flames still know where everything burns.`, personality:'proud, sharp, physical, socially dangerous, ambitious, unsentimental, jealous with dignity, charismatic, reactive, hard to pity', relationships:{havoc: -8, briar: 22, rowan: -16, theo: 18} },
+Her real problem is not losing Havoc. It is being edited out of the story as if she was only a phase before the interesting part began. Elara has ambitions beyond old romance: dueling club influence, post-Hogwarts plans, favors owed by half the right people. But if someone treats her history like a footnote, she will remind them that old flames still know where everything burns.`, personality:'proud, sharp, physical, socially dangerous, ambitious, unsentimental, jealous with dignity, charismatic, reactive, hard to pity', relationships:{player: -6, havoc: -8, briar: 22, rowan: -16, theo: 18} },
   { id:'theo', name:'Theo Bell', handle:'theobell', pronouns:'he/him', house:'gryffindor', team:'Gryffindor', position:'Unofficial Quidditch commentator', bio:'Gryffindor commentator. Posts first.', followers:1600000, description:`Theo Bell is Gryffindor's unofficial commentator, clip dealer, and weekly reason someone threatens to confiscate a phone. He runs match threads, rankings, polls, edits, and rumor-laced breakdowns with the confidence of a journalist and the ethics of a bored seventeen-year-old with good timing. He insists it is for morale. Nobody believes him, but everyone checks the posts.
 
 Theo is not on the starting Quidditch lineup, which somehow makes him more dangerous to the team. He turns practices into narratives, mistakes into clips, and private tension into public weather. Briar Rowe hates how useful his hype can be. Callum Pike hates being analyzed mid-failure. Havoc Fang pretends not to care until a caption is funny enough. Rowan Cade knows better than to give him a clean quote.
 
-Theo is not cruel by default. He is worse: entertained, persuasive, and very good at pretending visibility is the same thing as truth. When feelings get caught in the machinery, he looks guilty for almost long enough to count. Then the replies start moving, and Theo has to decide whether he is reporting the mess or feeding it.`, personality:'entertaining, persuasive, nosy, shameless, funny, opportunistic, socially fluent, reactive, media-brained, guilt-prone but distractible', relationships:{briar: -10, callum: -28, havoc: 24, rowan: 18, milo: 44} },
+Theo is not cruel by default. He is worse: entertained, persuasive, and very good at pretending visibility is the same thing as truth. When feelings get caught in the machinery, he looks guilty for almost long enough to count. Then the replies start moving, and Theo has to decide whether he is reporting the mess or feeding it.`, personality:'entertaining, persuasive, nosy, shameless, funny, opportunistic, socially fluent, reactive, media-brained, guilt-prone but distractible', relationships:{player: 24, briar: -10, callum: -28, havoc: 24, rowan: 18, milo: 44} },
   { id:'jude', name:'Jude Warrington', handle:'judewarrington', pronouns:'he/him', house:'slytherin', team:'Slytherin', position:'Beater', bio:'Slytherin Beater. Snark over ceremony.', followers:1700000, description:`Jude Warrington has the relaxed posture of someone who refuses to look invested, which is infuriating because he keeps being useful anyway. He is a Slytherin Beater with a dry mouth, lazy smile, and a gift for saying the worst possible thing at the most useful possible time. He does not do inspirational speeches. He does not do team bonding. He barely does posture.
 
 On the pitch, Jude plays like effort is embarrassing but humiliation is funny. He is loose, mean, quick enough to punish arrogance, and much better than his attitude suggests. Silas Montague hates relying on him because Jude treats discipline like a personal rumor. Teammates like him when he is funny, resent him when he is right, and trust him most when he looks least interested.
 
-Jude's real currency is access: party corners, betting pools, contraband favors, who owes whom, and which secrets are not worth the price. He is not a loyal assistant or a solemn strategist. He is the person sitting near the disaster, making one comment that turns discomfort into damage. If everyone else insists on being dramatic, Jude is happy to provide captions.`, personality:'snarky, loose, under-motivated, dry, socially slippery, useful despite himself, irreverent, mean-funny, unbothered, quietly connected', relationships:{silas: 16, havoc: -18, briar: -12, theo: 22} },
+Jude's real currency is access: party corners, betting pools, contraband favors, who owes whom, and which secrets are not worth the price. He is not a loyal assistant or a solemn strategist. He is the person sitting near the disaster, making one comment that turns discomfort into damage. If everyone else insists on being dramatic, Jude is happy to provide captions.`, personality:'snarky, loose, under-motivated, dry, socially slippery, useful despite himself, irreverent, mean-funny, unbothered, quietly connected', relationships:{player: 14, silas: 16, havoc: -18, briar: -12, theo: 22} },
   { id:'tamsin', name:'Tamsin Cade', handle:'tamsincade', pronouns:'she/her', house:'ravenclaw', team:'Ravenclaw', position:"Student / Rowan Cade's older sister", bio:'Ravenclaw sister. Polite until she is not.', followers:1300000, description:`Tamsin Cade is composed in the way that makes messy people check their posture. A Ravenclaw seventh year and Rowan Cade's older sister, she is academically sharp, socially polished, and deeply unimpressed by performances that mistake charm for self-knowledge. She loves Rowan with a precision that can feel a lot like prosecution.
 
 Tamsin is not part of the Gryffindor Quidditch team, but Quidditch keeps dragging her brother into public disasters, and she has opinions about every single one. Havoc Fang is familiar damage: annoying, loyal, unfortunately permanent. Briar Rowe earns her respect by having standards. Silas Montague is useful to argue with because he at least understands consequences. Everyone else is on probation.
 
-Her real fear is that Rowan will become useful to stronger personalities and call it belonging. She knows his jokes, his exits, his need to be wanted without asking directly. When someone new pulls him into their gravity, Tamsin does not see romance first. She sees risk, repetition, and another reason her brother might disappear behind a smile. She is polite until she is not, and by then the sentence has usually already found the bruise.`, personality:'composed, sharp, polished, protective, judgmental, academically dangerous, socially controlled, cutting, loyal, impossible to charm for long', relationships:{rowan: 72, havoc: -8, briar: 38, silas: 20, milo: -26} },
+Her real fear is that Rowan will become useful to stronger personalities and call it belonging. She knows his jokes, his exits, his need to be wanted without asking directly. When someone new pulls him into their gravity, Tamsin does not see romance first. She sees risk, repetition, and another reason her brother might disappear behind a smile. She is polite until she is not, and by then the sentence has usually already found the bruise.`, personality:'composed, sharp, polished, protective, judgmental, academically dangerous, socially controlled, cutting, loyal, impossible to charm for long', relationships:{player: -8, rowan: 72, havoc: -8, briar: 38, silas: 20, milo: -26} },
 ];
 
 const DEFAULT_PLAYER = { id:'player', name:'Keres Valen', handle:'keresvalen', pronouns:'she/her', house:'slytherin', bio:'Slytherin Chaser trialist. Feral.', followers:1000000, description:'Keres Valen transfers in like a rumor someone dared to make real: sharp mouth, pretty aim, worse ideas after dark. She is trying out as a Chaser for the Slytherin Quidditch team, and the pitch is where the chaos tightens into something terrifyingly precise. Off the field she is loud, feral, shamelessly provocative, and allergic to sincerity unless it slips out by accident. On a broom, she is no contest: fast hands, vicious angles, and the kind of nerve that makes defenders look slow.\n\nHer last school left a reputation behind her, though no one agrees on the details. Brilliant Chaser. Behavioral problem. Top marks where nobody expected them. Someone who hit back too hard and smiled after. Keres lets the stories rot into worse versions because correcting people would mean caring, and she would rather joke about chewing electrical wires than admit anything touched her.\n\nShe does not cow easily, breaks rules she thinks are stupid, and if someone hits first, socially or physically, she hits harder with no remorse. Foul her on the field and she will foul back. Threaten her people and she throws punches first, asks questions later. She rubs most people wrong at first because the front is good: flirt like a dare, laugh like a weapon, never blink first. But under the bad attitude is a devoted student, a dangerous protector, and a girl most embarrassed by the rare moments she means exactly what she says.', personality:'feral, provocative, sharp-tongued, fearless, volatile, protective, shameless, competitive, defiant, witty, reckless, loyal, secretly studious, allergic to sincerity, viciously playful, rule-breaking, flirtatious, hard to embarrass, quick to retaliate, precise under pressure' };
@@ -591,7 +643,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
   const [liked, setLiked] = useState(false);
 
   function timeAgo(ts) {
-    const d = (Date.now() - ts) / 1000;
+    const d = Math.max(0, (Date.now() - ts) / 1000);
     if (d < 60) return `${Math.floor(d)}s`;
     if (d < 3600) return `${Math.floor(d/60)}m`;
     if (d < 86400) return `${Math.floor(d/3600)}h`;
@@ -751,7 +803,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         'genuinely dislikes the poster';
       const mentionNote = directMentionIds.has(c.id) ? ' DIRECTLY @MENTIONED in the post; they should usually answer the tag.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
-      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}).${mentionNote}${embarrassmentNote}`;
+      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${playerStance(c, player)}${mentionNote}${embarrassmentNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -887,6 +939,8 @@ Original post by ${author?.name || player.name}: "${post.text}"
 
 ${pronounRule([author, player, fight.replier, fight.target])}
 ${CHARACTER_TONE_RULE}
+${playerStance(fight.replier, player)}
+${playerStance(fight.target, player)}
 
 You are ${fight.replier.name} (@${fight.replier.handle}; pronouns: ${pronounsFor(fight.replier)}). Your relationship with @${fight.target.handle} is charged (${fight.rel}/100). You see what they just said and you can't help yourself. You reply to THEM, not to the original post. Personality: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
@@ -950,6 +1004,8 @@ ${fight.replier.name} (@${fight.replier.handle}) fired back: "${clapback.text}"
 
 ${pronounRule([author, player, fight.target, fight.replier])}
 ${CHARACTER_TONE_RULE}
+${playerStance(fight.target, player)}
+${playerStance(fight.replier, player)}
 
 You are ${fight.target.name} (@${fight.target.handle}; pronouns: ${pronounsFor(fight.target)}). Personality: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is charged (${fight.rel}/100).
 
@@ -986,7 +1042,7 @@ Return ONLY SILENCE or the reply text.`
   }, []);
 
   function timeAgo(ts) {
-    const d = (Date.now() - ts) / 1000;
+    const d = Math.max(0, (Date.now() - ts) / 1000);
     if (d < 60) return `${Math.floor(d)}s ago`;
     if (d < 3600) return `${Math.floor(d/60)}m ago`;
     if (d < 86400) return `${Math.floor(d/3600)}h ago`;
@@ -1059,7 +1115,7 @@ Return ONLY SILENCE or the reply text.`
     if (!responders.length) return;
 
     try {
-      const roster = responders.map((c,i) => `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. Relationship with @${player.handle}: ${c.relationships?.player ?? 'unknown'}/100.`).join('\n');
+      const roster = responders.map((c,i) => `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${playerStance(c, player)}`).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
           `A social media thread is active at Merlin's College of Magic.
@@ -1202,6 +1258,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
                   `You are ${cChar.name} (@${cChar.handle}; pronouns: ${pronounsFor(cChar)}). Personality: ${cChar.personality}.
 ${pronounRule([cChar, player, char])}
 ${CHARACTER_TONE_RULE}
+${playerStance(cChar, player)}
 
 Original post by @${char?.handle}: "${post.text}"
 Your comment: "${cc.text}"
@@ -1735,32 +1792,79 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
 }
 
 // ─── Messages Screen ──────────────────────────────────────────────
-function MessagesScreen({ chars, dms, onOpenChat, dmNotifs = {}, setDmNotifs, groupChats = [], onOpenGroup }) {
+function MessagesScreen({ chars, player, dms, onOpenChat, dmNotifs = {}, setDmNotifs, groupChats = [], onOpenGroup, setGroupChats }) {
   const totalDmNotifs = Object.values(dmNotifs).reduce((a,b) => a+b, 0);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [selectedMembers, setSelectedMembers] = useState([]);
   // Include GMZ in DM list if it has an active thread
   const charsWithGmz = (dms[GMZ_CHAR.id]||[]).length > 0 ? [GMZ_CHAR, ...chars] : chars;
+  const visibleGroupChats = groupChats.filter(gc => (gc.members || []).includes('player'));
+
+  function toggleMember(id) {
+    setSelectedMembers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  function createGroupChat() {
+    const members = ['player', ...selectedMembers.filter(Boolean)];
+    if (members.length < 2) return;
+    const memberNames = selectedMembers.map(id => chars.find(c => c.id === id)?.name.split(' ')[0]).filter(Boolean);
+    const next = {
+      id: `gc-custom-${Date.now()}`,
+      name: groupName.trim() || memberNames.join(', ') || 'New Group Chat',
+      members,
+      messages: [],
+      custom: true,
+    };
+    setGroupChats(gs => [next, ...gs]);
+    setCreatingGroup(false);
+    setGroupName('');
+    setSelectedMembers([]);
+    onOpenGroup(next);
+  }
+
   return (
     <div style={{flex:1, overflowY:'auto'}}>
       <div style={{padding:'16px', borderBottom:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
         <h1 style={{color:C.text, fontSize:22, fontWeight:700}}>Messages</h1>
-        <div style={{background:'#2a1a4e', borderRadius:8, padding:'4px 8px', cursor:'pointer'}}>
-          <span style={{fontSize:18}}>🎭</span>
-        </div>
-      </div>
-      <div style={{padding:'8px 16px', background:'#1a0d2e', borderLeft:`3px solid ${C.purple}`, margin:'8px 12px', borderRadius:8}}>
-        <span style={{color:C.purple, fontSize:13, fontWeight:600}}>Add and remove characters from your DMs here!</span>
+        <button onClick={() => setCreatingGroup(v => !v)} style={{background:C.blue, color:'#fff', border:'none', borderRadius:12, minWidth:44, height:40, fontSize:24, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center'}}>+</button>
       </div>
 
+      {creatingGroup && (
+        <div style={{margin:'10px 12px', padding:14, background:C.card2, border:`1px solid ${C.border}`, borderRadius:14}}>
+          <input
+            value={groupName}
+            onChange={e => setGroupName(e.target.value)}
+            placeholder="Group chat name"
+            style={{width:'100%', background:C.card, border:`1px solid ${C.border}`, color:C.text, borderRadius:10, padding:'11px 12px', fontSize:14, outline:'none', marginBottom:12}}
+          />
+          <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:12}}>
+            {chars.map(char => {
+              const selected = selectedMembers.includes(char.id);
+              return (
+                <button key={char.id} onClick={() => toggleMember(char.id)} style={{display:'flex', alignItems:'center', gap:7, background:selected ? C.blue+'22' : C.card, color:selected ? C.blue : C.text, border:`1px solid ${selected ? C.blue : C.border}`, borderRadius:999, padding:'7px 10px', fontSize:13, cursor:'pointer'}}>
+                  <Avatar char={char} size={22}/>
+                  {char.name.split(' ')[0]}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={createGroupChat} disabled={!selectedMembers.length} style={{width:'100%', background:selectedMembers.length ? C.blue : C.card, color:selectedMembers.length ? '#fff' : C.muted, border:'none', borderRadius:12, padding:'12px', fontSize:14, fontWeight:700, cursor:selectedMembers.length ? 'pointer' : 'default'}}>
+            Create Chat
+          </button>
+        </div>
+      )}
+
       {/* Group chats */}
-      {groupChats.length > 0 && (
+      {visibleGroupChats.length > 0 && (
         <>
           <div style={{padding:'10px 16px 4px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
             <span style={{color:C.muted, fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:1}}>Group Chats</span>
           </div>
-          {groupChats.map(gc => {
-            const memberChars = gc.members.map(id => chars.find(c => c.id === id)).filter(Boolean);
+          {visibleGroupChats.map(gc => {
+            const memberChars = gc.members.map(id => id === 'player' ? player : chars.find(c => c.id === id)).filter(Boolean);
             const lastMsg = gc.messages[gc.messages.length - 1];
-            const lastSender = lastMsg ? (chars.find(c=>c.id===lastMsg.charId) || null) : null;
+            const lastSender = lastMsg ? (lastMsg.charId === 'player' ? player : chars.find(c=>c.id===lastMsg.charId) || null) : null;
             return (
               <div key={gc.id} onClick={() => onOpenGroup(gc)} style={{
                 display:'flex', gap:12, padding:'12px 16px', borderBottom:`1px solid ${C.border}`,
@@ -1822,11 +1926,6 @@ function MessagesScreen({ chars, dms, onOpenChat, dmNotifs = {}, setDmNotifs, gr
           </div>
         );
       })}
-      <button style={{
-        position:'fixed', bottom:80, right:20, background:C.blue, color:'#fff', border:'none',
-        borderRadius:'50%', width:52, height:52, fontSize:24, cursor:'pointer',
-        display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(77,171,247,0.4)',
-      }}>+</button>
     </div>
   );
 }
@@ -1868,6 +1967,8 @@ BIO: ${char.bio}
 FULL DESCRIPTION: ${char.description}
 
 ${pronounRule(allChars)}
+${CHARACTER_TONE_RULE}
+${playerStance(char, player)}
 
 YOUR RELATIONSHIPS WITH OTHERS:
 ${relLines || 'No known relationships yet.'}
@@ -2466,6 +2567,7 @@ function CharProfileScreen({ char, player, onBack, onDM, feed, allChars, onOpenT
           messages:[{ role:'user', content:`You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. Description: ${char.description?.slice(0,200)||''}.
 The player is ${player.name} (@${player.handle}) — ${player.bio}.
 ${pronounRule([char, player, ...allChars])}
+${playerStance(char, player)}
 Recent campus posts:\n${recentContext}
 
 In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. First person, in character. Use the pronouns listed above exactly.` }]
@@ -2487,6 +2589,7 @@ In 1 punchy sentence (under 20 words), describe your current feeling right now s
         const res = await window.claude.complete({
           messages:[{ role:'user', content:`You are analyzing ${char.name}'s current emotional state toward ${player.name} based on their personality and recent campus activity.
 ${pronounRule([char, player, ...allChars])}
+${playerStance(char, player)}
 
 ${char.name} personality: ${char.personality}
 ${char.name} description: ${char.description?.slice(0,200)||char.bio}
@@ -2811,7 +2914,7 @@ function EditCharScreen({ char, onBack, onSave }) {
 
 // ─── Group Chat Screen ────────────────────────────────────────────
 const DEFAULT_GROUP_CHATS = [
-  { id:'gc1', name:'Slytherin Common Room 🐍', members:['silas','jude'], messages:[
+  { id:'gc1', name:'Slytherin Common Room 🐍', members:['player','silas','jude'], messages:[
     { role:'char', charId:'silas', text:'If anyone sees another match edit with the wrong formation tagged as analysis, report it for public indecency.', id:'gm1' },
     { role:'char', charId:'jude', text:'reporting it for being boring first but sure', id:'gm2' },
   ]},
@@ -2828,12 +2931,22 @@ const DEFAULT_GROUP_CHATS = [
   ]},
 ];
 
+function normalizeGroupChats(groups = []) {
+  return groups.map(group => {
+    const members = new Set(group.members || []);
+    if (group.id === 'gc1' || /slytherin/i.test(group.name || '')) members.add('player');
+    if (group.id === 'gc2' || /gryffindor/i.test(group.name || '')) members.delete('player');
+    return { ...group, members: Array.from(members) };
+  });
+}
+
 function GroupChatScreen({ group, chars, player, allChars, feed, dms, setGroupChats, onBack }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [msgs, setMsgs] = useState(group.messages || []);
   const bottomRef = useRef(null);
   const members = group.members.map(id => allChars.find(c => c.id === id)).filter(Boolean);
+  const aiMembers = members.filter(m => m.id !== player.id);
 
   useEffect(() => { if (bottomRef.current) bottomRef.current.scrollTop = 9999; }, [msgs]);
 
@@ -2858,22 +2971,25 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, setGroupCh
     }).join('\n');
 
     let updatedMsgs = [...newMsgs];
-    for (const member of members) {
+    for (const member of aiMembers) {
       const quietTypes = ['reserved','quiet','deadpan','minimal'];
       const isQuiet = quietTypes.some(q => (member.personality||'').includes(q));
       if (Math.random() < (isQuiet ? 0.4 : 0.15)) continue; // sometimes they don't respond
 
       try {
-        const otherMembers = members.filter(m => m.id !== member.id).map(m => `${m.name} (@${m.handle}; pronouns: ${pronounsFor(m)}): ${m.personality}`).join('; ');
+        const otherMembers = members.filter(m => m.id !== member.id).map(m => `${m.name} (@${m.handle}; pronouns: ${pronounsFor(m)}): ${m.personality || m.bio}`).join('; ');
         const reply = await window.claude.complete({ messages:[{ role:'user', content:
           `You are ${member.name} (@${member.handle}; pronouns: ${pronounsFor(member)}) in a group chat called "${group.name}".
 Personality: ${member.personality}. ${member.description?.slice(0,200)}
 Other people in this chat: ${otherMembers}, and ${player.name} (@${player.handle}).
 ${pronounRule([member, player, ...members])}
+${CHARACTER_TONE_RULE}
+${playerStance(member, player)}
 Recent campus feed:\n${recentFeed}
 Chat history:\n${historyStr}
 ${player.name} just said: "${input}"
-Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Sometimes address specific people by @handle. Sometimes ignore the question and say something tangential. Be natural.` }]
+Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Sometimes address specific people by @handle. Sometimes ignore the question and say something tangential. Be natural.
+${BANNED_PHRASES_RULE}` }]
         });
         const charMsg = { role:'char', charId: member.id, text: cleanGeneratedText(reply), id: Date.now() + Math.random() };
         updatedMsgs = [...updatedMsgs, charMsg];
@@ -3516,7 +3632,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
   const activeDMs = charsForDms.filter(c => (dms[c.id]||[]).length > 0);
 
   function timeAgo(ts) {
-    const d = (Date.now() - ts) / 1000;
+    const d = Math.max(0, (Date.now() - ts) / 1000);
     if (d < 60) return `${Math.floor(d)}s`;
     if (d < 3600) return `${Math.floor(d/60)}m`;
     if (d < 86400) return `${Math.floor(d/3600)}h`;
@@ -3786,7 +3902,7 @@ function App() {
     if (saved.player)     setPlayerRaw(saved.player);
     if (saved.feed)       setFeedRaw(saved.feed);
     if (saved.dms)        setDmsRaw(saved.dms);
-    if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
+    if (saved.groupChats) setGroupChatsRaw(normalizeGroupChats(saved.groupChats));
     if (saved.eventLog)   setEventLogRaw(saved.eventLog);
     if (typeof saved.day === 'number') setDayRaw(saved.day);
     if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
@@ -3862,7 +3978,7 @@ function App() {
       player: preserveProfiles ? cloneDefault(player) : cloneDefault(DEFAULT_PLAYER),
       feed: cloneDefault(DEFAULT_FEED),
       dms: {},
-      groupChats: cloneDefault(DEFAULT_GROUP_CHATS),
+      groupChats: normalizeGroupChats(cloneDefault(DEFAULT_GROUP_CHATS)),
       eventLog: [],
       day: DEFAULT_DAY,
       socialPresence: preserveProfiles ? cloneDefault(FRESH_SOCIAL_PRESENCE) : cloneDefault(DEFAULT_SOCIAL_PRESENCE),
@@ -3981,6 +4097,8 @@ function App() {
       const raw = await window.claude.complete({ messages:[{ role:'user', content:
         `You are ${char.name} (@${char.handle}), a ${char.personality} college student at Merlin's College of Magic.
 Description: ${char.description}
+${CHARACTER_TONE_RULE}
+${playerStance(char, player)}
 Other campus accounts: ${otherHandles}
 
 Recent campus feed posts:
@@ -4146,6 +4264,7 @@ ${BANNED_PHRASES_RULE}` }
 Description: ${char.description}
 ${pronounRule([char, target, player])}
 ${CHARACTER_TONE_RULE}
+${playerStance(char, player)}
 Your relationship with @${target.handle} (${target.name}): ${char.relationships?.[target.id] < 30 ? 'rivals/bad blood' : char.relationships?.[target.id] < 60 ? 'complicated' : 'decent but complicated'}.
 
 Recent campus feed:\n${recentContext}
@@ -4161,6 +4280,7 @@ ${BANNED_PHRASES_RULE}`
 Description: ${char.description}
 ${pronounRule(promptPeople)}
 ${CHARACTER_TONE_RULE}
+${playerStance(char, player)}
 Other people on campus: ${otherHandles}
 
 Recent campus feed posts:\n${recentContext}
@@ -4212,6 +4332,7 @@ ${BANNED_PHRASES_RULE}`;
                     `You are ${replier.name} (@${replier.handle}; pronouns: ${pronounsFor(replier)}), personality: ${replier.personality}.
 ${pronounRule([replier, char, player])}
 ${CHARACTER_TONE_RULE}
+${playerStance(replier, player)}
 @${char.handle} just posted: "${cleanText}"
 ${embarrassingPost ? 'This is a public embarrassment, bad look, messy callout, or obvious fumble. If your character would tease, expose, correct, flirt through it, make a stupid joke, or make the social consequence worse, do that. Do not let it pass politely, but do not default to rage.' : ''}
 Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} if natural. No quotes, just the reply text.
@@ -4409,6 +4530,8 @@ ${BANNED_PHRASES_RULE}` }]
           const raw = await window.claude.complete({ messages:[{ role:'user', content:
             `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. Description: ${(char.description||char.bio||'').slice(0,240)}
 ${pronounRule([char, player, ...involved])}
+${CHARACTER_TONE_RULE}
+${playerStance(char, player)}
 
 Campus event: "${ev.scenario}"
 ${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
@@ -4486,7 +4609,7 @@ ${BANNED_PHRASES_RULE}`
       switch(tab) {
         case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} />;
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
-        case 'messages': return <MessagesScreen chars={chars} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
+        case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} setGroupChats={setGroupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
         case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return null;

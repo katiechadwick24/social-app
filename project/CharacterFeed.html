@@ -260,7 +260,7 @@ const BOT_COLORS = ['#8b0000','#1a3a1a','#1a1a4a','#3a1a00','#2a002a','#003a3a',
 // each has a personality so their comments stay in-character across posts.
 const RECURRING_BOTS = [
   { id:'gmz', name:'GMZ', handle:'gmz', type:'press', bg:'#c00', fg:'#fff', initials:'GMZ', bio:'Your #1 source for campus drama. We don\'t make the news, we just ruin lives with it.' },
-  { id:'mothballin', name:'mothballin', handle:'mothballin', type:'stan', bg:'#2a0a4a', fg:'#cc88ff', initials:'mb', vibe:'unhinged stan account, calls everyone "mother", types in lowercase, uses "girl" as punctuation' },
+  { id:'mothballin', name:'mothballin', handle:'mothballin', type:'stan', bg:'#2a0a4a', fg:'#cc88ff', initials:'mb', vibe:'stan account, dramatic but not always correct, occasional "mother" only for women, types in lowercase' },
   { id:'wetcatlooks', name:'wet cat looks', handle:'wetcatlooks', type:'snarky', bg:'#1a3a3a', fg:'#7adfdf', initials:'wc', vibe:'snarky observer, dry one-liners, mild contempt, never punctuates' },
   { id:'pumpkinjuiced', name:'pumpkinjuiced', handle:'pumpkinjuiced', type:'hater', bg:'#3a1a00', fg:'#ff9944', initials:'pj', vibe:'mild hater account, pretends to be neutral but isn\'t, "i mean..." energy' },
   { id:'gobletoffire', name:'gobletoffire', handle:'gobletoffire', type:'thirsty', bg:'#3a0a0a', fg:'#ff7766', initials:'gf', vibe:'thirst-poster, unhinged horny comments about everyone, uses 🥵💀' },
@@ -269,7 +269,7 @@ const RECURRING_BOTS = [
   { id:'broombroke', name:'broom broke (pls help)', handle:'broombroke', type:'fan', bg:'#001a3a', fg:'#66bbff', initials:'bb', vibe:'sweet fan, supportive, slightly cringe, uses heart emojis unironically' },
   { id:'libraryghoul', name:'library ghoul', handle:'libraryghoul', type:'gossip', bg:'#2a1a00', fg:'#d4a060', initials:'lg', vibe:'gossip account that pretends to be above it but isn\'t, "interesting that..."' },
   { id:'quafflewasted', name:'quaffle wasted', handle:'quafflewasted', type:'snarky', bg:'#1a3a00', fg:'#9adf3f', initials:'qw', vibe:'sports drunk, irreverent commentary on everything like it\'s a match, "L take" energy' },
-  { id:'crylittlerunt', name:'cry little runt', handle:'crylittlerunt', type:'hater', bg:'#1a0000', fg:'#ff6060', initials:'cl', vibe:'unapologetic hater, mean girl energy, brutal short comments' },
+  { id:'crylittlerunt', name:'cry little runt', handle:'crylittlerunt', type:'hater', bg:'#1a0000', fg:'#ff6060', initials:'cl', vibe:'unapologetic hater, brutal short comments, not gendered unless a handle makes it obvious' },
   { id:'nikitasburner', name:'nikita\'s burner', handle:'nikitasburner', type:'chaos', bg:'#2a002a', fg:'#ff66cc', initials:'nb', vibe:'obvious finsta, talks about main account drama, "anyway as i was saying"' },
   { id:'lowkeylurking', name:'lowkey lurking', handle:'lowkeylurking', type:'lurker', bg:'#0f0f1a', fg:'#888aaa', initials:'ll', vibe:'comments rarely but cuts deep, observational, sees through everyone' },
 ];
@@ -633,7 +633,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-function PostThreadView({ post, chars, player, onBack, onCharClick, feed }) {
+function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPostUpdate }) {
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
   const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
@@ -646,10 +646,23 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed }) {
   const [likedBots, setLikedBots] = useState({});
   const [likedCharComments, setLikedCharComments] = useState({});
   const [replyingToBot, setReplyingToBot] = useState(null); // bot comment index
+  const [replyingToChar, setReplyingToChar] = useState(null); // char comment index
   const [botReplyText, setBotReplyText] = useState('');
   const [botReplyLoading, setBotReplyLoading] = useState(false);
+  const [charReplyText, setCharReplyText] = useState('');
+  const [charReplyLoading, setCharReplyLoading] = useState(false);
   const [loadingBots, setLoadingBots] = useState(false);
   const [loadingChars, setLoadingChars] = useState(false);
+
+  useEffect(() => {
+    if (!onPostUpdate) return;
+    const visibleCommentCount = botComments.length + charComments.length + (post.reply ? 1 : 0);
+    onPostUpdate(post.id, {
+      botComments,
+      charComments,
+      comments: Math.max(post.comments || 0, visibleCommentCount),
+    });
+  }, [botComments, charComments]);
 
   // Generate the full thread (chars + bots, multi-round, tension-aware)
   useEffect(() => {
@@ -694,13 +707,17 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed }) {
     const intro = isPlayerPost
       ? `${player.name} (@${player.handle}, the main character everyone watches) posted: "${post.text}"`
       : `${author?.name} (@${author?.handle}) posted: "${post.text}"`;
+    const hotTransferContext = /transfer|new girl|new transfer|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(post.text || '');
+    const attractionRule = hotTransferContext
+      ? `\nCONTEXT NOTE: This thread is about ${player.name} as a striking new transfer with talent, attitude, and a reputation. The campus default is excitement, curiosity, attraction, competitive interest, and people trying not to look impressed. A few characters can be wary or test her, but do NOT make everyone bully, insult, or tear her down. Most reactions should be positive, intrigued, thirsty, amused, or impressed in each character's own voice.`
+      : '';
 
     (async () => {
       let charR1 = [];
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character — match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nLength: 6-30 words each. Lowercase casual texting / lowkey ranting / dragging is encouraged. They might pile on, defend, deflect, sub-tweet, or escalate. People with bad blood should NOT be polite. People who are friends should be supportive but in their own voice. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character — match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, or escalate if it fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -745,18 +762,26 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed }) {
 
 ${transcript}
 
+${pronounRule([author, player, ...chars])}
+
 You are writing reactions from random anonymous student accounts watching this play out. They're an AUDIENCE. They:
-- pick teams ("team @whoever", "@xxx ATE this")
-- quote-laugh by repeating the funniest line back ("the way she said '${charR1[0]?.text?.split(/[.,!?]/)[0]?.trim()?.slice(0,40) || 'X'}' I AM CRYING")
-- use slang heavily: lmfaooo, not him saying X, the way, I cant, screaming, deceased, oop, bestie no, etc.
-- dunk, escalate, drag, or take sides — never neutral
+- pick teams sometimes ("team @whoever", "@xxx ate this")
+- quote or repeat a line only occasionally
+- use casual slang lightly: lmfao, oop, bestie, the way, screaming
+- react with a mix of thirst, jokes, skeptical gossip, and taking sides
+- when the thread is about a hot/talented new transfer, most audience comments should be excited, impressed, thirsty, curious, or playfully chaotic, not bullying
+- interject with original opinions, questions, fan behavior, tactical reads, rumors, side-eye, admiration, or warnings
+- fangirl/fanboy naturally when someone is hot, impressive, or messy
 - can call out specific @handles
-- are NOT polite
+- keep it readable and not maximum-volume chaos
+- do not call people "she", "girl", "mother", "queen", etc. unless the pronoun roster supports it and that exact account would say it
+- most accounts should use @handles or names instead of gendered labels
+- do NOT all quote the previous replies; most comments should be fresh reactions
 
 Accounts (in order):
 ${botRoster}
 
-Each comment 5-30 words. Match each account's voice — ${botsPicked.map(b => `@${b.handle} = ${b.vibe}`).join('; ')}. Mix CAPS/lowercase naturally. NO hashtags.
+Each comment 5-22 words. Match each account's voice — ${botsPicked.map(b => `@${b.handle} = ${b.vibe}`).join('; ')}. Mostly lowercase/casual. Avoid excessive ALL CAPS, emoji spam, repeated quote-replies, meltdown language, and everyone sounding like the same stan account. NO hashtags.
 ${BANNED_PHRASES_RULE}
 Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           }]
@@ -837,7 +862,7 @@ Return ONLY the reply text. No other text.`
           try {
             const res2 = await window.claude.complete({
               messages:[{ role:'user', content:
-                `Thread escalated. Latest exchange:\n${clapTranscript}\n\nWrite ${reactBots.length} reactions from anonymous audience accounts who just watched @${fight.replier.handle} clap back at @${fight.target.handle}. They should:\n- pick a winner (CLEARLY — "team @${fight.replier.handle}" or "@${fight.target.handle} did NOT deserve that")\n- quote-laugh the funniest part back\n- use heavy slang (lmfaooo, not the way she said X, screaming, OOP, deceased, etc.)\n- be UNHINGED about it\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-25 words. Match each voice. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+                `Thread escalated. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n\nWrite ${reactBots.length} reactions from anonymous audience accounts who just watched @${fight.replier.handle} clap back at @${fight.target.handle}. They can pick a winner, offer an opinion, ask a messy question, fan out, side-eye the motive, make a tactical read, or make the argument worse. Quote a line only occasionally; most comments should be fresh interjections.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, and "deceased/screaming" pileups. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
             });
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -932,8 +957,8 @@ Return ONLY SILENCE or the reply text.`
   }, [charComments, botComments]);
 
   return (
-    <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-    <div style={{flex:1, overflowY:'auto'}}>
+    <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minHeight:0}}>
+    <div style={{flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', paddingBottom:bottomSafe(96)}}>
       {/* Header */}
       <div style={{padding:'12px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:12, position:'sticky', top:0, background:C.bg, zIndex:5}}>
         <button onClick={onBack} style={{background:'none',border:'none',color:C.blue,fontSize:20,cursor:'pointer'}}>‹</button>
@@ -1006,9 +1031,62 @@ Return ONLY SILENCE or the reply text.`
           const cChar = allChars.find(c => c.id === cc.charId);
           if (!cChar) return null;
           const isLiked = !!likedCharComments[i];
+          const isReplying = replyingToChar === i;
+
+          async function handleCharReply() {
+            if (!charReplyText.trim() || charReplyLoading) return;
+            setCharReplyLoading(true);
+            const playerReply = charReplyText.trim();
+            setCharReplyText('');
+            setReplyingToChar(null);
+            const replyBaseTs = Number(cc.timestamp || post.timestamp || Date.now());
+            const playerEntry = {
+              charId: player.id,
+              text: playerReply,
+              likes: 0,
+              timestamp: replyBaseTs + 0.1,
+              replyTo: cChar.handle,
+              nestedReply: true,
+            };
+            setCharComments(prev => {
+              const next = [...prev];
+              next.splice(i + 1, 0, playerEntry);
+              return next;
+            });
+            try {
+              const res = await window.claude.complete({
+                messages:[{ role:'user', content:
+                  `You are ${cChar.name} (@${cChar.handle}; pronouns: ${pronounsFor(cChar)}). Personality: ${cChar.personality}.
+${pronounRule([cChar, player, char])}
+
+Original post by @${char?.handle}: "${post.text}"
+Your comment: "${cc.text}"
+${player.name} (@${player.handle}) replied to you: "${playerReply}"
+
+Write ONE short response to ${player.name}. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. 6-24 words. No quotes.`
+                }]
+              });
+              const reply = {
+                charId: cChar.id,
+                text: res.trim().replace(/^["']|["']$/g,''),
+                likes: Math.floor(Math.random()*9000),
+                timestamp: replyBaseTs + 0.2,
+                replyTo: player.handle,
+                nestedReply: true,
+              };
+              setCharComments(prev => {
+                const next = [...prev];
+                const insertAt = next.findIndex(c => c === playerEntry);
+                next.splice((insertAt < 0 ? i + 1 : insertAt) + 1, 0, reply);
+                return next;
+              });
+            } catch(e) {}
+            setCharReplyLoading(false);
+          }
+
           return (
             <div key={`char-${i}`} style={{borderBottom:`1px solid ${C.border}`, padding:'14px 16px'}}>
-              <div style={{display:'flex', gap:10}}>
+              <div style={{display:'flex', gap:10, marginLeft: cc.nestedReply ? 30 : 0}}>
                 <Avatar char={cChar} size={38} onClick={() => onCharClick(cChar)}/>
                 <div style={{flex:1, minWidth:0}}>
                   <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:2, flexWrap:'wrap'}}>
@@ -1025,12 +1103,42 @@ Return ONLY SILENCE or the reply text.`
                   )}
                   <p style={{color:C.text, fontSize:14, lineHeight:1.5, margin:0}}>{renderText(cc.text)}</p>
                   <div style={{display:'flex', gap:24, marginTop:10, alignItems:'center'}}>
+                    {cChar.id !== player.id && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setReplyingToChar(isReplying ? null : i); }}
+                        style={{background:'none', border:'none', color: isReplying ? C.blue : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4, padding:'6px 8px 6px 0', minHeight:30}}>
+                        <ReplyGlyph size={14} />
+                        Reply
+                      </button>
+                    )}
                     <button onClick={() => setLikedCharComments(p => ({...p, [i]: !p[i]}))}
                       style={{background:'none', border:'none', color: isLiked ? C.red : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4}}>
                       <svg viewBox="0 0 24 24" width="14" height="14" fill={isLiked?C.red:'none'} stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
                       {fmt((cc.likes||0) + (isLiked?1:0))}
                     </button>
                   </div>
+                  {isReplying && cChar.id !== player.id && (
+                    <div style={{marginTop:10, display:'flex', gap:8, alignItems:'flex-end'}}>
+                      <Avatar char={player} size={28}/>
+                      <div style={{flex:1, background:C.card2, borderRadius:12, border:`1px solid ${charReplyText.trim() ? C.blue+'66' : C.border}`, padding:'8px 12px', transition:'border-color 0.2s'}}>
+                        <input
+                          value={charReplyText}
+                          onChange={e => setCharReplyText(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleCharReply()}
+                          placeholder={`Reply to @${cChar.handle}…`}
+                          style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:13, outline:'none'}}
+                          autoFocus
+                        />
+                      </div>
+                      <button
+                        onClick={handleCharReply}
+                        disabled={!charReplyText.trim() || charReplyLoading}
+                        style={{background: charReplyText.trim() ? C.blue : C.card2, color: charReplyText.trim() ? '#fff' : C.muted, border:'none', borderRadius:22, padding:'8px 16px', fontSize:14, fontWeight:700, cursor: charReplyText.trim() ? 'pointer' : 'default', whiteSpace:'nowrap'}}>
+                        {charReplyLoading ? '…' : 'Send'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1050,7 +1158,8 @@ Return ONLY SILENCE or the reply text.`
           setBotReplyText('');
           setReplyingToBot(null);
           // Optimistically add player reply
-          const playerEntry = { bot: '__player__', text: playerReply, likes: 0, isPlayer: true };
+          const replyBaseTs = Number(bc.timestamp || post.timestamp || Date.now());
+          const playerEntry = { bot: '__player__', text: playerReply, likes: 0, isPlayer: true, timestamp: replyBaseTs + 0.1, replyTo: bot.handle, nestedReply: true };
           setBotComments(prev => {
             const next = [...prev];
             next.splice(i + 1, 0, playerEntry);
@@ -1069,7 +1178,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
             setBotComments(prev => {
               const next = [...prev];
               const insertAt = next.findIndex(c => c === playerEntry) + 1;
-              next.splice(insertAt, 0, { bot: bc.bot, text: res.trim(), likes: Math.floor(Math.random()*3000) });
+              next.splice(insertAt, 0, { bot: bc.bot, text: res.trim(), likes: Math.floor(Math.random()*3000), timestamp: replyBaseTs + 0.2, replyTo: player.handle, nestedReply: true });
               return next;
             });
           } catch(e) {}
@@ -1079,7 +1188,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
         if (bc.isPlayer) {
           return (
             <div key={i} style={{borderBottom:`1px solid ${C.border}`, padding:'12px 16px', paddingLeft:64}}>
-              <div style={{display:'flex', gap:10}}>
+              <div style={{display:'flex', gap:10, marginLeft: bc.nestedReply ? 24 : 0}}>
                 <Avatar char={player} size={32}/>
                 <div style={{flex:1}}>
                   <span style={{fontWeight:700, fontSize:13, color:C.text}}>{player.name}</span>
@@ -1093,7 +1202,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
 
         return (
           <div key={i} style={{borderBottom:`1px solid ${C.border}`, padding:'14px 16px'}}>
-            <div style={{display:'flex', gap:10}}>
+            <div style={{display:'flex', gap:10, marginLeft: bc.nestedReply ? 30 : 0}}>
               <BotAvatar bot={bot} size={38}/>
               <div style={{flex:1}}>
                 <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:4, flexWrap:'wrap'}}>
@@ -1103,8 +1212,9 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
                 <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{renderText(bc.text)}</p>
                 <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
                   <button
-                    onClick={() => setReplyingToBot(isReplying ? null : i)}
-                    style={{background:'none', border:'none', color: isReplying ? C.blue : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4}}>
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setReplyingToBot(isReplying ? null : i); }}
+                    style={{background:'none', border:'none', color: isReplying ? C.blue : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4, padding:'6px 8px 6px 0', minHeight:30}}>
                     <ReplyGlyph size={14} />
                     Reply
                   </button>
@@ -1144,7 +1254,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
       {(loadingChars || loadingBots) && mergedReplies.length > 0 && (
         <p style={{color:C.muted, fontSize:12, padding:'10px 16px', textAlign:'center', fontStyle:'italic'}}>more replies coming in...</p>
       )}
-      <div style={{height: replyOpen ? 80 : 20}}/>
+      <div style={{height: replyOpen ? 220 : 180}}/>
     </div>
 
     {/* Reply input bar */}    {replyOpen && (
@@ -1158,7 +1268,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
             onKeyDown={e => {
               if (e.key === 'Escape') { setReplyOpen(false); setReplyText(''); }
               if (e.key === 'Enter' && replyText.trim()) {
-                setBotComments(prev => [...prev, { bot:'__player__', text: replyText.trim(), likes:0, isPlayer:true }]);
+                setBotComments(prev => [...prev, { bot:'__player__', text: replyText.trim(), likes:0, isPlayer:true, timestamp: Date.now(), replyTo: char?.handle }]);
                 setReplyText(''); setReplyOpen(false);
               }
             }}
@@ -1169,7 +1279,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
         <button
           onClick={() => {
             if (!replyText.trim()) return;
-            setBotComments(prev => [...prev, { bot:'__player__', text: replyText.trim(), likes:0, isPlayer:true }]);
+            setBotComments(prev => [...prev, { bot:'__player__', text: replyText.trim(), likes:0, isPlayer:true, timestamp: Date.now(), replyTo: char?.handle }]);
             setReplyText(''); setReplyOpen(false);
           }}
           disabled={!replyText.trim()}
@@ -3687,6 +3797,10 @@ ${BANNED_PHRASES_RULE}` }] });
   function handleViewChar(char) { pushNav(); setViewChar(char); }
   function handleEditChar(char) { pushNav(); setEditChar(char); }
   function handleCreateChar() { pushNav(); setEditChar({ name:'', handle:'', pronouns:'', house:'', bio:'', description:'', personality:'', followers:1000000 }); }
+  function handleThreadPostUpdate(postId, patch) {
+    setFeed(f => f.map(p => p.id === postId ? { ...p, ...patch } : p));
+    setThreadPost(p => p && p.id === postId ? { ...p, ...patch } : p);
+  }
 
   // Proactive DM: char slides into DMs after hot events
   async function triggerProactiveDM(triggerChar, context) {
@@ -3710,7 +3824,7 @@ ${BANNED_PHRASES_RULE}` }] });
   useEffect(() => {
     let active = true;
     let nextTimer = null;
-    const canAutoPost = tab === 'feed' && !threadPost && !viewChar && !chatChar && !activeGroupChat && !editChar && !activeEvent && !activeMatch && !composing;
+    const canAutoPost = !editChar && !activeEvent && !activeMatch && !composing;
     if (!canAutoPost) return () => { active = false; };
 
     async function generatePost() {
@@ -3820,17 +3934,17 @@ Write ONE short reply (1 sentence, in character). Use the pronouns listed above 
     function scheduleNext(delay) {
       nextTimer = setTimeout(async () => {
         await generatePost();
-        if (active) scheduleNext(180000 + Math.random()*180000);
+        if (active) scheduleNext(240000 + Math.random()*240000);
       }, delay);
     }
 
-    // First post after 60s, then every 3-6 minutes while the main feed is open.
-    scheduleNext(60000);
+    // First post after 90s, then every 4-8 minutes while the app is open.
+    scheduleNext(90000);
 
     // ── GMZ auto-posts ──────────────────────────────────────────
     // GMZ posts only reactively — see triggerGMZPost called from events/hot threads
     return () => { active = false; clearTimeout(nextTimer); };
-  }, [chars.length, tab, threadPost, viewChar, chatChar, activeGroupChat, editChar, activeEvent, activeMatch, composing]); // pause while the user is focused elsewhere
+  }, [chars.length, editChar, activeEvent, activeMatch, composing]);
 
   function handleSaveChar(data) {
     const isNew = !chars.find(c => c.id === data.id) && data.id !== player.id;
@@ -3909,6 +4023,7 @@ Write ONE GMZ gossip post. Rules:
 - 1-2 sentences, punchy tabloid energy  
 - Must reference at least one campus account by @handle
 - Use the pronouns listed above exactly. Do not misgender anyone.
+- If the context is a hot new transfer/photo/reputation reveal, frame the campus as excited, thirsty, curious, and impressed, with only light scandal edge.
 - Start with a hook ("BREAKING:", "SOURCES CONFIRM:", "EXCLUSIVE:", "WITNESSES SAY:", etc.)
 - No hashtags, no quotes, just the post text` }]
       });
@@ -3956,24 +4071,60 @@ ${BANNED_PHRASES_RULE}` }]
     } catch(e) {}
   }
 
-  function handleEventSubmit(eventOverride) {
+  async function handleEventSubmit(eventOverride) {
     const ev = eventOverride || activeEvent;
     if (!ev) return;
     const involved = chars.filter(c => ev.chars.includes(c.id));
-    const newPosts = involved.map(char => ({
-      id: `gen-${Date.now()}-${char.id}`,
+    const isTransferHeat = /keres|transfer|new girl|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(ev.scenario || '');
+    const fallbackReaction = (char) => {
+      if (isTransferHeat) {
+        if (char.id === 'silas') return 'a reputation is useful if she knows how to aim it. tryouts will be informative.';
+        if (char.id === 'jude') return 'new slytherin transfer with a record and cheekbones. finally, paperwork with entertainment value.';
+        if (char.id === 'briar') return 'slytherin getting a talented chaser with attitude is irritating. objectively interesting, but irritating.';
+        if (char.id === 'havoc') return 'if the record is real then respect. if the photo is real then also respect.';
+        if (char.id === 'rowan') return 'terrible day for everyone pretending they did not zoom in.';
+        if (char.id === 'callum') return 'talent travels faster than facts. still, that form does not look accidental.';
+        if (char.id === 'milo') return 'wait are we all pretending the photo did not happen or';
+        if (char.id === 'theo') return 'ranking the new transfer before tryouts would be irresponsible. unrelated thread loading.';
+        if (char.id === 'tamsin') return 'interesting how quickly a record becomes fascinating when the person attached is photogenic.';
+      }
+      return 'watching everyone decide what this means before the facts arrive. efficient, if nothing else.';
+    };
+
+    const basePosts = involved.map(char => ({
+      id: `gen-${Date.now()}-${char.id}-${Math.random()}`,
       charId: char.id,
-      text: ev.custom
-        ? `not everyone needs to have an opinion on ${ev.scenario.includes('@') ? 'this' : 'the new development'}. unfortunately, here we are.`
-        : `...still thinking about what just happened.`,
+      text: fallbackReaction(char),
       likes: Math.floor(Math.random()*100000),
       reposts: Math.floor(Math.random()*5000),
       comments: Math.floor(Math.random()*200),
       timestamp: Date.now(),
       reply: null,
       botComments: [],
+      isEventReaction: true,
     }));
-    setFeed(f => [...newPosts, ...f]);
+    setFeed(f => [...basePosts, ...f]);
+
+    // Upgrade fallback posts with real in-character reactions as they come in.
+    involved.forEach((char, idx) => {
+      setTimeout(async () => {
+        try {
+          const raw = await window.claude.complete({ messages:[{ role:'user', content:
+            `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. Description: ${(char.description||char.bio||'').slice(0,240)}
+${pronounRule([char, player, ...involved])}
+
+Campus event: "${ev.scenario}"
+${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
+
+Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post.`
+          }]});
+          const clean = raw.trim().replace(/^["']|["']$/g,'');
+          if (!clean) return;
+          setFeed(f => f.map(p => p.id === basePosts[idx].id ? {...p, text: clean} : p));
+        } catch(e) {}
+      }, 600 + idx * 500);
+    });
+
     setActiveEvent(null);
     // Proactive DM: 40% chance a reactive char slides in
     const reactiveChars = chars.filter(c => !['reserved','quiet'].some(q => (c.personality||'').includes(q)));
@@ -3982,7 +4133,7 @@ ${BANNED_PHRASES_RULE}` }]
       setTimeout(() => triggerProactiveDM(pick, `the event: ${ev.scenario.slice(0,60)}`), 3000);
     }
     // GMZ: 50% chance to cover a completed event after a short delay
-    if (Math.random() < 0.5) {
+    if (Math.random() < (ev.custom ? 0.75 : 0.5)) {
       setTimeout(() => triggerGMZPost(`A dramatic event just unfolded involving ${ev.chars.map(id => chars.find(c=>c.id===id)?.handle || id).join(' and ')}: "${ev.scenario.slice(0,100)}"`), 8000 + Math.random()*10000);
     }
     // GMZ DM: 35% chance for scandals, 25% for opportunities, 15% otherwise — they want a quote
@@ -4028,7 +4179,7 @@ ${BANNED_PHRASES_RULE}` }]
   } else if (threadPost) {
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <PostThreadView post={threadPost} chars={chars} player={player} onBack={goBack} onCharClick={handleViewChar} feed={feed} />
+        <PostThreadView post={threadPost} chars={chars} player={player} onBack={goBack} onCharClick={handleViewChar} feed={feed} onPostUpdate={handleThreadPostUpdate} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setThreadPost(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );

@@ -2788,6 +2788,26 @@ const SCENE_VIBES = [
   { id:'more',     label:'Something more…',   emoji:'🔥', color:'#e91e8c' },
 ];
 
+function scoreSceneRelationshipForChar(char, sceneMessages = [], vibe) {
+  if (!char) return 0;
+  const relevant = (sceneMessages || []).filter(m => m.role === 'user' || m.charId === char.id);
+  if (relevant.length < 2) return 0;
+  const text = relevant.map(m => m.text || '').join(' ');
+  const warm = /(trust|honest|honesty|respect|appreciate|soft|care|close|stay|wanted|miss|like you|good|beautiful|hot|flirt|kiss|touch|smile|laugh|safe|alliance|ally|thank|yes|please)/i;
+  const sharp = /(hate|leave|back off|shut up|idiot|stupid|threat|angry|hurt|liar|fight|fucked|fuck you|don't touch|do not touch|no)/i;
+  const vibeBase = {
+    catchup: 0.7,
+    drama: 0.45,
+    flirty: 1.1,
+    fight: -0.15,
+    more: 1.25,
+  }[vibe?.id] ?? 0.45;
+  let score = vibeBase + Math.min(1.4, relevant.length * 0.12);
+  if (warm.test(text)) score += 0.75;
+  if (sharp.test(text)) score -= 0.65;
+  return +clamp(score, -2.5, 3.5).toFixed(2);
+}
+
 function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
   const [step, setStep] = useState('setup'); // setup | invite | declined
   const [setting, setSetting] = useState(null);
@@ -2954,13 +2974,14 @@ Write a short in-character group acceptance preview. It can include one or two q
   );
 }
 
-function SceneChatScreen({ char, sceneChars, player, setting, vibe, onClose }) {
+function SceneChatScreen({ char, sceneChars, player, setting, vibe, onClose, onEnd }) {
   const participants = (sceneChars && sceneChars.length ? sceneChars : [char]).filter(Boolean);
   const primaryChar = participants[0];
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const inputRef = useRef(null);
   const getSceneChar = id => participants.find(c => c.id === id) || primaryChar;
 
   useEffect(() => {
@@ -2980,11 +3001,11 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, onClose }) {
         const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
         const openers = parsed.slice(0,2).map((m, i) => {
           const speaker = participants.find(c => c.handle === String(m.handle || '').replace('@','')) || participants[i] || primaryChar;
-          return { role:'char', charId:speaker.id, text: cleanGeneratedText(m.text || ''), id: Date.now() + i };
+          return { role:'char', charId:speaker.id, text: cleanGeneratedText(m.text || ''), id: Date.now() + i, ts: Date.now() };
         }).filter(m => m.text);
-        setMsgs(openers.length ? openers : [{ role:'char', charId:primaryChar.id, text:'*glances over, saying nothing for a moment.*', id: Date.now() }]);
+        setMsgs(openers.length ? openers : [{ role:'char', charId:primaryChar.id, text:'*glances over, saying nothing for a moment.*', id: Date.now(), ts: Date.now() }]);
       } catch(e) {
-        setMsgs([{ role:'char', charId:primaryChar.id, text: '*glances over, saying nothing for a moment.*', id: Date.now() }]);
+        setMsgs([{ role:'char', charId:primaryChar.id, text: '*glances over, saying nothing for a moment.*', id: Date.now(), ts: Date.now() }]);
       }
       setLoading(false);
     }
@@ -3007,7 +3028,8 @@ RESPONSE FORMAT — follow this exactly:
 - Spoken dialogue goes in double quotes: "You're late."
 - Thoughts are NEVER stated directly. At most a very brief physical tell that hints at them: *something flickers across her face* — not "she thinks" or "she wonders".
 - A response might be just dialogue, just an action, or both — whatever feels natural.
-- Keep it SHORT: 1-3 lines total. This is live conversation, not a story.
+- Keep it SHORT: 1-2 lines total. This is live conversation, not a story. No paragraph blocks.
+- Do not write stage-play beats like "Pauses." or long narrated reactions. Use one small physical action at most.
 - Stay completely in character for whoever is speaking. Let the group chemistry matter.
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - The vibe is ${vibe.label}. Honor it.
@@ -3018,7 +3040,7 @@ ${BANNED_PHRASES_RULE}`;
 
   async function send() {
     if (!input.trim() || loading) return;
-    const userMsg = { role:'user', text: input.trim(), id: Date.now() };
+    const userMsg = { role:'user', charId:'player', text: input.trim(), id: Date.now(), ts: Date.now() };
     setMsgs(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
@@ -3035,20 +3057,35 @@ ${BANNED_PHRASES_RULE}`;
       const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
       const replies = parsed.slice(0,3).map((m, i) => {
         const speaker = participants.find(c => c.handle === String(m.handle || '').replace('@','')) || participants[i] || primaryChar;
-        return { role:'char', charId:speaker.id, text: cleanGeneratedText(m.text || ''), id: Date.now()+1+i };
+        return { role:'char', charId:speaker.id, text: cleanGeneratedText(m.text || ''), id: Date.now()+1+i, ts: Date.now() };
       }).filter(m => m.text);
       if (replies.length) setMsgs(prev => [...prev, ...replies]);
     } catch(e) {}
     setLoading(false);
   }
 
+  function endScene() {
+    if (onEnd) onEnd(participants, msgs, vibe);
+    onClose();
+  }
+
   const vibeColor = vibe.color;
 
   return (
-    <div style={{position:'absolute', inset:0, zIndex:200, display:'flex', flexDirection:'column', background:C.bg}}>
+    <div style={{
+      position:'fixed',
+      inset:0,
+      zIndex:500,
+      height:'100dvh',
+      maxHeight:'100dvh',
+      overflow:'hidden',
+      display:'flex',
+      flexDirection:'column',
+      background:C.bg,
+    }}>
       {/* Header */}
       <div style={{padding:'12px 16px', borderBottom:`1px solid ${C.border}`, background:C.bg, display:'flex', alignItems:'center', gap:10}}>
-        <button onClick={onClose} style={{background:'none', border:'none', color:C.blue, fontSize:22, cursor:'pointer', lineHeight:1}}>×</button>
+        <button onClick={onClose} style={{background:'none', border:'none', color:C.blue, fontSize:22, cursor:'pointer', lineHeight:1}}>‹</button>
         <div style={{display:'flex'}}>
           {participants.slice(0,3).map((c,i) => <div key={c.id} style={{marginLeft:i ? -9 : 0}}><Avatar char={c} size={34}/></div>)}
         </div>
@@ -3060,6 +3097,7 @@ ${BANNED_PHRASES_RULE}`;
           <span style={{fontSize:12}}>{vibe.emoji}</span>
           <span style={{color:vibeColor, fontSize:11, fontWeight:600}}>{vibe.label}</span>
         </div>
+        <button onClick={endScene} style={{background:C.card2, color:C.text, border:`1px solid ${C.border}`, borderRadius:18, padding:'7px 12px', fontSize:12, fontWeight:700, cursor:'pointer'}}>End</button>
       </div>
 
       {/* Scene setting banner */}
@@ -3068,7 +3106,7 @@ ${BANNED_PHRASES_RULE}`;
       </div>
 
       {/* Messages */}
-      <div ref={bottomRef} style={{flex:1, overflowY:'auto', padding:'16px 14px', display:'flex', flexDirection:'column', gap:12}}>
+      <div ref={bottomRef} style={{flex:1, overflowY:'auto', padding:`16px 14px ${bottomSafe(92)}`, display:'flex', flexDirection:'column', gap:12}}>
         {msgs.map(m => {
           const isMe = m.role === 'user';
           return (
@@ -3104,16 +3142,17 @@ ${BANNED_PHRASES_RULE}`;
       </div>
 
       {/* Input */}
-      <div style={{padding:'10px 12px', borderTop:`1px solid ${C.border}`, background:C.bg, display:'flex', gap:8, alignItems:'flex-end'}}>
-        <div style={{flex:1, background:C.card2, borderRadius:20, border:`1px solid ${input.trim() ? vibeColor+'66' : C.border}`, padding:'10px 14px', transition:'border-color 0.2s'}}>
-          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key==='Enter' && send()}
-            placeholder="Say something… or [do something]"
-            style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:14, outline:'none'}}
+      <div style={{padding:`10px 12px ${bottomSafe(10)}`, borderTop:`1px solid ${C.border}`, background:C.bg, display:'flex', gap:8, alignItems:'flex-end'}}>
+        <div style={{flex:1, background:C.card2, borderRadius:22, border:`1px solid ${input.trim() ? vibeColor+'66' : C.border}`, padding:'11px 14px', transition:'border-color 0.2s'}}>
+          <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onFocus={() => setTimeout(() => { if (bottomRef.current) bottomRef.current.scrollTop = 9999; }, 250)}
+            placeholder="Say something... or [do something]"
+            rows={2}
+            style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:15, outline:'none', resize:'none', lineHeight:1.35, maxHeight:96}}
           />
         </div>
         <button onClick={send} disabled={!input.trim() || loading} style={{
           background: input.trim() ? vibeColor : C.card2, color:'#fff', border:'none',
-          borderRadius:'50%', width:40, height:40, cursor: input.trim() ? 'pointer' : 'default',
+          borderRadius:'50%', width:46, height:46, cursor: input.trim() ? 'pointer' : 'default',
           display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:18,
           transition:'background 0.2s',
         }}>→</button>
@@ -3149,7 +3188,7 @@ function relationshipStageLabel(value) {
   return 'Bad Blood';
 }
 
-function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats = [], onBack, onDM, feed, allChars, onOpenThread }) {
+function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats = [], onBack, onDM, feed, allChars, onOpenThread, onSceneEnd }) {
   const { hasRelationship: hasPlayerRel, value: rel } = effectivePlayerRelationship(char, eventLog, dms, groupChats);
   const [following, setFollowing] = useState(false);
   const [chemOpen, setChemOpen] = useState(false);
@@ -3378,6 +3417,7 @@ Only output the JSON array, nothing else.` }]
           char={char} sceneChars={activeScene.chars} player={player}
           setting={activeScene.setting} vibe={activeScene.vibe}
           onClose={() => setActiveScene(null)}
+          onEnd={(participants, messages, sceneVibe) => onSceneEnd && onSceneEnd(participants, messages, sceneVibe)}
         />
       )}
     </div>
@@ -4863,6 +4903,35 @@ ${BANNED_PHRASES_RULE}` }] });
     setThreadPost(p => p && p.id === postId ? { ...p, ...patch } : p);
   }
 
+  function handleSceneEnd(participants = [], messages = [], vibe = null) {
+    const changes = participants
+      .filter(c => c?.id && c.id !== 'player' && c.id !== '__gmz__')
+      .map(c => ({ id: c.id, value: scoreSceneRelationshipForChar(c, messages, vibe) }))
+      .filter(ch => ch.value !== 0);
+    if (!changes.length) return;
+    setChars(list => list.map(char => {
+      const change = changes.find(ch => ch.id === char.id);
+      if (!change) return char;
+      const current = Number(char.relationships?.player || 0);
+      return {
+        ...char,
+        relationships: {
+          ...(char.relationships || {}),
+          player: +clamp(current + change.value, -100, 100).toFixed(2),
+        },
+      };
+    }));
+    const label = participants.map(c => c.name).join(', ');
+    setEventLog(log => [{
+      id: `scene-${Date.now()}`,
+      type: 'scene',
+      title: `Scene ended: ${label}`,
+      text: `${vibe?.label || 'Scene'} with ${label}. Relationship shifts were applied.`,
+      scoreChanges: changes.map(ch => ({ avatar: ch.id, value: ch.value })),
+      timestamp: Date.now(),
+    }, ...log]);
+  }
+
   // Proactive DM: char slides into DMs after hot events
   async function triggerProactiveDM(triggerChar, context) {
     try {
@@ -5370,7 +5439,7 @@ ${BANNED_PHRASES_RULE}`
     const liveViewChar = chars.find(c => c.id === viewChar.id) || (player.id === viewChar.id ? player : viewChar);
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} />
+        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} onSceneEnd={handleSceneEnd} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setViewChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );

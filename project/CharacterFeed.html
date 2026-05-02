@@ -55,7 +55,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 const MOBILE_BROWSER_CHROME_GAP = (
   window.innerWidth <= 480 &&
   !(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-) ? 96 : 0;
+) ? 36 : 0;
 
 function bottomSafe(extra = 0) {
   return `calc(env(safe-area-inset-bottom, 0px) + ${MOBILE_BROWSER_CHROME_GAP + extra}px)`;
@@ -253,6 +253,7 @@ Her real fear is that Rowan will become useful to stronger personalities and cal
 
 const DEFAULT_PLAYER = { id:'player', name:'Keres Valen', handle:'keresvalen', house:'slytherin', bio:'Slytherin Chaser trialist. Feral.', followers:1000000, description:'Keres Valen transfers in like a rumor someone dared to make real: sharp mouth, pretty aim, worse ideas after dark. She is trying out as a Chaser for the Slytherin Quidditch team, and the pitch is where the chaos tightens into something terrifyingly precise. Off the field she is loud, feral, shamelessly provocative, and allergic to sincerity unless it slips out by accident. On a broom, she is no contest: fast hands, vicious angles, and the kind of nerve that makes defenders look slow.\n\nHer last school left a reputation behind her, though no one agrees on the details. Brilliant Chaser. Behavioral problem. Top marks where nobody expected them. Someone who hit back too hard and smiled after. Keres lets the stories rot into worse versions because correcting people would mean caring, and she would rather joke about chewing electrical wires than admit anything touched her.\n\nShe does not cow easily, breaks rules she thinks are stupid, and if someone hits first, socially or physically, she hits harder with no remorse. Foul her on the field and she will foul back. Threaten her people and she throws punches first, asks questions later. She rubs most people wrong at first because the front is good: flirt like a dare, laugh like a weapon, never blink first. But under the bad attitude is a devoted student, a dangerous protector, and a girl most embarrassed by the rare moments she means exactly what she says.', personality:'feral, provocative, sharp-tongued, fearless, volatile, protective, shameless, competitive, defiant, witty, reckless, loyal, secretly studious, allergic to sincerity, viciously playful, rule-breaking, flirtatious, hard to embarrass, quick to retaliate, precise under pressure' };
 const DEFAULT_DAY = 1;
+const SAVE_STATE_VERSION = 3;
 const DEFAULT_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
 const FRESH_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
 const LOCAL_STATE_KEY = 'socials-app-state-v2';
@@ -3140,9 +3141,18 @@ function App() {
     }
   }
 
+  function isCurrentSave(saved) {
+    return saved && saved.stateVersion === SAVE_STATE_VERSION;
+  }
+
+  function withStateVersion(state) {
+    return { ...state, stateVersion: SAVE_STATE_VERSION };
+  }
+
   function serverSave(state) {
+    const versionedState = withStateVersion(state);
     if (isFileMode()) {
-      saveLocalState(state);
+      saveLocalState(versionedState);
       return;
     }
     clearTimeout(_saveTimer.current);
@@ -3150,21 +3160,22 @@ function App() {
       fetch('/api/state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state),
+        body: JSON.stringify(versionedState),
       }).catch(() => {});
     }, 1500);
   }
 
   function serverSaveNow(state) {
+    const versionedState = withStateVersion(state);
     if (isFileMode()) {
-      saveLocalState(state);
+      saveLocalState(versionedState);
       return;
     }
     clearTimeout(_saveTimer.current);
     fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state),
+      body: JSON.stringify(versionedState),
     }).catch(() => {});
   }
 
@@ -3201,6 +3212,7 @@ function App() {
       eventLog: [],
       day: DEFAULT_DAY,
       socialPresence: preserveProfiles ? cloneDefault(FRESH_SOCIAL_PRESENCE) : cloneDefault(DEFAULT_SOCIAL_PRESENCE),
+      stateVersion: SAVE_STATE_VERSION,
     };
   }
 
@@ -3208,26 +3220,34 @@ function App() {
   useEffect(() => {
     if (isFileMode()) {
       const saved = loadLocalState();
-      if (saved.chars)      setCharsRaw(saved.chars);
-      if (saved.player)     setPlayerRaw(saved.player);
-      if (saved.feed)       setFeedRaw(saved.feed);
-      if (saved.dms)        setDmsRaw(saved.dms);
-      if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
-      if (saved.eventLog)   setEventLogRaw(saved.eventLog);
-      if (typeof saved.day === 'number') setDayRaw(saved.day);
-      if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
+      if (isCurrentSave(saved)) {
+        if (saved.chars)      setCharsRaw(saved.chars);
+        if (saved.player)     setPlayerRaw(saved.player);
+        if (saved.feed)       setFeedRaw(saved.feed);
+        if (saved.dms)        setDmsRaw(saved.dms);
+        if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
+        if (saved.eventLog)   setEventLogRaw(saved.eventLog);
+        if (typeof saved.day === 'number') setDayRaw(saved.day);
+        if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
+      } else {
+        window.localStorage.removeItem(LOCAL_STATE_KEY);
+      }
       setStateLoaded(true);
       return;
     }
     fetch('/api/state').then(r => r.json()).then(saved => {
-      if (saved.chars)      setCharsRaw(saved.chars);
-      if (saved.player)     setPlayerRaw(saved.player);
-      if (saved.feed)       setFeedRaw(saved.feed);
-      if (saved.dms)        setDmsRaw(saved.dms);
-      if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
-      if (saved.eventLog)   setEventLogRaw(saved.eventLog);
-      if (typeof saved.day === 'number') setDayRaw(saved.day);
-      if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
+      if (isCurrentSave(saved)) {
+        if (saved.chars)      setCharsRaw(saved.chars);
+        if (saved.player)     setPlayerRaw(saved.player);
+        if (saved.feed)       setFeedRaw(saved.feed);
+        if (saved.dms)        setDmsRaw(saved.dms);
+        if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
+        if (saved.eventLog)   setEventLogRaw(saved.eventLog);
+        if (typeof saved.day === 'number') setDayRaw(saved.day);
+        if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
+      } else if (saved && Object.keys(saved).length) {
+        serverSaveNow(freshGameState());
+      }
       setStateLoaded(true);
     }).catch(() => setStateLoaded(true));
   }, []);

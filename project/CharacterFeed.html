@@ -119,6 +119,7 @@ function Avatar({ char, size = 42, onClick }) {
   const houseColor = getHouseColor(char);
   const ringWidth = Math.max(1, size * 0.022);
   const ringGap = Math.max(0.5, size * 0.015);
+  const profilePhoto = char?.profilePhoto || char?.avatar || char?.photo;
   return (
     <div onClick={onClick} style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0, cursor: onClick ? 'pointer' : 'default',
@@ -127,11 +128,15 @@ function Avatar({ char, size = 42, onClick }) {
       boxSizing: 'border-box',
     }}>
       <div style={{
-        width: '100%', height: '100%', borderRadius: '50%', background: bg,
+        width: '100%', height: '100%', borderRadius: '50%', background: bg, overflow:'hidden',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: (size - (houseColor ? (ringWidth + ringGap) * 2 : 0)) * 0.36,
         fontWeight: 700, color: fg,
-      }}>{initials}</div>
+      }}>
+        {profilePhoto
+          ? <img src={profilePhoto} alt="" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+          : initials}
+      </div>
     </div>
   );
 }
@@ -1227,47 +1232,49 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
   const currentEvent = EVENT_POOL[day % EVENT_POOL.length];
 
   return (
-    <div style={{flex:1, overflowY:'auto', position:'relative'}}>
-      {/* Header */}
-      <div style={{padding:'10px 16px', borderBottom:`1px solid ${C.border}`, position:'sticky', top:0, background:C.bg, zIndex:10}}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
-          <div style={{display:'flex', alignItems:'center', gap:6}}>
-            <span style={{fontSize:16}}>☀️</span>
-            <span style={{color:C.text, fontWeight:700}}>Day {day}</span>
-          </div>
-          <div style={{display:'flex', gap:8}}>
-            <div style={{width:32, height:32, background:C.card2, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}} onClick={() => setTab('profile')}>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill={C.muted}><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+    <div style={{flex:1, display:'flex', flexDirection:'column', minHeight:0}}>
+      <div style={{flex:1, overflowY:'auto', position:'relative'}}>
+        {/* Header */}
+        <div style={{padding:'10px 16px', borderBottom:`1px solid ${C.border}`, position:'sticky', top:0, background:C.bg, zIndex:10}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+            <div style={{display:'flex', alignItems:'center', gap:6}}>
+              <span style={{fontSize:16}}>☀️</span>
+              <span style={{color:C.text, fontWeight:700}}>Day {day}</span>
+            </div>
+            <div style={{display:'flex', gap:8}}>
+              <div style={{width:32, height:32, background:C.card2, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}} onClick={() => setTab('profile')}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill={C.muted}><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+              </div>
             </div>
           </div>
+
         </div>
 
+        {/* Match day banner */}
+        <MatchDayBanner match={currentMatch} day={day} onWatch={onWatchMatch} />
+
+        {/* Posts */}
+        {feed.map(post => (
+          <PostCard key={post.id} post={post} chars={chars} player={player} onCharClick={onCharClick} onOpenThread={onOpenThread} />
+        ))}
+
+        {/* Spacer */}
+        <div style={{height:18}}/>
       </div>
 
-      {/* Match day banner */}
-      <MatchDayBanner match={currentMatch} day={day} onWatch={onWatchMatch} />
-
-      {/* Posts */}
-      {feed.map(post => (
-        <PostCard key={post.id} post={post} chars={chars} player={player} onCharClick={onCharClick} onOpenThread={onOpenThread} />
-      ))}
-
-      {/* Spacer */}
-      <div style={{height:MOBILE_BROWSER_CHROME_GAP + 120}}/>
-
-      {/* Event Banner */}
-      <div style={{position:'sticky', bottom:bottomSafe(18), left:0, right:0, display:'flex', justifyContent:'center', gap:10, padding:'0 16px', pointerEvents:'none'}}>
+      {/* Feed actions */}
+      <div style={{display:'flex', justifyContent:'center', gap:10, padding:'8px 16px 10px', background:C.bg, borderTop:`1px solid ${C.border}`, flexShrink:0}}>
         <button onClick={() => onEvent(currentEvent)} style={{
-          pointerEvents:'all', background:'linear-gradient(135deg, #4dabf7, #2280d2)', color:'#fff', border:'none',
-          borderRadius:30, padding:'12px 24px', fontSize:14, fontWeight:700, cursor:'pointer',
-          display:'flex', alignItems:'center', gap:8, boxShadow:'0 4px 20px rgba(77,171,247,0.4)',
+          background:'linear-gradient(135deg, #4dabf7, #2280d2)', color:'#fff', border:'none',
+          borderRadius:24, padding:'10px 22px', fontSize:14, fontWeight:700, cursor:'pointer',
+          display:'flex', alignItems:'center', gap:8, boxShadow:'0 3px 14px rgba(77,171,247,0.28)',
         }}>
           📣 Event <span style={{fontSize:11, fontWeight:500, opacity:0.9}}>up to +{currentEvent.xp[1]} xp</span>
         </button>
         <button onClick={onCompose} style={{
-          pointerEvents:'all', background:C.blue, color:'#fff', border:'none',
-          borderRadius:'50%', width:46, height:46, fontSize:22, cursor:'pointer',
-          display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(77,171,247,0.4)',
+          background:C.blue, color:'#fff', border:'none',
+          borderRadius:'50%', width:42, height:42, fontSize:22, cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 3px 14px rgba(77,171,247,0.28)',
         }}>+</button>
       </div>
     </div>
@@ -2193,6 +2200,7 @@ Only output the JSON array, nothing else.` }]
 // ─── Edit / Create Character Screen ──────────────────────────────
 function EditCharScreen({ char, onBack, onSave }) {
   const isNew = !char.id;
+  const avatarFileRef = useRef(null);
   const [form, setForm] = useState({
     name: char.name || '',
     handle: char.handle || '',
@@ -2200,6 +2208,7 @@ function EditCharScreen({ char, onBack, onSave }) {
     bio: char.bio || '',
     description: char.description || '',
     personality: char.personality || '',
+    profilePhoto: char.profilePhoto || '',
     followers: char.followers || 1000000,
     followerTier: '1mil+',
   });
@@ -2216,6 +2225,15 @@ function EditCharScreen({ char, onBack, onSave }) {
 
   function up(k,v) { setForm(f => ({...f, [k]:v})); }
 
+  function handleProfilePhoto(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => up('profilePhoto', ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
   return (
     <div style={{flex:1, overflowY:'auto'}}>
       <div style={{padding:'14px 16px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:12}}>
@@ -2225,13 +2243,25 @@ function EditCharScreen({ char, onBack, onSave }) {
 
       {/* Banner placeholder */}
       <div style={{height:120, background: houseColor ? `linear-gradient(135deg, ${houseColor}88, ${houseColor}44)` : 'linear-gradient(135deg, #1a1a2e, #2a1a4e)', position:'relative', display:'flex', alignItems:'center', justifyContent:'center'}}>
-        <div style={{position:'absolute', bottom:-30, left:'50%', transform:'translateX(-50%)', background:C.card2, borderRadius:'50%', border:`3px solid ${houseColor || C.bg}`, width:68, height:68, display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, color: houseColor || C.text, boxShadow: houseColor ? `0 0 0 2px ${C.bg}, 0 0 16px ${houseColor}55` : 'none'}}>
-          {form.name ? form.name[0].toUpperCase() : '?'}
-          <div style={{position:'absolute', bottom:0, right:0, background:C.blue, borderRadius:'50%', width:22, height:22, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#fff', fontWeight:700}}>+</div>
-        </div>
+        <button onClick={() => avatarFileRef.current.click()} style={{position:'absolute', bottom:-30, left:'50%', transform:'translateX(-50%)', background:'none', border:'none', padding:0, cursor:'pointer'}}>
+          <Avatar char={{...form, id: char.id || form.handle || form.name}} size={68} />
+          <div style={{position:'absolute', bottom:0, right:0, background:C.blue, borderRadius:'50%', width:22, height:22, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#fff', fontWeight:700, border:`2px solid ${C.bg}`}}>+</div>
+        </button>
+        <input ref={avatarFileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProfilePhoto} />
       </div>
 
       <div style={{padding:'44px 16px 100px', display:'flex', flexDirection:'column', gap:16}}>
+        <div style={{display:'flex', gap:8, justifyContent:'center'}}>
+          <button onClick={() => avatarFileRef.current.click()} style={{background:C.card2, border:`1px solid ${C.border}`, color:C.text, borderRadius:18, padding:'7px 14px', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+            Upload profile photo
+          </button>
+          {form.profilePhoto && (
+            <button onClick={() => up('profilePhoto','')} style={{background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:18, padding:'7px 14px', fontSize:12, cursor:'pointer'}}>
+              Remove
+            </button>
+          )}
+        </div>
+
         {[['Character Name','name','text'],['Handle','handle','text'],].map(([label, key, type]) => (
           <div key={key}>
             <label style={{color:C.muted, fontSize:13, marginBottom:6, display:'block'}}>{label}</label>

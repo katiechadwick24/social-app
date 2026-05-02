@@ -389,7 +389,10 @@ function playerStance(char, player, relationshipOverride) {
     theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred. He should sound like someone making the thread funnier while pretending it is journalism.',
     elara: 'Elara is proud, socially dangerous, and hard to pity. She reacts to being erased or underestimated, but she can be charismatic, funny, and lethal without monologuing.'
   }[char.id] || '';
-  return `KERES CONTINUITY: ${relLine} ${fixed} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
+  const relationshipNuance = char.id === 'tamsin' && rel > 0
+    ? 'Because Tamsin and Keres currently have positive trust, she can still be sharp, but she should not treat normal Slytherin-vs-Gryffindor trash talk as weird, betrayal, or overstepping. She respects directness and information exchange; skepticism should be precise, not random hostility.'
+    : '';
+  return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
 }
 
 function cleanGeneratedText(text = '') {
@@ -962,10 +965,12 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPostUpdate }) {
+function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPostUpdate, dms = {}, groupChats = [] }) {
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
   const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
+  const playerRelFor = (c) => effectivePlayerRelationship(c, [], dms, groupChats).value;
+  const stanceFor = (c) => playerStance(c, player, playerRelFor(c));
   const [liked, setLiked] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replyOpen, setReplyOpen] = useState(false);
@@ -1019,9 +1024,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     );
     const directlyMentioned = eligible.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
     const directMentionIds = new Set(directlyMentioned.map(c => c.id));
+    const authorId = author?.id || post.charId;
+    const isKeresPost = post.charId === 'player' || mentionedHandles.has((player.handle || '').toLowerCase());
 
     const charge = (c) => {
-      const r = c.relationships?.[post.charId] ?? c.relationships?.player;
+      const r = isKeresPost ? playerRelFor(c) : (c.relationships?.[post.charId] ?? c.relationships?.player);
       if (r === undefined) return 25; // neutral default
       return Math.abs(r - 50) + 10; // distance from neutral, min 10
     };
@@ -1034,8 +1041,6 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
             return (score(b) + charge(b)/100) - (score(a) + charge(a)/100);
           })[0]
       : null;
-    const authorId = author?.id || post.charId;
-    const isKeresPost = post.charId === 'player' || mentionedHandles.has((player.handle || '').toLowerCase());
     const weighted = eligible
       .filter(c => !directMentionIds.has(c.id))
       .map(c => {
@@ -1063,7 +1068,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     }
 
     const charRoster = picked.map((c,i) => {
-      const rel = c.relationships?.[post.charId] ?? c.relationships?.player;
+      const rel = isKeresPost ? playerRelFor(c) : (c.relationships?.[post.charId] ?? c.relationships?.player);
       const feel = rel === undefined ? 'neutral' :
         rel > 70 ? 'best friends with the poster' :
         rel > 40 ? 'on good terms with the poster' :
@@ -1072,7 +1077,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         'genuinely dislikes the poster';
       const mentionNote = directMentionIds.has(c.id) ? ' DIRECTLY @MENTIONED in the post; they should usually answer the tag.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
-      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${playerStance(c, player)}${mentionNote}${embarrassmentNote}`;
+      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${stanceFor(c)}${mentionNote}${embarrassmentNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -1211,8 +1216,8 @@ Original post by ${author?.name || player.name}: "${post.text}"
 
 ${pronounRule([author, player, fight.replier, fight.target])}
 ${CHARACTER_TONE_RULE}
-${playerStance(fight.replier, player)}
-${playerStance(fight.target, player)}
+${stanceFor(fight.replier)}
+${stanceFor(fight.target)}
 
 You are ${fight.replier.name} (@${fight.replier.handle}; pronouns: ${pronounsFor(fight.replier)}). Your relationship with @${fight.target.handle} is charged (${fight.rel}/100). You see what they just said and you can't help yourself. You reply to THEM, not to the original post. Personality: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
@@ -1273,7 +1278,7 @@ Return ONLY the reply text. No other text.`
                   const bot = pool.find(b => b.id === botTarget.bot);
                   const resBot = await window.claude.complete({
                     messages:[{ role:'user', content:
-                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${playerStance(responder, player)}\n\nYou are ${responder.name} (@${responder.handle}). If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, or clarifying. No hashtags, no quotes.` }]
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${stanceFor(responder)}\n\nYou are ${responder.name} (@${responder.handle}). If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, or clarifying. No hashtags, no quotes.` }]
                   });
                   const botReply = cleanGeneratedText(resBot);
                   if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
@@ -1307,8 +1312,8 @@ ${fight.replier.name} (@${fight.replier.handle}) fired back: "${clapback.text}"
 
 ${pronounRule([author, player, fight.target, fight.replier])}
 ${CHARACTER_TONE_RULE}
-${playerStance(fight.target, player)}
-${playerStance(fight.replier, player)}
+${stanceFor(fight.target)}
+${stanceFor(fight.replier)}
 
 You are ${fight.target.name} (@${fight.target.handle}; pronouns: ${pronounsFor(fight.target)}). Personality: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is charged (${fight.rel}/100).
 
@@ -1424,6 +1429,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
           sourceText: target.sourceText || '',
           baseTs: baseTs + 0.25,
           mode: 'direct',
+          replyToHandle: bot.handle,
         });
       } catch(e) {}
       return;
@@ -1444,19 +1450,30 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
 
     if (target.kind === 'char' && target.targetChar) {
       const targetChar = target.targetChar;
+      const currentTranscript = mergedReplies.slice(-8).map(item => {
+        if (item.kind === 'char') {
+          const speaker = allChars.find(c => c.id === item.data.charId);
+          return `@${speaker?.handle || '?'}: "${item.data.text}"`;
+        }
+        const speaker = getBotById(item.data.bot);
+        return `@${speaker?.handle || '?'}: "${item.data.text}"`;
+      }).join('\n');
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
             `You are ${targetChar.name} (@${targetChar.handle}; pronouns: ${pronounsFor(targetChar)}). Personality: ${targetChar.personality}.
 ${pronounRule([targetChar, player, char])}
 ${CHARACTER_TONE_RULE}
-${playerStance(targetChar, player)}
+${stanceFor(targetChar)}
 
 Original post by @${char?.handle}: "${post.text}"
+Recent visible thread:
+${currentTranscript || '(no earlier replies shown)'}
+
 Your comment: "${target.sourceText || ''}"
 ${player.name} (@${player.handle}) replied to you: "${text}"
 
-Write ONE short response to ${player.name}. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, or be awkward instead of angry. 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a pointed question, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
           }]
         });
@@ -1476,6 +1493,7 @@ ${BANNED_PHRASES_RULE}`
           baseTs: baseTs + 0.25,
           mode: 'direct',
           excludeIds: [targetChar.id],
+          replyToHandle: targetChar.handle,
         });
       } catch(e) {}
       return;
@@ -1490,7 +1508,7 @@ ${BANNED_PHRASES_RULE}`
     });
   }
 
-  async function triggerCharacterFollowups({ playerText, targetChar, sourceText, baseTs, mode = 'main', excludeIds = [] }) {
+  async function triggerCharacterFollowups({ playerText, targetChar, sourceText, baseTs, mode = 'main', excludeIds = [], replyToHandle = null }) {
     const mentionedHandles = new Set(
       Array.from((playerText || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase())
     );
@@ -1510,10 +1528,11 @@ ${BANNED_PHRASES_RULE}`
     const charged = [...candidatePool]
       .filter(c => c.id !== post.charId && !target.some(t => t.id === c.id) && !tagged.some(t => t.id === c.id))
       .map(c => {
-        let w = Math.abs((c.relationships?.player ?? 50) - 50) + Math.random()*18;
+        let w = Math.abs((playerRelFor(c) ?? 50) - 50) + Math.random()*18;
         if (sourceAuthorId === 'havoc' && c.id === 'silas') w *= 0.22;
         if (sourceAuthorId === 'havoc' && c.id === 'callum' && !mentionedHandles.has('callumpike')) w *= 0.35;
         if (c.id === 'silas' && !mentionedHandles.has('silasmontague') && Math.random() < 0.45) w *= 0.3;
+        if (mode === 'direct' && c.id === 'havoc' && !mentionedHandles.has('havocfang')) w *= 0.28;
         return { c, w };
       })
       .sort((a,b) => b.w - a.w)
@@ -1525,7 +1544,7 @@ ${BANNED_PHRASES_RULE}`
     if (!responders.length) return;
 
     try {
-      const roster = responders.map((c,i) => `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${playerStance(c, player)}`).join('\n');
+      const roster = responders.map((c,i) => `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${stanceFor(c)}`).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
           `A social media thread is active at Merlin's College of Magic.
@@ -1540,7 +1559,7 @@ ${player.name} (@${player.handle}) just commented: "${playerText}"
 ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
 
 Characters in order:
 ${roster}
@@ -1556,7 +1575,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
         text: cleanGeneratedText(parsed[i] || ''),
         likes: Math.floor(Math.random()*12000),
         timestamp: baseTs + 90000 + i*45000 + Math.floor(Math.random()*45000),
-        replyTo: player.handle,
+        replyTo: replyToHandle || targetChar?.handle || char?.handle || player.handle,
         nestedReply: false,
       })).filter(r => r.text);
       replies.forEach((reply, i) => {
@@ -1668,7 +1687,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
                   `You are ${cChar.name} (@${cChar.handle}; pronouns: ${pronounsFor(cChar)}). Personality: ${cChar.personality}.
 ${pronounRule([cChar, player, char])}
 ${CHARACTER_TONE_RULE}
-${playerStance(cChar, player)}
+${stanceFor(cChar)}
 
 Original post by @${char?.handle}: "${post.text}"
 Your comment: "${cc.text}"
@@ -1699,6 +1718,7 @@ ${BANNED_PHRASES_RULE}`
                 baseTs: replyBaseTs + 0.25,
                 mode: 'direct',
                 excludeIds: [cChar.id],
+                replyToHandle: cChar.handle,
               });
             } catch(e) {}
             setCharReplyLoading(false);
@@ -1810,6 +1830,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
               sourceText: bc.text,
               baseTs: replyBaseTs + 0.25,
               mode: 'direct',
+              replyToHandle: bot.handle,
             });
           } catch(e) {}
           setBotReplyLoading(false);
@@ -5221,7 +5242,7 @@ ${BANNED_PHRASES_RULE}`
   } else if (threadPost) {
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <PostThreadView post={threadPost} chars={chars} player={player} onBack={goBack} onCharClick={handleViewChar} feed={feed} onPostUpdate={handleThreadPostUpdate} />
+        <PostThreadView post={threadPost} chars={chars} player={player} onBack={goBack} onCharClick={handleViewChar} feed={feed} onPostUpdate={handleThreadPostUpdate} dms={dms} groupChats={groupChats} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setThreadPost(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );

@@ -456,6 +456,27 @@ function repairPromptLeakPosts(feed = [], chars = [], player) {
   });
 }
 
+function loggedRelationshipAddsByChar(eventLog = {}) {
+  return (eventLog || []).reduce((acc, entry) => {
+    if (entry?.relationshipApplied) return acc;
+    (entry?.scoreChanges || []).forEach(ch => {
+      if (!ch?.avatar || typeof ch.value !== 'number') return;
+      acc[ch.avatar] = +(Number(acc[ch.avatar] || 0) + Number(ch.value || 0)).toFixed(2);
+    });
+    return acc;
+  }, {});
+}
+
+function effectivePlayerRelationship(char, eventLog = []) {
+  const loggedAdds = loggedRelationshipAddsByChar(eventLog);
+  const hasSaved = !!char?.relationships && Object.prototype.hasOwnProperty.call(char.relationships, 'player');
+  const hasLogged = Object.prototype.hasOwnProperty.call(loggedAdds, char?.id);
+  return {
+    hasRelationship: hasSaved || hasLogged,
+    value: +((Number(char?.relationships?.player || 0) + Number(loggedAdds[char?.id] || 0)).toFixed(2)),
+  };
+}
+
 // ─── Bot pool ─────────────────────────────────────────────────────
 const BOT_COLORS = ['#8b0000','#1a3a1a','#1a1a4a','#3a1a00','#2a002a','#003a3a','#1a1a1a'];
 // Recurring "bots" = finsta/burner-style accounts. Real-people vibes, chaotic usernames,
@@ -2392,23 +2413,9 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
 
 // ─── Profile Screen ───────────────────────────────────────────────
 function ProfileScreen({ player, chars, socialPresence, eventLog = [], onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
-  const loggedRelationshipAdds = eventLog.reduce((acc, entry) => {
-    if (entry?.relationshipApplied) return acc;
-    (entry?.scoreChanges || []).forEach(ch => {
-      if (!ch?.avatar || typeof ch.value !== 'number') return;
-      acc[ch.avatar] = +(Number(acc[ch.avatar] || 0) + Number(ch.value || 0)).toFixed(2);
-    });
-    return acc;
-  }, {});
   const relationships = chars
-    .filter(c => (
-      (c.relationships && Object.prototype.hasOwnProperty.call(c.relationships, 'player')) ||
-      Object.prototype.hasOwnProperty.call(loggedRelationshipAdds, c.id)
-    ))
-    .map(c => ({
-      char: c,
-      value: +((Number(c.relationships?.player || 0) + Number(loggedRelationshipAdds[c.id] || 0)).toFixed(2)),
-    }));
+    .map(c => ({ char: c, ...effectivePlayerRelationship(c, eventLog) }))
+    .filter(r => r.hasRelationship);
   const socialRows = [
     ['😂','Humor',socialPresence?.humor ?? 0,'#4dabf7'],
     ['⭐','Aura',socialPresence?.aura ?? 0,'#22c55e'],
@@ -2895,9 +2902,17 @@ const CHEMISTRY_CHIPS = [
   {id:'friends', icon:'🤝', label:'Friends'},
 ];
 
-function CharProfileScreen({ char, player, onBack, onDM, feed, allChars, onOpenThread }) {
-  const hasPlayerRel = !!char.relationships && Object.prototype.hasOwnProperty.call(char.relationships, 'player');
-  const rel = hasPlayerRel ? char.relationships.player : 0;
+function relationshipStageLabel(value) {
+  if (value >= 60) return 'Close Orbit';
+  if (value >= 25) return 'Warm Interest';
+  if (value > 0) return 'Something Brewing';
+  if (value === 0) return 'Neutral';
+  if (value > -25) return 'Complicated';
+  return 'Bad Blood';
+}
+
+function CharProfileScreen({ char, player, eventLog = [], onBack, onDM, feed, allChars, onOpenThread }) {
+  const { hasRelationship: hasPlayerRel, value: rel } = effectivePlayerRelationship(char, eventLog);
   const [following, setFollowing] = useState(false);
   const [chemOpen, setChemOpen] = useState(false);
   const [chemistry, setChemistry] = useState('default');
@@ -2974,7 +2989,9 @@ Only output the JSON array, nothing else.` }]
     loadVibes();
   }, [char.id]);
 
-  const relLabel = hasPlayerRel ? (CHEMISTRY_LABELS[chemistry] || CHEMISTRY_LABELS.default) : 'No Current Relationship';
+  const relLabel = hasPlayerRel
+    ? (chemistry === 'default' ? relationshipStageLabel(rel) : CHEMISTRY_LABELS[chemistry] || CHEMISTRY_LABELS.default)
+    : 'No Current Relationship';
 
   return (
     <div style={{flex:1, overflowY:'auto', position:'relative'}}>
@@ -3062,13 +3079,14 @@ Only output the JSON array, nothing else.` }]
         <div style={{marginTop:10, background:C.card2, borderRadius:14, padding:'14px'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
             <span style={{color:C.text, fontWeight:700, fontSize:14}}>💕 Your Relationship</span>
+            <span style={{color: rel >= 0 ? C.green : C.red, fontSize:13, fontWeight:700}}>{rel > 0 ? '+' : ''}{rel.toFixed(1)}%</span>
           </div>
           <p style={{color:C.yellow, fontSize:13, fontWeight:600, marginBottom:10}}>{relLabel}</p>
           <RelBar value={rel} />
           {/* Change chemistry */}
           <div style={{marginTop:12, borderTop:`1px solid ${C.border}`, paddingTop:10}}>
             <button onClick={() => setChemOpen(o=>!o)} style={{background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:8, width:'100%'}}>
-              <span style={{color:C.text, fontSize:13, fontWeight:600}}>Change chemistry</span>
+              <span style={{color:C.text, fontSize:13, fontWeight:600}}>Chemistry tag</span>
               <span style={{color:C.muted, marginLeft:'auto'}}>{chemOpen ? '▲' : '▼'}</span>
             </button>
             {chemOpen && (
@@ -4229,23 +4247,6 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
             </div>
           )}
 
-          {/* Rewind bar */}
-          {filteredLog.length > 0 && (
-            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', margin:'10px 14px 4px', padding:'10px 14px', background:`${C.yellow}0a`, border:`1px solid ${C.yellow}22`, borderRadius:14}}>
-              <div style={{display:'flex', alignItems:'center', gap:10}}>
-                <div style={{width:32, height:32, borderRadius:'50%', background:C.card2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16}}>↩</div>
-                <div>
-                  <p style={{color:C.text, fontSize:13, fontWeight:700}}>Rewind</p>
-                  <p style={{color:C.muted, fontSize:11}}>Undo last action</p>
-                </div>
-              </div>
-              <div style={{display:'flex', alignItems:'center', gap:6, background:`${C.yellow}18`, border:`1px solid ${C.yellow}44`, borderRadius:20, padding:'5px 12px'}}>
-                <span style={{fontSize:14}}>💜</span>
-                <span style={{color:C.yellow, fontWeight:700, fontSize:13}}>14</span>
-              </div>
-            </div>
-          )}
-
           <div style={{padding:'10px 14px'}}>
             {filteredLog.length === 0 ? (
               <div style={{textAlign:'center', color:C.muted, fontSize:14, marginTop:60}}>
@@ -5040,7 +5041,7 @@ ${BANNED_PHRASES_RULE}`
   } else if (viewChar) {
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <CharProfileScreen char={viewChar} player={player} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} />
+        <CharProfileScreen char={viewChar} player={player} eventLog={eventLog} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setViewChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );

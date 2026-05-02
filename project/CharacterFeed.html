@@ -34,10 +34,12 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0a0a0a; display: flex; justify-content: center; align-items: center; min-height: 100vh; min-height: 100dvh; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; }
   ::-webkit-scrollbar { display: none; }
-  input, textarea { font-family: inherit; }
+  input, textarea, button { font-family: inherit; }
+  button { touch-action: manipulation; }
   /* Full-screen on real phones */
   @media (max-width: 480px) {
     body { display: block; background: #111; min-height: 100dvh; }
+    button { min-height: 38px; }
   }
 </style>
 </head>
@@ -115,6 +117,7 @@ function Avatar({ char, size = 42, onClick }) {
   const ringWidth = Math.max(1, size * 0.022);
   const ringGap = Math.max(0.5, size * 0.015);
   const profilePhoto = char?.profilePhoto || char?.avatar || char?.photo;
+  const photoPosition = char?.profilePhotoPosition || { x:50, y:50 };
   return (
     <div onClick={onClick} style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0, cursor: onClick ? 'pointer' : 'default',
@@ -129,7 +132,7 @@ function Avatar({ char, size = 42, onClick }) {
         fontWeight: 700, color: fg,
       }}>
         {profilePhoto
-          ? <img src={profilePhoto} alt="" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+          ? <img src={profilePhoto} alt="" style={{width:'100%', height:'100%', objectFit:'cover', objectPosition:`${photoPosition.x ?? 50}% ${photoPosition.y ?? 50}%`, display:'block'}} />
           : initials}
       </div>
     </div>
@@ -158,6 +161,40 @@ function fmt(n) {
   if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
   if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
   return String(n);
+}
+
+function findCharByHandle(handle, allChars = []) {
+  const clean = (handle || '').replace('@','').toLowerCase();
+  return allChars.find(c => (c.handle || '').toLowerCase() === clean);
+}
+
+function renderLinkedText(text = '', allChars = [], onCharClick) {
+  return text.split(/(@\w+)/g).map((part, i) => {
+    if (!part.startsWith('@')) return part;
+    const mentioned = findCharByHandle(part, allChars);
+    return (
+      <span
+        key={i}
+        onClick={e => {
+          if (!mentioned || !onCharClick) return;
+          e.stopPropagation();
+          onCharClick(mentioned);
+        }}
+        style={{color:C.blue, cursor: mentioned && onCharClick ? 'pointer' : 'default', fontWeight:500}}
+      >
+        {part}
+      </span>
+    );
+  });
+}
+
+function ReplyGlyph({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 8.5 5.5 13 10 17.5"/>
+      <path d="M6 13h8.5c2.8 0 4.5 1.6 4.5 4.2v1.3"/>
+    </svg>
+  );
 }
 
 // ─── Global dialogue rules ────────────────────────────────────────────
@@ -447,22 +484,22 @@ function RelBar({ value }) {
 function BottomNav({ tab, setTab, dmNotifs = {} }) {
   const totalDmNotifs = Object.values(dmNotifs).reduce((a,b) => a+b, 0);
   const tabs = [
-    { id:'feed', icon: <svg viewBox="0 0 24 24" width="22" height="22"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></svg> },
-    { id:'activity', icon: <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="currentColor"/></svg> },
+    { id:'feed', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></svg> },
+    { id:'activity', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="currentColor"/></svg> },
     { id:'messages', icon: (
       <div style={{position:'relative', display:'inline-flex'}}>
-        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>
+        <svg viewBox="0 0 24 24" width="26" height="26"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>
         {totalDmNotifs > 0 && <div style={{position:'absolute', top:-4, right:-6, background:'#e91e8c', borderRadius:'50%', width:16, height:16, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:'#fff', border:`1.5px solid ${C.bg}`}}>{totalDmNotifs}</div>}
       </div>
     )},
-    { id:'notifications', icon: <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/></svg> },
-    { id:'profile', icon: <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg> },
+    { id:'notifications', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/></svg> },
+    { id:'profile', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg> },
   ];
   return (
     <div style={{display:'flex', borderTop:`1px solid ${C.border}`, background:C.bg, paddingBottom:bottomSafe(8), flexShrink:0}}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => setTab(t.id)} style={{
-          flex:1, background:'none', border:'none', padding:'12px 0 8px', cursor:'pointer',
+          flex:1, background:'none', border:'none', padding:'13px 0 10px', cursor:'pointer',
           color: tab === t.id ? '#fff' : C.muted, display:'flex', flexDirection:'column', alignItems:'center',
         }}>{t.icon}</button>
       ))}
@@ -487,16 +524,12 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
 
   if (!char) return null;
 
-  const renderText = (text) => {
-    return text.split(/(@\w+)/g).map((part, i) =>
-      part.startsWith('@') ? <span key={i} style={{color: C.blue}}>{part}</span> : part
-    );
-  };
+  const renderText = (text) => renderLinkedText(text, allChars, onCharClick);
 
   return (
-    <div style={{padding:'14px 16px', borderBottom:`1px solid ${C.border}`}}>
-      <div style={{display:'flex', gap:10}}>
-        <Avatar char={char} size={40} onClick={() => char.id !== '__gmz__' && onCharClick(char)} />
+    <div style={{padding:'16px 16px', borderBottom:`1px solid ${C.border}`}}>
+      <div style={{display:'flex', gap:12}}>
+        <Avatar char={char} size={52} onClick={() => char.id !== '__gmz__' && onCharClick(char)} />
         <div style={{flex:1, minWidth:0}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
             <div style={{display:'flex', alignItems:'center', gap:4, flexWrap:'wrap'}}>
@@ -511,7 +544,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
           {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', borderRadius:12, marginTop:8, maxHeight:220, objectFit:'cover', cursor:'pointer'}} />}
           <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
             <button onClick={() => onOpenThread && onOpenThread(post)} style={{background:'none',border:'none',color:C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <ReplyGlyph size={16} />
               {fmt(post.comments)}
             </button>
             <button style={{background:'none',border:'none',color:C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
@@ -531,7 +564,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
       {replyChar && (
         <div style={{marginLeft:50, marginTop:10, padding:'10px 12px', background:C.card2, borderRadius:12, borderLeft:`3px solid ${C.border}`}}>
           <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:4}}>
-            <Avatar char={replyChar} size={22} />
+            <Avatar char={replyChar} size={32} />
             <span style={{fontWeight:700, fontSize:13, color:C.text}}>{replyChar.name}</span>
             <CharBadge char={replyChar} />
             <span style={{color:C.muted, fontSize:12}}>@{replyChar.handle}</span>
@@ -789,9 +822,7 @@ Return ONLY the reply text. No other text.`
     return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + ' · ' + new Date(ts).toLocaleDateString([],{month:'numeric',day:'numeric',year:'2-digit'});
   }
 
-  const renderText = (text) => text.split(/(@\w+)/g).map((part,i) =>
-    part.startsWith('@') ? <span key={i} style={{color:C.blue}}>{part}</span> : part
-  );
+  const renderText = (text) => renderLinkedText(text, allChars, onCharClick);
 
   const getBotById = id => RECURRING_BOTS.find(b => b.id === id) || RECURRING_BOTS[0];
 
@@ -832,8 +863,8 @@ Return ONLY the reply text. No other text.`
         {post.photo && <img src={post.photo} alt="" style={{width:'100%', borderRadius:14, marginBottom:12, maxHeight:260, objectFit:'cover'}}/>}
         <p style={{color:C.muted, fontSize:13, marginBottom:12}}>{fmtTime(post.timestamp)} · <strong style={{color:C.text}}>{fmt(post.likes * 7.2 | 0)}</strong> Views</p>
         <div style={{borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`, padding:'10px 0', display:'flex', gap:16, alignItems:'center'}}>
-          <button onClick={() => { setReplyOpen(true); setTimeout(() => replyInputRef.current?.focus(), 50); }} style={{background:C.blue+'22', color:C.blue, border:'none', borderRadius:20, padding:'7px 16px', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6}}>
-            💬 Reply
+          <button onClick={() => { setReplyOpen(true); setTimeout(() => replyInputRef.current?.focus(), 50); }} style={{background:C.blue+'22', color:C.blue, border:'none', borderRadius:22, padding:'9px 18px', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:7}}>
+            <ReplyGlyph size={17} /> Reply
           </button>
           <div style={{display:'flex', alignItems:'center', gap:6, color:C.muted, fontSize:13}}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
@@ -959,7 +990,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
                 <div style={{flex:1}}>
                   <span style={{fontWeight:700, fontSize:13, color:C.text}}>{player.name}</span>
                   <span style={{color:C.muted, fontSize:12, marginLeft:6}}>@{player.handle}</span>
-                  <p style={{color:C.text, fontSize:13, lineHeight:1.5, marginTop:4}}>{bc.text}</p>
+                  <p style={{color:C.text, fontSize:13, lineHeight:1.5, marginTop:4}}>{renderText(bc.text)}</p>
                 </div>
               </div>
             </div>
@@ -975,12 +1006,12 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
                   <span style={{fontWeight:700, fontSize:14, color:C.text}}>{bot.name}</span>
                   <span style={{color:C.muted, fontSize:13}}>@{bot.handle}</span>
                 </div>
-                <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{bc.text}</p>
+                <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{renderText(bc.text)}</p>
                 <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
                   <button
                     onClick={() => setReplyingToBot(isReplying ? null : i)}
                     style={{background:'none', border:'none', color: isReplying ? C.blue : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4}}>
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <ReplyGlyph size={14} />
                     Reply
                   </button>
                   <button
@@ -1006,7 +1037,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
                     <button
                       onClick={handleBotReply}
                       disabled={!botReplyText.trim() || botReplyLoading}
-                      style={{background: botReplyText.trim() ? C.blue : C.card2, color: botReplyText.trim() ? '#fff' : C.muted, border:'none', borderRadius:20, padding:'6px 14px', fontSize:13, fontWeight:700, cursor: botReplyText.trim() ? 'pointer' : 'default', whiteSpace:'nowrap'}}>
+                      style={{background: botReplyText.trim() ? C.blue : C.card2, color: botReplyText.trim() ? '#fff' : C.muted, border:'none', borderRadius:22, padding:'8px 16px', fontSize:14, fontWeight:700, cursor: botReplyText.trim() ? 'pointer' : 'default', whiteSpace:'nowrap'}}>
                       {botReplyLoading ? '…' : 'Send'}
                     </button>
                   </div>
@@ -1048,7 +1079,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
             setReplyText(''); setReplyOpen(false);
           }}
           disabled={!replyText.trim()}
-          style={{background: replyText.trim() ? C.blue : C.card2, color:'#fff', border:'none', borderRadius:'50%', width:36, height:36, cursor: replyText.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0}}>
+          style={{background: replyText.trim() ? C.blue : C.card2, color:'#fff', border:'none', borderRadius:'50%', width:42, height:42, cursor: replyText.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0}}>
           →
         </button>
       </div>
@@ -1214,7 +1245,7 @@ function MatchDayBanner({ match, day, onWatch }) {
         <p style={{color:C.text, fontWeight:700, fontSize:14}}>Match Day</p>
         <p style={{color:C.muted, fontSize:12}}>{match.home} vs {match.away} · {match.location}</p>
       </div>
-      <button onClick={onWatch} style={{background:C.blue, color:'#fff', border:'none', borderRadius:20, padding:'8px 18px', fontSize:13, fontWeight:700, cursor:'pointer'}}>
+      <button onClick={onWatch} style={{background:C.blue, color:'#fff', border:'none', borderRadius:22, padding:'10px 20px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
         Watch
       </button>
     </div>
@@ -1222,13 +1253,42 @@ function MatchDayBanner({ match, day, onWatch }) {
 }
 
 // ─── Feed Screen ──────────────────────────────────────────────────
-function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, setTab, onCompose, onOpenThread, onWatchMatch, currentMatch }) {
+function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, setTab, onCompose, onOpenThread, onWatchMatch, currentMatch, onRefreshFeed }) {
   const [showEvent, setShowEvent] = useState(false);
+  const [pullStart, setPullStart] = useState(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const currentEvent = EVENT_POOL[day % EVENT_POOL.length];
+
+  function beginPull(e) {
+    if (e.currentTarget.scrollTop <= 0) setPullStart(e.touches[0].clientY);
+  }
+
+  function movePull(e) {
+    if (pullStart === null || e.currentTarget.scrollTop > 0 || refreshing) return;
+    const distance = Math.max(0, e.touches[0].clientY - pullStart);
+    setPullDistance(Math.min(distance, 92));
+  }
+
+  async function endPull() {
+    if (pullDistance > 68 && onRefreshFeed) {
+      setRefreshing(true);
+      await onRefreshFeed();
+      setRefreshing(false);
+    }
+    setPullStart(null);
+    setPullDistance(0);
+  }
 
   return (
     <div style={{flex:1, display:'flex', flexDirection:'column', minHeight:0}}>
-      <div style={{flex:1, overflowY:'auto', position:'relative'}}>
+      <div
+        onTouchStart={beginPull}
+        onTouchMove={movePull}
+        onTouchEnd={endPull}
+        onTouchCancel={endPull}
+        style={{flex:1, overflowY:'auto', position:'relative'}}
+      >
         {/* Header */}
         <div style={{padding:'10px 16px', borderBottom:`1px solid ${C.border}`, position:'sticky', top:0, background:C.bg, zIndex:10}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
@@ -1237,13 +1297,19 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
               <span style={{color:C.text, fontWeight:700}}>Day {day}</span>
             </div>
             <div style={{display:'flex', gap:8}}>
-              <div style={{width:32, height:32, background:C.card2, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}} onClick={() => setTab('profile')}>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill={C.muted}><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+              <div style={{width:42, height:42, background:C.card2, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}} onClick={() => setTab('profile')}>
+                <svg viewBox="0 0 24 24" width="24" height="24" fill={C.muted}><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
               </div>
             </div>
           </div>
 
         </div>
+
+        {(pullDistance > 0 || refreshing) && (
+          <div style={{height:refreshing ? 42 : Math.max(26, pullDistance * 0.55), display:'flex', alignItems:'center', justifyContent:'center', color:C.muted, fontSize:12, transition:refreshing?'height 0.18s ease':'none'}}>
+            {refreshing ? 'Loading new posts...' : pullDistance > 68 ? 'Release to refresh' : 'Pull for new posts'}
+          </div>
+        )}
 
         {/* Match day banner */}
         <MatchDayBanner match={currentMatch} day={day} onWatch={onWatchMatch} />
@@ -1258,17 +1324,17 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
       </div>
 
       {/* Feed actions */}
-      <div style={{display:'flex', justifyContent:'center', gap:10, padding:'8px 16px 10px', background:C.bg, borderTop:`1px solid ${C.border}`, flexShrink:0}}>
+      <div style={{display:'flex', justifyContent:'center', gap:12, padding:'10px 16px 12px', background:C.bg, borderTop:`1px solid ${C.border}`, flexShrink:0}}>
         <button onClick={() => onEvent(currentEvent)} style={{
           background:'linear-gradient(135deg, #4dabf7, #2280d2)', color:'#fff', border:'none',
-          borderRadius:24, padding:'10px 22px', fontSize:14, fontWeight:700, cursor:'pointer',
+          borderRadius:28, padding:'13px 28px', fontSize:16, fontWeight:700, cursor:'pointer',
           display:'flex', alignItems:'center', gap:8, boxShadow:'0 3px 14px rgba(77,171,247,0.28)',
         }}>
-          📣 Event <span style={{fontSize:11, fontWeight:500, opacity:0.9}}>up to +{currentEvent.xp[1]} xp</span>
+          📣 Event <span style={{fontSize:13, fontWeight:500, opacity:0.9}}>up to +{currentEvent.xp[1]} xp</span>
         </button>
         <button onClick={onCompose} style={{
           background:C.blue, color:'#fff', border:'none',
-          borderRadius:'50%', width:42, height:42, fontSize:22, cursor:'pointer',
+          borderRadius:'50%', width:50, height:50, fontSize:28, cursor:'pointer',
           display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 3px 14px rgba(77,171,247,0.28)',
         }}>+</button>
       </div>
@@ -1553,19 +1619,19 @@ function ProfileScreen({ player, chars, socialPresence, onEditChar, onCreateChar
   return (
     <div style={{flex:1, overflowY:'auto'}}>
       {/* Header banner */}
-      <div style={{height:140, background:'linear-gradient(135deg, #1a1a2e, #2a1a4e, #1a2e1a)', position:'relative', display:'flex', alignItems:'flex-end', padding:'0 16px 0'}}>
+      <div style={{height:174, background:'linear-gradient(135deg, #1a1a2e, #2a1a4e, #1a2e1a)', position:'relative', display:'flex', alignItems:'flex-end', padding:'0 16px 0'}}>
         <div style={{position:'absolute', top:12, right:12, display:'flex', gap:8}}>
           <div style={{background:'rgba(0,0,0,0.5)', borderRadius:8, padding:'4px 8px', cursor:'pointer', color:C.muted}}>⚙️</div>
         </div>
-        <div style={{position:'absolute', bottom:-28, left:16}}>
-          <div style={{border:`3px solid ${C.bg}`, borderRadius:'50%'}}>
-            <Avatar char={player} size={64} />
+        <div style={{position:'absolute', bottom:-42, left:16}}>
+          <div style={{border:`4px solid ${C.bg}`, borderRadius:'50%'}}>
+            <Avatar char={player} size={96} />
           </div>
         </div>
       </div>
-      <div style={{padding:'36px 16px 16px'}}>
+      <div style={{padding:'54px 16px 16px'}}>
         <div style={{display:'flex', justifyContent:'flex-end', marginBottom:12}}>
-          <button onClick={() => onEditChar(player)} style={{background:'none', border:`1px solid ${C.border}`, color:C.text, borderRadius:20, padding:'6px 18px', fontSize:13, cursor:'pointer'}}>Edit profile</button>
+          <button onClick={() => onEditChar(player)} style={{background:'none', border:`1px solid ${C.border}`, color:C.text, borderRadius:22, padding:'9px 20px', fontSize:14, fontWeight:700, cursor:'pointer'}}>Edit profile</button>
         </div>
         <div style={{display:'flex', alignItems:'center', gap:6}}>
           <h2 style={{color:C.text, fontSize:20, fontWeight:700}}>{player.name}</h2>
@@ -1576,15 +1642,15 @@ function ProfileScreen({ player, chars, socialPresence, onEditChar, onCreateChar
         <p style={{color:C.text, fontSize:14, marginTop:8}}><strong style={{color:C.text}}>{fmt(player.followers)}</strong> <span style={{color:C.muted}}>Followers</span></p>
 
         <div style={{display:'flex', gap:10, marginTop:16}}>
-          <button onClick={onShowLog} style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, color:C.text, borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
+          <button onClick={onShowLog} style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, color:C.text, borderRadius:12, padding:'13px 10px', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8}}>
             📋 Actions Log
           </button>
-          <button style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, color:C.text, borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6}}>
+          <button style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, color:C.text, borderRadius:12, padding:'13px 10px', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8}}>
             🎭 Characters
           </button>
         </div>
 
-        <button onClick={onResetGame} style={{width:'100%', marginTop:10, background:`${C.red}14`, border:`1px solid ${C.red}44`, color:C.red, borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, cursor:'pointer'}}>
+        <button onClick={onResetGame} style={{width:'100%', marginTop:10, background:`${C.red}14`, border:`1px solid ${C.red}44`, color:C.red, borderRadius:12, padding:'13px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
           Start fresh
         </button>
 
@@ -2049,14 +2115,14 @@ Only output the JSON array, nothing else.` }]
   return (
     <div style={{flex:1, overflowY:'auto', position:'relative'}}>
       {/* Banner */}
-      <div style={{height:160, background:`linear-gradient(160deg, #1a1a2e 0%, #2a1a${char.id.charCodeAt(0) % 2 === 0 ? '4e' : '2e'} 100%)`, position:'relative'}}>
+      <div style={{height:184, background:`linear-gradient(160deg, #1a1a2e 0%, #2a1a${char.id.charCodeAt(0) % 2 === 0 ? '4e' : '2e'} 100%)`, position:'relative'}}>
         <button onClick={onBack} style={{position:'absolute', top:12, left:12, background:'rgba(0,0,0,0.55)', border:'none', color:'#fff', borderRadius:'50%', width:34, height:34, cursor:'pointer', fontSize:20, display:'flex', alignItems:'center', justifyContent:'center'}}>‹</button>
-        <div style={{position:'absolute', bottom:-30, left:16, border:`3px solid ${C.bg}`, borderRadius:'50%'}}>
-          <Avatar char={char} size={66} />
+        <div style={{position:'absolute', bottom:-42, left:16, border:`4px solid ${C.bg}`, borderRadius:'50%'}}>
+          <Avatar char={char} size={96} />
         </div>
       </div>
 
-      <div style={{padding:'38px 16px 0'}}>
+      <div style={{padding:'56px 16px 0'}}>
         {/* Name row */}
         <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:2}}>
           <h2 style={{color:C.text, fontSize:20, fontWeight:700}}>{char.name}</h2>
@@ -2071,16 +2137,16 @@ Only output the JSON array, nothing else.` }]
           <button onClick={() => setFollowing(f=>!f)} style={{
             flex:1, background: following ? C.card2 : 'none',
             border:`1.5px solid ${C.border}`, color:C.text,
-            borderRadius:25, padding:'10px', fontSize:14, fontWeight:600, cursor:'pointer',
+            borderRadius:26, padding:'12px 10px', fontSize:15, fontWeight:700, cursor:'pointer',
           }}>{following ? 'Following ✓' : 'Follow'}</button>
           <button onClick={() => onDM(char)} style={{
             flex:1, background:C.blue, border:'none', color:'#fff',
-            borderRadius:25, padding:'10px', fontSize:14, fontWeight:700, cursor:'pointer',
+            borderRadius:26, padding:'12px 10px', fontSize:15, fontWeight:700, cursor:'pointer',
           }}>Message</button>
           {isAIChar && (
             <button onClick={() => setShowSceneSetup(true)} style={{
               flex:1, background:`${C.purple}20`, border:`1.5px solid ${C.purple}44`, color:C.purple,
-              borderRadius:25, padding:'10px', fontSize:14, fontWeight:700, cursor:'pointer',
+              borderRadius:26, padding:'12px 10px', fontSize:15, fontWeight:700, cursor:'pointer',
             }}>Scene</button>
           )}
         </div>
@@ -2196,6 +2262,7 @@ Only output the JSON array, nothing else.` }]
 function EditCharScreen({ char, onBack, onSave }) {
   const isNew = !char.id;
   const avatarFileRef = useRef(null);
+  const avatarDragRef = useRef(null);
   const [form, setForm] = useState({
     name: char.name || '',
     handle: char.handle || '',
@@ -2204,6 +2271,7 @@ function EditCharScreen({ char, onBack, onSave }) {
     description: char.description || '',
     personality: char.personality || '',
     profilePhoto: char.profilePhoto || '',
+    profilePhotoPosition: char.profilePhotoPosition || { x:50, y:50 },
     followers: char.followers || 1000000,
     followerTier: '1mil+',
   });
@@ -2224,9 +2292,35 @@ function EditCharScreen({ char, onBack, onSave }) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => up('profilePhoto', ev.target.result);
+    reader.onload = ev => setForm(f => ({...f, profilePhoto: ev.target.result, profilePhotoPosition: f.profilePhotoPosition || { x:50, y:50 }}));
     reader.readAsDataURL(file);
     e.target.value = '';
+  }
+
+  function updateProfilePhotoPosition(e) {
+    if (!form.profilePhoto) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    up('profilePhotoPosition', { x:+x.toFixed(1), y:+y.toFixed(1) });
+  }
+
+  function startProfilePhotoDrag(e) {
+    if (!form.profilePhoto) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    avatarDragRef.current = true;
+    updateProfilePhotoPosition(e);
+  }
+
+  function dragProfilePhoto(e) {
+    if (!avatarDragRef.current) return;
+    updateProfilePhotoPosition(e);
+  }
+
+  function stopProfilePhotoDrag(e) {
+    avatarDragRef.current = false;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
   }
 
   return (
@@ -2238,10 +2332,16 @@ function EditCharScreen({ char, onBack, onSave }) {
 
       {/* Banner placeholder */}
       <div style={{height:120, background: houseColor ? `linear-gradient(135deg, ${houseColor}88, ${houseColor}44)` : 'linear-gradient(135deg, #1a1a2e, #2a1a4e)', position:'relative', display:'flex', alignItems:'center', justifyContent:'center'}}>
-        <button onClick={() => avatarFileRef.current.click()} style={{position:'absolute', bottom:-30, left:'50%', transform:'translateX(-50%)', background:'none', border:'none', padding:0, cursor:'pointer'}}>
+        <div
+          onPointerDown={startProfilePhotoDrag}
+          onPointerMove={dragProfilePhoto}
+          onPointerUp={stopProfilePhotoDrag}
+          onPointerCancel={stopProfilePhotoDrag}
+          style={{position:'absolute', bottom:-30, left:'50%', transform:'translateX(-50%)', touchAction:'none', cursor:form.profilePhoto?'grab':'default'}}
+        >
           <Avatar char={{...form, id: char.id || form.handle || form.name}} size={68} />
-          <div style={{position:'absolute', bottom:0, right:0, background:C.blue, borderRadius:'50%', width:22, height:22, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#fff', fontWeight:700, border:`2px solid ${C.bg}`}}>+</div>
-        </button>
+          <button onClick={() => avatarFileRef.current.click()} style={{position:'absolute', bottom:0, right:0, background:C.blue, border:'none', borderRadius:'50%', width:22, height:22, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#fff', fontWeight:700, border:`2px solid ${C.bg}`, cursor:'pointer'}}>+</button>
+        </div>
         <input ref={avatarFileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProfilePhoto} />
       </div>
 
@@ -2253,6 +2353,11 @@ function EditCharScreen({ char, onBack, onSave }) {
           {form.profilePhoto && (
             <button onClick={() => up('profilePhoto','')} style={{background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:18, padding:'7px 14px', fontSize:12, cursor:'pointer'}}>
               Remove
+            </button>
+          )}
+          {form.profilePhoto && (
+            <button onClick={() => up('profilePhotoPosition', { x:50, y:50 })} style={{background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:18, padding:'7px 14px', fontSize:12, cursor:'pointer'}}>
+              Center
             </button>
           )}
         </div>
@@ -2983,7 +3088,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
                   {post.text && <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{post.text}</p>}
                   {post.photo && <img src={post.photo} alt="" style={{width:'100%', borderRadius:10, marginTop:6, maxHeight:160, objectFit:'cover'}}/>}
                   <div style={{display:'flex', gap:16, marginTop:8}}>
-                    <span style={{color:C.muted, fontSize:12}}>💬 {post.comments}</span>
+                    <span style={{color:C.muted, fontSize:12, display:'inline-flex', alignItems:'center', gap:3}}><ReplyGlyph size={13} /> {post.comments}</span>
                     <span style={{color:C.muted, fontSize:12}}>🔁 {fmt(post.reposts)}</span>
                     <span style={{color:C.muted, fontSize:12}}>♥ {fmt(post.likes)}</span>
                   </div>
@@ -3171,13 +3276,35 @@ function App() {
   }
 
   function withStateVersion(state) {
-    return { ...state, stateVersion: SAVE_STATE_VERSION };
+    return { ...state, stateVersion: SAVE_STATE_VERSION, savedAt: Date.now() };
+  }
+
+  function applySavedState(saved) {
+    if (saved.chars)      setCharsRaw(saved.chars);
+    if (saved.player)     setPlayerRaw(saved.player);
+    if (saved.feed)       setFeedRaw(saved.feed);
+    if (saved.dms)        setDmsRaw(saved.dms);
+    if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
+    if (saved.eventLog)   setEventLogRaw(saved.eventLog);
+    if (typeof saved.day === 'number') setDayRaw(saved.day);
+    if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
+  }
+
+  function chooseSavedState(serverState, localState) {
+    const serverCurrent = isCurrentSave(serverState);
+    const localCurrent = isCurrentSave(localState);
+    if (serverCurrent && localCurrent) {
+      return (Number(localState.savedAt || 0) > Number(serverState.savedAt || 0)) ? localState : serverState;
+    }
+    if (localCurrent) return localState;
+    if (serverCurrent) return serverState;
+    return null;
   }
 
   function serverSave(state) {
     const versionedState = withStateVersion(state);
+    saveLocalState(versionedState);
     if (isFileMode()) {
-      saveLocalState(versionedState);
       return;
     }
     clearTimeout(_saveTimer.current);
@@ -3192,8 +3319,8 @@ function App() {
 
   function serverSaveNow(state) {
     const versionedState = withStateVersion(state);
+    saveLocalState(versionedState);
     if (isFileMode()) {
-      saveLocalState(versionedState);
       return;
     }
     clearTimeout(_saveTimer.current);
@@ -3238,22 +3365,16 @@ function App() {
       day: DEFAULT_DAY,
       socialPresence: preserveProfiles ? cloneDefault(FRESH_SOCIAL_PRESENCE) : cloneDefault(DEFAULT_SOCIAL_PRESENCE),
       stateVersion: SAVE_STATE_VERSION,
+      savedAt: Date.now(),
     };
   }
 
   // Load saved state from server on startup
   useEffect(() => {
+    const localSaved = loadLocalState();
     if (isFileMode()) {
-      const saved = loadLocalState();
-      if (isCurrentSave(saved)) {
-        if (saved.chars)      setCharsRaw(saved.chars);
-        if (saved.player)     setPlayerRaw(saved.player);
-        if (saved.feed)       setFeedRaw(saved.feed);
-        if (saved.dms)        setDmsRaw(saved.dms);
-        if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
-        if (saved.eventLog)   setEventLogRaw(saved.eventLog);
-        if (typeof saved.day === 'number') setDayRaw(saved.day);
-        if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
+      if (isCurrentSave(localSaved)) {
+        applySavedState(localSaved);
       } else {
         window.localStorage.removeItem(LOCAL_STATE_KEY);
       }
@@ -3261,15 +3382,10 @@ function App() {
       return;
     }
     fetch('/api/state').then(r => r.json()).then(saved => {
-      if (isCurrentSave(saved)) {
-        if (saved.chars)      setCharsRaw(saved.chars);
-        if (saved.player)     setPlayerRaw(saved.player);
-        if (saved.feed)       setFeedRaw(saved.feed);
-        if (saved.dms)        setDmsRaw(saved.dms);
-        if (saved.groupChats) setGroupChatsRaw(saved.groupChats);
-        if (saved.eventLog)   setEventLogRaw(saved.eventLog);
-        if (typeof saved.day === 'number') setDayRaw(saved.day);
-        if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
+      const bestSaved = chooseSavedState(saved, localSaved);
+      if (bestSaved) {
+        applySavedState(bestSaved);
+        if (bestSaved === localSaved) serverSaveNow(bestSaved);
       } else if (saved && Object.keys(saved).length) {
         serverSaveNow(freshGameState());
       }
@@ -3333,6 +3449,65 @@ function App() {
     setTab('profile');
     setNavStack([]);
     serverSaveNow(next);
+  }
+
+  async function handleRefreshFeed() {
+    if (!chars.length) return;
+    const weights = chars.map(c => ['chaotic','bold','loud','shameless','provocative'].some(w => (c.personality||'').includes(w)) ? 3 : 1);
+    const total = weights.reduce((a,b) => a+b, 0);
+    let r = Math.random() * total;
+    let char = chars[0];
+    for (let i = 0; i < chars.length; i++) { r -= weights[i]; if (r <= 0) { char = chars[i]; break; } }
+    const otherHandles = chars.filter(c => c.id !== char.id).map(c => `@${c.handle}`).join(', ');
+    const recentContext = feed.slice(0,6).map(p => {
+      const poster = [...chars, player, GMZ_CHAR].find(c => c.id === p.charId);
+      return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
+    }).join('\n');
+
+    try {
+      const raw = await window.claude.complete({ messages:[{ role:'user', content:
+        `You are ${char.name} (@${char.handle}), a ${char.personality} college student at Merlin's College of Magic.
+Description: ${char.description}
+Other campus accounts: ${otherHandles}
+
+Recent campus feed posts:
+${recentContext}
+
+Write ONE fresh social media post from ${char.name}'s perspective. Rules:
+- Stay completely in character
+- 1-2 sentences max, punchy
+- Optionally tag 0-2 handles if natural
+- Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
+- NO hashtags, NO quotes around the post, JUST the post text
+${BANNED_PHRASES_RULE}` }] });
+      const cleanText = raw.trim().replace(/^["']|["']$/g,'');
+      setFeed(f => [{
+        id: `pull-${Date.now()}-${char.id}`,
+        charId: char.id,
+        text: cleanText,
+        likes: Math.floor(Math.random()*180000),
+        reposts: Math.floor(Math.random()*9000),
+        comments: Math.floor(Math.random()*160),
+        timestamp: Date.now(),
+        reply: null,
+        botComments: [],
+        isPullGenerated: true,
+      }, ...f]);
+    } catch(e) {
+      const fallback = chars[Math.floor(Math.random()*chars.length)];
+      setFeed(f => [{
+        id: `pull-${Date.now()}-${fallback.id}`,
+        charId: fallback.id,
+        text: '...still thinking about what just happened.',
+        likes: Math.floor(Math.random()*80000),
+        reposts: Math.floor(Math.random()*4000),
+        comments: Math.floor(Math.random()*100),
+        timestamp: Date.now(),
+        reply: null,
+        botComments: [],
+        isPullGenerated: true,
+      }, ...f]);
+    }
   }
 
   // ── Navigation helpers ────────────────────────────────────────
@@ -3693,7 +3868,7 @@ ${BANNED_PHRASES_RULE}` }]
   } else {
     const mainScreen = (() => {
       switch(tab) {
-        case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} />;
+        case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} />;
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
         case 'notifications': return <NotificationsScreen chars={chars} feed={feed} />;

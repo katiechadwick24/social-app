@@ -342,6 +342,8 @@ ANTI-AI PATTERNS:
 - Do not explain subtext that already lands through the post, reply, tag, silence, or timing.
 - Avoid prefab contrast glue and reveal ladders: "and yet", "of course", "there it is", "there you are", "that was the problem", "not X, but Y", "not because X, because Y".
 - Avoid stock banter scaffolds: "Don't start", "Do what?", "Liar", "Careful", "make me", "or am I special", "you always X or Y", "you practicing that line, or...".
+- Avoid conversation-killing outros: "let's see it", "prove it", "this just got interesting", "things interesting around here", "get more interesting", "fair enough", "fair point", "we'll see".
+- Avoid spectator recap language unless it is very rare and specific: "discourse", "reality tv", "production value", "documentary mode", "screenplay", "narrative", "transparently", "performative care".
 - Avoid generic labels like menace unless the line has a specific target and reason.
 - If a line is only there to sound sharp, flirty, threatening, or profound, rewrite it toward the character's actual motive and the live social situation.`;
 
@@ -349,6 +351,8 @@ const CHARACTER_TONE_RULE = `
 CHARACTER TONE BALANCE:
 - Not every character should sound angry, hostile, or wounded.
 - These are college-aged students. They are not polished adults, staff members, or career strategists. Even the serious ones can be petty, bored, horny, sleep-deprived, impulsive, dramatic, or stupid about someone hot.
+- In first-person posts, DMs, and replies, characters should not refer to themselves by name or narrate themselves in third person. Write "i'm going to study", not "milo going to study"; write "i'm just here", not "jude's just here".
+- If using emojis, output the actual emoji character, never stage directions like "heart emoji" or "skull emoji".
 - Keres is visibly hot, provocative, and talented. People notice. Attraction, curiosity, thirst, showing off, jealousy, trying not to look impressed, and stupid flirting should regularly color posts/replies, especially when photos of her are posted. Do not sanitize this into abstract respect.
 - Not everyone is attracted to Keres, but even non-attracted characters can notice the social effect of her looks, confidence, and bad-idea energy.
 - Most public chatter should feel alive: jokes, thirst, teasing, bad ideas, overreactions, petty side comments, stupid observations, flirtation, and people replying because they are bored.
@@ -363,7 +367,7 @@ CHARACTER TONE BALANCE:
 - Theo should post like the mess has analytics. He should chase the funny angle, not just the severe one.
 - Tamsin and Elara can be composed or dangerous without becoming humorless.
 - Silas should stay controlled and tactical. Do not make him openly needy, defensive, or romantic on main.
-- Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", or agreeing after being insulted unless he twists it into a challenge.
+- Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", "let's see it", "prove it", or agreeing after being insulted. He should track the actual logic of the exchange, not randomly defend Havoc or accuse Keres of judging if she is clearly appreciating the chaos.
 - Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.`;
 
 function playerStance(char, player, relationshipOverride) {
@@ -375,7 +379,7 @@ function playerStance(char, player, relationshipOverride) {
     : `Current relationship score with @${player.handle}: ${rel}/100. Keep this consistent across the thread.`;
   const fixed = {
     silas: 'Silas is controlled, strategic, and hard to impress. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction.',
-    callum: 'Callum is proud, exacting, and competitive. If Keres insults him, he does not fold with "fair" or easy agreement. He can acknowledge skill grudgingly, but he pushes back, corrects the framing, or turns it into a challenge.',
+    callum: 'Callum is proud, exacting, and competitive. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess.',
     havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action.',
     rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery.',
     briar: 'Briar is watchful and disciplined, but she is not a joyless lecture machine. She can be dry, exhausted, sarcastic, and funny when other people make captaincy impossible.',
@@ -393,6 +397,19 @@ function cleanGeneratedText(text = '') {
     .trim()
     .replace(/^["']|["']$/g, '')
     .replace(/[—–]/g, '.')
+    .replace(/\bheart emoji\b/gi, '❤️')
+    .replace(/\b(?:sparkle|sparkles) emoji\b/gi, '✨')
+    .replace(/\b(?:skull|dead) emoji\b/gi, '💀')
+    .replace(/\bfire emoji\b/gi, '🔥')
+    .replace(/\bcrying emoji\b/gi, '😭')
+    .replace(/\blaughing emoji\b/gi, '😂')
+    .replace(/\beyes emoji\b/gi, '👀')
+    .replace(/\bthis just got interesting\b/gi, 'say that without hovering over the reply button')
+    .replace(/\b(?:keep|keeping|keeps) things interesting around here\b/gi, 'make the prefects develop a twitch')
+    .replace(/\bget more interesting\b/gi, 'stop being boring')
+    .replace(/\blet'?s see it\b/gi, 'try me')
+    .replace(/\bfair enough\b/gi, 'fine')
+    .replace(/\bfair point\b/gi, 'fine')
     .replace(/\s+([.,!?])/g, '$1')
     .replace(/([.!?]){2,}/g, '$1')
     .replace(/\s{2,}/g, ' ');
@@ -433,17 +450,47 @@ function fallbackPostForChar(char, player) {
   }[char?.id] || [
     `@${player?.handle || 'keresvalen'} has half the campus pretending not to watch. cute.`,
     'the timeline is doing that thing where everyone acts surprised by consequences.',
-    `${handle} logging on against better judgment again.`,
+    'logging on against better judgment again.',
   ];
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+function cleanSelfNarration(text = '', char) {
+  if (!char?.name || !text) return text;
+  const names = [
+    char.name,
+    (char.name || '').split(/\s+/)[0],
+    char.handle,
+  ].filter(Boolean).map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!names.length) return text;
+  const nameGroup = `(?:${names.join('|')})`;
+  return String(text)
+    .replace(new RegExp(`^${nameGroup}\\s+going\\s+to\\b`, 'i'), "i'm going to")
+    .replace(new RegExp(`^${nameGroup}\\s+(?:is|'s)\\s+just\\s+here\\b`, 'i'), "i'm just here")
+    .replace(new RegExp(`^${nameGroup}\\s+(?:is|'s)\\s+`, 'i'), "i'm ")
+    .replace(new RegExp(`^${nameGroup}\\s+(?:has|'s got)\\s+`, 'i'), "i've got ")
+    .replace(new RegExp(`^${nameGroup}\\s+needs\\s+`, 'i'), "i need ")
+    .replace(new RegExp(`^${nameGroup}\\s+wants\\s+`, 'i'), "i want ")
+    .replace(new RegExp(`^${nameGroup}\\s+thinks\\s+`, 'i'), "i think ")
+    .replace(new RegExp(`^${nameGroup}\\s+knows\\s+`, 'i'), "i know ")
+    .replace(new RegExp(`^${nameGroup}\\s+would\\s+`, 'i'), "i would ")
+    .replace(new RegExp(`^${nameGroup}\\s+will\\s+`, 'i'), "i will ");
+}
+
+function isSelfNarration(text = '', char) {
+  if (!char?.name || !text) return false;
+  const first = (char.name || '').split(/\s+/)[0];
+  const escaped = [char.name, first, char.handle].filter(Boolean).map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!escaped.length) return false;
+  return new RegExp(`^(?:${escaped.join('|')})\\s+(?:is|'s|has|needs|wants|thinks|knows|would|will|going\\s+to)\\b`, 'i').test(String(text).trim());
+}
+
 function cleanSocialPostText(raw = '', char, player) {
-  const clean = cleanGeneratedText(raw)
+  const clean = cleanSelfNarration(cleanGeneratedText(raw), char)
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || clean.length > 280) {
+  if (!clean || looksLikePromptLeak(clean) || isSelfNarration(clean, char) || clean.length > 280) {
     return fallbackPostForChar(char, player);
   }
   return clean;
@@ -452,9 +499,12 @@ function cleanSocialPostText(raw = '', char, player) {
 function repairPromptLeakPosts(feed = [], chars = [], player) {
   const all = [...(chars || []), player, GMZ_CHAR].filter(Boolean);
   return (feed || []).map(post => {
-    if (!looksLikePromptLeak(post?.text || '')) return post;
     const author = all.find(c => c.id === post.charId) || player;
-    return { ...post, text: fallbackPostForChar(author, player), repairedPromptLeak: true };
+    const cleaned = cleanSocialPostText(post?.text || '', author, player);
+    if (looksLikePromptLeak(post?.text || '') || cleaned !== post?.text) {
+      return { ...post, text: cleaned, repairedPromptLeak: looksLikePromptLeak(post?.text || '') };
+    }
+    return post;
   });
 }
 
@@ -504,15 +554,32 @@ function dmRelationshipAddsByChar(dms = {}) {
   }, {});
 }
 
-function effectivePlayerRelationship(char, eventLog = [], dms = {}) {
+function groupRelationshipAddsByChar(groupChats = {}) {
+  return (groupChats || []).reduce((acc, group) => {
+    const members = new Set(group?.members || []);
+    if (!members.has('player')) return acc;
+    members.forEach(charId => {
+      if (charId === 'player') return;
+      const relevant = (group.messages || []).filter(m => m.role === 'user' || m.charId === charId);
+      if (relevant.length < 2) return;
+      const score = scoreDmExchange(relevant) * 0.65 + Math.min(1.2, relevant.length * 0.08);
+      if (score !== 0) acc[charId] = +(Number(acc[charId] || 0) + score).toFixed(2);
+    });
+    return acc;
+  }, {});
+}
+
+function effectivePlayerRelationship(char, eventLog = [], dms = {}, groupChats = []) {
   const loggedAdds = loggedRelationshipAddsByChar(eventLog);
   const dmAdds = dmRelationshipAddsByChar(dms);
+  const groupAdds = groupRelationshipAddsByChar(groupChats);
   const hasSaved = !!char?.relationships && Object.prototype.hasOwnProperty.call(char.relationships, 'player');
   const hasLogged = Object.prototype.hasOwnProperty.call(loggedAdds, char?.id);
   const hasDm = Object.prototype.hasOwnProperty.call(dmAdds, char?.id);
+  const hasGroup = Object.prototype.hasOwnProperty.call(groupAdds, char?.id);
   return {
-    hasRelationship: hasSaved || hasLogged || hasDm,
-    value: +((Number(char?.relationships?.player || 0) + Number(loggedAdds[char?.id] || 0) + Number(dmAdds[char?.id] || 0)).toFixed(2)),
+    hasRelationship: hasSaved || hasLogged || hasDm || hasGroup,
+    value: +((Number(char?.relationships?.player || 0) + Number(loggedAdds[char?.id] || 0) + Number(dmAdds[char?.id] || 0) + Number(groupAdds[char?.id] || 0)).toFixed(2)),
   };
 }
 
@@ -967,18 +1034,33 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
             return (score(b) + charge(b)/100) - (score(a) + charge(a)/100);
           })[0]
       : null;
+    const authorId = author?.id || post.charId;
+    const isKeresPost = post.charId === 'player' || mentionedHandles.has((player.handle || '').toLowerCase());
     const weighted = eligible
       .filter(c => !directMentionIds.has(c.id))
-      .map(c => ({ c, w: charge(c) + Math.random()*30 }));
+      .map(c => {
+        let w = charge(c) + Math.random()*30;
+        if (c.id === 'silas' && isKeresPost && !/slytherin|tryout|captain|strategy|quidditch|pitch|match|foul|chaser|seeker|keeper|beater/i.test(post.text || '')) w *= 0.28;
+        if (c.id === 'silas' && authorId === 'havoc') w *= 0.35;
+        if (c.id === 'callum' && authorId === 'havoc') w *= 0.72;
+        return { c, w };
+      });
     weighted.sort((a,b) => b.w - a.w);
 
-    // Pick 2-4 chars by default. Direct @mentions jump the line, then other characters can chime in.
-    const targetCount = Math.min(5, Math.max(embarrassmentContext ? 3 : 2, directlyMentioned.length + 1 + Math.floor(Math.random()*2)));
-    const picked = [
+    // Pick 1-3 chars by default. Direct @mentions jump the line, then other characters can chime in.
+    const targetCount = Math.min(4, Math.max(embarrassmentContext ? 2 : 1, directlyMentioned.length + 1 + (Math.random() < 0.35 ? 1 : 0)));
+    let picked = [
       ...directlyMentioned,
       ...(snarkyResponder && !directMentionIds.has(snarkyResponder.id) ? [snarkyResponder] : []),
       ...weighted.slice(0, Math.max(0, targetCount - directlyMentioned.length)).map(x => x.c),
     ].filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i).slice(0, targetCount);
+    if (authorId === 'havoc' && picked.some(c => c.id === 'silas') && picked.some(c => c.id === 'callum')) {
+      picked = picked.filter(c => c.id !== (Math.random() < 0.65 ? 'silas' : 'callum'));
+    }
+    if (isKeresPost && picked.some(c => c.id === 'silas') && !directMentionIds.has('silas') && Math.random() < 0.55) {
+      const replacement = weighted.map(x => x.c).find(c => c.id !== 'silas' && !picked.some(p => p.id === c.id));
+      picked = replacement ? picked.map(c => c.id === 'silas' ? replacement : c) : picked.filter(c => c.id !== 'silas');
+    }
 
     const charRoster = picked.map((c,i) => {
       const rel = c.relationships?.[post.charId] ?? c.relationships?.player;
@@ -1042,12 +1124,12 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ].join('\n');
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
-      const botCount = 1 + Math.floor(Math.random()*3); // 1-3
+      const botCount = Math.max(0, Math.min(2, (charR1.length >= 3 ? 1 : 0) + (Math.random() < 0.45 ? 1 : 0))); // 0-2, usually sparse
       const botsPicked = [...pool].sort(() => Math.random()-0.5).slice(0, botCount);
       const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
 
       let bots = [];
-      try {
+      if (botCount > 0) try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
             `Below is a thread on a college social media app. ${charR1.length > 0 ? "It's gotten spicy — characters have piled on." : ''}
@@ -1056,24 +1138,25 @@ ${transcript}
 
 ${pronounRule([author, player, ...chars])}
 
-You are writing reactions from random anonymous student accounts watching this play out. They're an AUDIENCE. They:
+You are writing replies from random anonymous student accounts joining the comment thread. They are part of the conversation, not a recap channel. They:
 - pick teams sometimes ("team @whoever", "@xxx ate this")
 - quote or repeat a line only occasionally
 - use casual slang lightly: lmfao, oop, bestie, the way, screaming
 - react with a mix of thirst, jokes, skeptical gossip, and taking sides
+- often reply directly to someone with @handle, ask a pointed question, flirt, heckle, correct, beg for details, or make a joke at someone in the thread
 - when the thread is about a hot/talented new transfer, most audience comments should be excited, impressed, thirsty, curious, or playfully chaotic, not bullying
 - interject with original opinions, questions, fan behavior, tactical reads, rumors, side-eye, admiration, or warnings
 - fangirl/fanboy naturally when someone is hot, impressive, or messy
 - can call out specific @handles
-- keep it readable and not maximum-volume chaos
+- keep it readable and not maximum-volume chaos. This is one or two people jumping in, not the whole campus at once.
 - do not call people "she", "girl", "mother", "queen", etc. unless the pronoun roster supports it and that exact account would say it
 - most accounts should use @handles or names instead of gendered labels
-- do NOT all quote the previous replies; most comments should be fresh reactions
+- do NOT narrate the thread as media criticism. Avoid "discourse", "reality tv", "production value", "documentary", "screenplay", "narrative", or "the way this thread..." style recaps.
 
 Accounts (in order):
 ${botRoster}
 
-Each comment 5-22 words. Match each account's voice — ${botsPicked.map(b => `@${b.handle} = ${b.vibe}`).join('; ')}. Mostly lowercase/casual. Avoid excessive ALL CAPS, emoji spam, repeated quote-replies, meltdown language, and everyone sounding like the same stan account. NO hashtags.
+Each comment 5-22 words. Match each account's voice — ${botsPicked.map(b => `@${b.handle} = ${b.vibe}`).join('; ')}. Mostly lowercase/casual. Avoid excessive ALL CAPS, emoji spam, repeated quote-replies, meltdown language, spectator summaries, and everyone sounding like the same stan account. NO hashtags.
 ${BANNED_PHRASES_RULE}
 Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           }]
@@ -1089,12 +1172,12 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
       } catch(e) {}
 
       if (cancelled) return;
-      const botStartDelay = 400 + charR1.length*(600 + 250); // after chars finish
+      const botStartDelay = 2200 + charR1.length*(1100 + 350); // after chars finish, with breathing room
       for (let i = 0; i < bots.length; i++) {
         setTimeout(() => {
           if (cancelled) return;
           setBotComments(prev => [...prev, bots[i]]);
-        }, botStartDelay + i*(500 + Math.random()*400));
+        }, botStartDelay + i*(2800 + Math.random()*2400));
       }
       if (!cancelled) setLoadingChars(false);
 
@@ -1108,6 +1191,8 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           const cj = allChars.find(x => x.id === charR1[j].charId);
           const rel = ci?.relationships?.[cj?.id];
           if (rel !== undefined && (rel < 10 || (rel < 35 && Math.random() < 0.35))) {
+            if (authorId === 'havoc' && new Set([ci?.id, cj?.id]).has('silas') && new Set([ci?.id, cj?.id]).has('callum') && Math.random() < 0.82) continue;
+            if (ci?.id === 'silas' && isKeresPost && Math.random() < 0.7) continue;
             pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel });
           }
         }
@@ -1152,28 +1237,59 @@ Return ONLY the reply text. No other text.`
 
           // ─── ROUND 4: bots react to the clapback ────────────
           const clapTranscript = `${author?.name || player.name}: "${post.text}"\n${fight.target.name}: "${fight.targetReply.text}"\n${fight.replier.name}: "${clapback.text}"`;
-          const reactBots = [...pool].sort(() => Math.random()-0.5).slice(0, 1 + Math.floor(Math.random()*2));
+          const reactBots = Math.random() < 0.55 ? [...pool].sort(() => Math.random()-0.5).slice(0, 1) : [];
           const reactRoster = reactBots.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
           try {
+            let reactComments = [];
+            if (reactBots.length > 0) {
             const res2 = await window.claude.complete({
               messages:[{ role:'user', content:
-                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n\nWrite ${reactBots.length} reactions from anonymous audience accounts who just watched @${fight.replier.handle} answer @${fight.target.handle}. They can pick a winner, offer an opinion, ask a messy question, fan out, side-eye the motive, make a tactical read, laugh at the joke, or make the argument worse. Quote a line only occasionally; most comments should be fresh interjections.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, and "deceased/screaming" pileups. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy question, pick a side, flirt, heckle, beg for details, or make the argument worse. They should sound like participants, not spectators writing a recap.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
             });
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
             const parsed2 = JSON.parse(cleaned2);
-            const reactComments = reactBots.map((b,i) => ({
+            reactComments = reactBots.map((b,i) => ({
               bot: b.id,
               text: cleanGeneratedText(parsed2[i] || ''),
               likes: Math.floor(Math.random()*25000) + 3000,
               timestamp: baseTs + 600000 + i*30000,
             })).filter(b => b.text);
+            }
             const reactStart = botStartDelay + bots.length*600 + 2400;
             for (let i = 0; i < reactComments.length; i++) {
               setTimeout(() => {
                 if (cancelled) return;
                 setBotComments(prev => [...prev, reactComments[i]]);
-              }, reactStart + i*(500 + Math.random()*400));
+              }, reactStart + i*(3000 + Math.random()*2500));
+            }
+
+            const botTarget = [...bots, ...reactComments].find(bc => /@\w+/.test(bc.text || ''));
+            if (botTarget && Math.random() < 0.38) {
+              const mentioned = Array.from((botTarget.text || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase());
+              const responder = chars.find(c => mentioned.includes((c.handle || '').toLowerCase()));
+              if (responder) {
+                try {
+                  const bot = pool.find(b => b.id === botTarget.bot);
+                  const resBot = await window.claude.complete({
+                    messages:[{ role:'user', content:
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${playerStance(responder, player)}\n\nYou are ${responder.name} (@${responder.handle}). If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, or clarifying. No hashtags, no quotes.` }]
+                  });
+                  const botReply = cleanGeneratedText(resBot);
+                  if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
+                    setTimeout(() => {
+                      if (cancelled) return;
+                      setCharComments(prev => [...prev, {
+                        charId: responder.id,
+                        text: botReply,
+                        likes: Math.floor(Math.random()*14000) + 1200,
+                        timestamp: baseTs + 660000 + Math.floor(Math.random()*180000),
+                        replyTo: bot?.handle,
+                      }]);
+                    }, reactStart + reactComments.length*3600 + 1200);
+                  }
+                } catch(e) {}
+              }
             }
 
             // ─── ROUND 5: optional counterpunch ────────────────
@@ -1390,10 +1506,19 @@ ${BANNED_PHRASES_RULE}`
     const candidatePool = chars.filter(c => c.id !== player.id && !excluded.has(c.id));
     const tagged = candidatePool.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
     const target = targetChar && targetChar.id !== player.id && targetChar.id !== '__gmz__' ? [targetChar] : [];
+    const sourceAuthorId = targetChar?.id || post.charId;
     const charged = [...candidatePool]
       .filter(c => c.id !== post.charId && !target.some(t => t.id === c.id) && !tagged.some(t => t.id === c.id))
-      .sort((a,b) => Math.abs((b.relationships?.player ?? 50) - 50) - Math.abs((a.relationships?.player ?? 50) - 50));
-    const wantedCount = mode === 'direct' ? 1 + Math.floor(Math.random()*2) : 2 + Math.floor(Math.random()*2);
+      .map(c => {
+        let w = Math.abs((c.relationships?.player ?? 50) - 50) + Math.random()*18;
+        if (sourceAuthorId === 'havoc' && c.id === 'silas') w *= 0.22;
+        if (sourceAuthorId === 'havoc' && c.id === 'callum' && !mentionedHandles.has('callumpike')) w *= 0.35;
+        if (c.id === 'silas' && !mentionedHandles.has('silasmontague') && Math.random() < 0.45) w *= 0.3;
+        return { c, w };
+      })
+      .sort((a,b) => b.w - a.w)
+      .map(x => x.c);
+    const wantedCount = mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0);
     const responders = [...target, ...tagged, ...charged]
       .filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i)
       .slice(0, wantedCount);
@@ -1415,12 +1540,12 @@ ${player.name} (@${player.handle}) just commented: "${playerText}"
 ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
 
 Characters in order:
 ${roster}
 
-Each reply 6-24 words. Use @handles when responding directly. Keep it conversational and varied. Do not make everyone angry. No hashtags. No quotes around replies.
+Each reply 6-24 words. Use @handles when responding directly. Keep it conversational and varied. Do not make everyone angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". No hashtags. No quotes around replies.
 ${BANNED_PHRASES_RULE}
 Return ONLY a JSON array of ${responders.length} strings, in order.`
         }]
@@ -2453,9 +2578,9 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
 }
 
 // ─── Profile Screen ───────────────────────────────────────────────
-function ProfileScreen({ player, chars, socialPresence, eventLog = [], dms = {}, onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
+function ProfileScreen({ player, chars, socialPresence, eventLog = [], dms = {}, groupChats = [], onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
   const relationships = chars
-    .map(c => ({ char: c, ...effectivePlayerRelationship(c, eventLog, dms) }))
+    .map(c => ({ char: c, ...effectivePlayerRelationship(c, eventLog, dms, groupChats) }))
     .filter(r => r.hasRelationship);
   const socialRows = [
     ['😂','Humor',socialPresence?.humor ?? 0,'#4dabf7'],
@@ -2952,8 +3077,8 @@ function relationshipStageLabel(value) {
   return 'Bad Blood';
 }
 
-function CharProfileScreen({ char, player, eventLog = [], dms = {}, onBack, onDM, feed, allChars, onOpenThread }) {
-  const { hasRelationship: hasPlayerRel, value: rel } = effectivePlayerRelationship(char, eventLog, dms);
+function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats = [], onBack, onDM, feed, allChars, onOpenThread }) {
+  const { hasRelationship: hasPlayerRel, value: rel } = effectivePlayerRelationship(char, eventLog, dms, groupChats);
   const [following, setFollowing] = useState(false);
   const [chemOpen, setChemOpen] = useState(false);
   const [chemistry, setChemistry] = useState('default');
@@ -4602,7 +4727,7 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
 - NO hashtags, NO quotes around the post, JUST the post text
 ${BANNED_PHRASES_RULE}` }] });
-      const cleanText = cleanGeneratedText(raw);
+      const cleanText = cleanSocialPostText(raw, char, player);
       setFeed(f => [{
         id: `pull-${Date.now()}-${char.id}`,
         charId: char.id,
@@ -5089,7 +5214,7 @@ ${BANNED_PHRASES_RULE}`
     const liveViewChar = chars.find(c => c.id === viewChar.id) || (player.id === viewChar.id ? player : viewChar);
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} />
+        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setViewChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );
@@ -5107,7 +5232,7 @@ ${BANNED_PHRASES_RULE}`
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} setGroupChats={setGroupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
-        case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} eventLog={eventLog} dms={dms} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
+        case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} eventLog={eventLog} dms={dms} groupChats={groupChats} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return null;
       }
     })();

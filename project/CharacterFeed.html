@@ -117,7 +117,6 @@ function Avatar({ char, size = 42, onClick }) {
   const ringWidth = Math.max(1, size * 0.022);
   const ringGap = Math.max(0.5, size * 0.015);
   const profilePhoto = char?.profilePhoto || char?.avatar || char?.photo;
-  const photoPosition = char?.profilePhotoPosition || { x:50, y:50 };
   return (
     <div onClick={onClick} style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0, cursor: onClick ? 'pointer' : 'default',
@@ -132,7 +131,7 @@ function Avatar({ char, size = 42, onClick }) {
         fontWeight: 700, color: fg,
       }}>
         {profilePhoto
-          ? <img src={profilePhoto} alt="" style={{width:'100%', height:'100%', objectFit:'cover', objectPosition:`${photoPosition.x ?? 50}% ${photoPosition.y ?? 50}%`, display:'block'}} />
+          ? <img src={profilePhoto} alt="" style={{width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
           : initials}
       </div>
     </div>
@@ -216,6 +215,28 @@ function pronounRoster(chars = []) {
 
 function pronounRule(chars = []) {
   return `PRONOUN RULE: Use these exact pronouns and do not infer from names, vibes, teams, or usernames. ${pronounRoster(chars)}. If a character is mentioned by @handle, keep their pronouns consistent.`;
+}
+
+function compressImageFile(file, { maxSize = 720, quality = 0.78 } = {}) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(reader.result);
+      img.src = reader.result;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
 }
 
 function ReplyGlyph({ size = 16 }) {
@@ -324,6 +345,7 @@ const SAVE_STATE_VERSION = 3;
 const DEFAULT_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
 const FRESH_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
 const LOCAL_STATE_KEY = 'socials-app-state-v2';
+const LEGACY_LOCAL_STATE_KEYS = ['socials-app-state'];
 
 const DEFAULT_FEED = [
   { id:'p1', charId:'briar', text:'team bonding is not a synonym for "let havoc invent a new disciplinary category."', likes:231800, reposts:9400, comments:77, timestamp: Date.now()-3600000*2, reply:null,
@@ -2344,7 +2366,6 @@ Only output the JSON array, nothing else.` }]
 function EditCharScreen({ char, onBack, onSave }) {
   const isNew = !char.id;
   const avatarFileRef = useRef(null);
-  const avatarDragRef = useRef(null);
   const [form, setForm] = useState({
     name: char.name || '',
     handle: char.handle || '',
@@ -2354,7 +2375,6 @@ function EditCharScreen({ char, onBack, onSave }) {
     description: char.description || '',
     personality: char.personality || '',
     profilePhoto: char.profilePhoto || '',
-    profilePhotoPosition: char.profilePhotoPosition || { x:50, y:50 },
     followers: char.followers || 1000000,
     followerTier: '1mil+',
   });
@@ -2371,39 +2391,12 @@ function EditCharScreen({ char, onBack, onSave }) {
 
   function up(k,v) { setForm(f => ({...f, [k]:v})); }
 
-  function handleProfilePhoto(e) {
+  async function handleProfilePhoto(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => setForm(f => ({...f, profilePhoto: ev.target.result, profilePhotoPosition: f.profilePhotoPosition || { x:50, y:50 }}));
-    reader.readAsDataURL(file);
+    const dataUrl = await compressImageFile(file, { maxSize: 420, quality: 0.76 });
+    setForm(f => ({...f, profilePhoto: dataUrl}));
     e.target.value = '';
-  }
-
-  function updateProfilePhotoPosition(e) {
-    if (!form.profilePhoto) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    up('profilePhotoPosition', { x:+x.toFixed(1), y:+y.toFixed(1) });
-  }
-
-  function startProfilePhotoDrag(e) {
-    if (!form.profilePhoto) return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    avatarDragRef.current = true;
-    updateProfilePhotoPosition(e);
-  }
-
-  function dragProfilePhoto(e) {
-    if (!avatarDragRef.current) return;
-    updateProfilePhotoPosition(e);
-  }
-
-  function stopProfilePhotoDrag(e) {
-    avatarDragRef.current = false;
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
   }
 
   return (
@@ -2416,11 +2409,7 @@ function EditCharScreen({ char, onBack, onSave }) {
       {/* Banner placeholder */}
       <div style={{height:120, background: houseColor ? `linear-gradient(135deg, ${houseColor}88, ${houseColor}44)` : 'linear-gradient(135deg, #1a1a2e, #2a1a4e)', position:'relative', display:'flex', alignItems:'center', justifyContent:'center'}}>
         <div
-          onPointerDown={startProfilePhotoDrag}
-          onPointerMove={dragProfilePhoto}
-          onPointerUp={stopProfilePhotoDrag}
-          onPointerCancel={stopProfilePhotoDrag}
-          style={{position:'absolute', bottom:-30, left:'50%', transform:'translateX(-50%)', touchAction:'none', cursor:form.profilePhoto?'grab':'default'}}
+          style={{position:'absolute', bottom:-30, left:'50%', transform:'translateX(-50%)'}}
         >
           <Avatar char={{...form, id: char.id || form.handle || form.name}} size={68} />
           <button onClick={() => avatarFileRef.current.click()} style={{position:'absolute', bottom:0, right:0, background:C.blue, border:'none', borderRadius:'50%', width:22, height:22, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#fff', fontWeight:700, border:`2px solid ${C.bg}`, cursor:'pointer'}}>+</button>
@@ -2436,11 +2425,6 @@ function EditCharScreen({ char, onBack, onSave }) {
           {form.profilePhoto && (
             <button onClick={() => up('profilePhoto','')} style={{background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:18, padding:'7px 14px', fontSize:12, cursor:'pointer'}}>
               Remove
-            </button>
-          )}
-          {form.profilePhoto && (
-            <button onClick={() => up('profilePhotoPosition', { x:50, y:50 })} style={{background:'none', border:`1px solid ${C.border}`, color:C.muted, borderRadius:18, padding:'7px 14px', fontSize:12, cursor:'pointer'}}>
-              Center
             </button>
           )}
         </div>
@@ -2661,12 +2645,12 @@ function ComposeModal({ chars, player, onClose, onPost }) {
   const allChars = [player, ...chars];
   const fileRef = useRef(null);
 
-  function handlePhoto(e) {
+  async function handlePhoto(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => setPhoto(ev.target.result);
-    reader.readAsDataURL(file);
+    const dataUrl = await compressImageFile(file, { maxSize: 900, quality: 0.78 });
+    setPhoto(dataUrl);
+    e.target.value = '';
   }
 
   function submit() {
@@ -2751,12 +2735,37 @@ function EventModal({ event, chars, player, feed, onClose, onSubmit, onLog, onSo
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [currentEvent, setCurrentEvent] = useState(event);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customScenario, setCustomScenario] = useState('');
+  const [customType, setCustomType] = useState('gossip');
+  const [customChars, setCustomChars] = useState([]);
+  const [submittedEvent, setSubmittedEvent] = useState(null);
   const involved = chars.filter(c => currentEvent.chars.includes(c.id));
 
   function reroll() {
     const others = EVENT_POOL.filter(e => e.id !== currentEvent.id);
     setCurrentEvent(others[Math.floor(Math.random() * others.length)]);
     setInput('');
+    setResult(null);
+    setSubmittedEvent(null);
+    setCustomOpen(false);
+  }
+
+  function applyCustomEvent() {
+    if (!customScenario.trim()) return;
+    const fallbackChars = chars.slice(0, Math.min(3, chars.length)).map(c => c.id);
+    setCurrentEvent({
+      id: `custom-${Date.now()}`,
+      type: customType,
+      scenario: customScenario.trim(),
+      chars: customChars.length ? customChars : fallbackChars,
+      xp: [80, 200],
+      custom: true,
+    });
+    setInput('');
+    setResult(null);
+    setSubmittedEvent(null);
+    setCustomOpen(false);
   }
 
   const xp = Math.floor(Math.random() * (currentEvent.xp[1] - currentEvent.xp[0])) + currentEvent.xp[0];
@@ -2785,7 +2794,7 @@ ${pronounRule([player, ...involved])}
 RECENT FEED CONTEXT:
 ${recentFeedContext}
 
-EVENT: "${event.scenario}"
+EVENT: "${currentEvent.scenario}"
 PLAYER'S ACTION: "${input}"
 
 Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles. Use the pronouns listed above exactly. Show consequences. Make it feel like something that would blow up on social media. Plain prose only — no headers, no bullet points, no markdown formatting.`
@@ -2799,6 +2808,7 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
         .replace(/\n{3,}/g, '\n\n')
         .trim();
       setResult(cleaned);
+      setSubmittedEvent(currentEvent);
       // Generate score changes
       const followerGain = Math.floor(xp * (1800 + Math.random() * 1200));
       const statGain = +(Math.random() * 0.3 + 0.1).toFixed(2);
@@ -2838,6 +2848,11 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
     setLoading(false);
   }
 
+  function finishEvent() {
+    onSubmit && onSubmit(submittedEvent || currentEvent);
+    onClose();
+  }
+
   return (
     <div style={{position:'absolute', inset:0, display:'flex', flexDirection:'column', justifyContent:'flex-end', zIndex:100}}>
       <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.7)', backdropFilter:'blur(6px)'}} onClick={onClose}/>
@@ -2871,11 +2886,55 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
             {/* XP + reroll row */}
             <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:16}}>
               <button onClick={reroll} style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, cursor:'pointer', flexShrink:0}} title="Reroll">🎲</button>
+              <button onClick={() => setCustomOpen(o => !o)} style={{background: customOpen || currentEvent.custom ? `${C.blue}18` : C.card2, color: customOpen || currentEvent.custom ? C.blue : C.text, border:`1px solid ${customOpen || currentEvent.custom ? C.blue : C.border}`, borderRadius:10, padding:'0 12px', minHeight:36, fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0}}>
+                Custom
+              </button>
               <div style={{flex:1, background:C.card2, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
                 <span style={{color:C.muted, fontSize:12}}>XP reward</span>
                 <span style={{color:C.yellow, fontWeight:700, fontSize:13}}>+{currentEvent.xp[0]}–{currentEvent.xp[1]} ✦</span>
               </div>
             </div>
+
+            {customOpen && (
+              <div style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:14, padding:12, marginBottom:16}}>
+                <label style={{color:C.muted, fontSize:12, marginBottom:6, display:'block'}}>CUSTOM EVENT</label>
+                <textarea
+                  value={customScenario}
+                  onChange={e => setCustomScenario(e.target.value)}
+                  placeholder="GMZ posts that a new Slytherin transfer was seen at the pitch before official tryouts..."
+                  style={{width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 12px', color:C.text, fontSize:13, outline:'none', resize:'none', minHeight:84, lineHeight:1.5, marginBottom:10}}
+                />
+                <div style={{display:'flex', gap:8, overflowX:'auto', marginBottom:10}}>
+                  {Object.entries(EVENT_TYPES).map(([id,t]) => (
+                    <button key={id} onClick={() => setCustomType(id)} style={{
+                      background: customType === id ? `${t.color}20` : C.bg,
+                      color: customType === id ? t.color : C.muted,
+                      border:`1px solid ${customType === id ? t.color : C.border}`,
+                      borderRadius:18, padding:'7px 10px', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
+                    }}>{t.emoji} {t.label}</button>
+                  ))}
+                </div>
+                <p style={{color:C.muted, fontSize:12, marginBottom:8}}>Involved characters</p>
+                <div style={{display:'flex', gap:8, overflowX:'auto', paddingBottom:4, marginBottom:12}}>
+                  {chars.map(c => {
+                    const active = customChars.includes(c.id);
+                    return (
+                      <button key={c.id} onClick={() => setCustomChars(ids => active ? ids.filter(id => id !== c.id) : [...ids, c.id])} style={{
+                        display:'flex', alignItems:'center', gap:6, background: active ? C.blue+'22' : C.bg,
+                        border:`1px solid ${active ? C.blue : C.border}`, borderRadius:18, padding:'6px 10px', cursor:'pointer', flexShrink:0,
+                      }}>
+                        <Avatar char={c} size={20}/>
+                        <span style={{color: active ? C.blue : C.text, fontSize:12, fontWeight:700}}>{c.name.split(' ')[0]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button onClick={applyCustomEvent} disabled={!customScenario.trim()} style={{
+                  width:'100%', background: customScenario.trim() ? C.blue : C.bg, color: customScenario.trim() ? '#fff' : C.muted,
+                  border:'none', borderRadius:12, padding:'11px', fontSize:14, fontWeight:800, cursor:customScenario.trim() ? 'pointer' : 'default',
+                }}>Use Custom Event</button>
+              </div>
+            )}
 
             {/* Input */}
             <textarea value={input} onChange={e => setInput(e.target.value)}
@@ -2916,7 +2975,7 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
               <span style={{color:C.yellow, fontWeight:700, fontSize:16}}>+{xp} ✦</span>
             </div>
 
-            <button onClick={onClose} style={{width:'100%', background:C.blue, color:'#fff', border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700, cursor:'pointer'}}>Back to Feed</button>
+            <button onClick={finishEvent} style={{width:'100%', background:C.blue, color:'#fff', border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700, cursor:'pointer'}}>Back to Feed</button>
           </div>
         )}
       </div>
@@ -3346,12 +3405,20 @@ function App() {
   function saveLocalState(state) {
     try {
       window.localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(state));
-    } catch(e) {}
+    } catch(e) {
+      console.warn('Could not save local game state. Uploaded images may be too large.', e);
+    }
   }
 
   function loadLocalState() {
     try {
-      return JSON.parse(window.localStorage.getItem(LOCAL_STATE_KEY) || '{}');
+      const saved = JSON.parse(window.localStorage.getItem(LOCAL_STATE_KEY) || '{}');
+      if (saved && Object.keys(saved).length) return saved;
+      for (const key of LEGACY_LOCAL_STATE_KEYS) {
+        const legacy = JSON.parse(window.localStorage.getItem(key) || '{}');
+        if (legacy && Object.keys(legacy).length) return legacy;
+      }
+      return {};
     } catch(e) {
       return {};
     }
@@ -3889,13 +3956,16 @@ ${BANNED_PHRASES_RULE}` }]
     } catch(e) {}
   }
 
-  function handleEventSubmit() {
-    const ev = activeEvent;
+  function handleEventSubmit(eventOverride) {
+    const ev = eventOverride || activeEvent;
+    if (!ev) return;
     const involved = chars.filter(c => ev.chars.includes(c.id));
     const newPosts = involved.map(char => ({
       id: `gen-${Date.now()}-${char.id}`,
       charId: char.id,
-      text: `...still thinking about what just happened.`,
+      text: ev.custom
+        ? `not everyone needs to have an opinion on ${ev.scenario.includes('@') ? 'this' : 'the new development'}. unfortunately, here we are.`
+        : `...still thinking about what just happened.`,
       likes: Math.floor(Math.random()*100000),
       reposts: Math.floor(Math.random()*5000),
       comments: Math.floor(Math.random()*200),

@@ -52,13 +52,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "compactFeed": false
 }/*EDITMODE-END*/;
 
-const MOBILE_BROWSER_CHROME_GAP = (
-  window.innerWidth <= 480 &&
-  !(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-) ? 36 : 0;
-
 function bottomSafe(extra = 0) {
-  return `calc(env(safe-area-inset-bottom, 0px) + ${MOBILE_BROWSER_CHROME_GAP + extra}px)`;
+  return `calc(env(safe-area-inset-bottom, 0px) + ${extra}px)`;
 }
 
 // ─── Theme builder ────────────────────────────────────────────────
@@ -3386,6 +3381,10 @@ function App() {
   // ── Auto-post system ──────────────────────────────────────────
   useEffect(() => {
     let active = true;
+    let nextTimer = null;
+    const canAutoPost = tab === 'feed' && !threadPost && !viewChar && !chatChar && !activeGroupChat && !editChar && !activeEvent && !activeMatch && !composing;
+    if (!canAutoPost) return () => { active = false; };
+
     async function generatePost() {
       if (!active || chars.length === 0) return;
       // Pick a random char, weighted toward more active personalities
@@ -3461,8 +3460,8 @@ ${BANNED_PHRASES_RULE}`;
         };
         setFeed(f => [newPost, ...f]);
 
-        // 25% chance a second char replies within 8s
-        if (Math.random() < 0.25) {
+        // 15% chance a second char replies after a short beat
+        if (Math.random() < 0.15) {
           const others = chars.filter(c => c.id !== char.id);
           if (others.length) {
             const replier = others[Math.floor(Math.random()*others.length)];
@@ -3478,22 +3477,26 @@ Write ONE short reply (1 sentence, in character). Tag @${char.handle} if natural
                 const replyText = replyRaw.trim().replace(/^["']|["']$/g,'');
                 setFeed(f => f.map(p => p.id === newPost.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
               } catch(e) {}
-            }, 5000 + Math.random()*8000);
+            }, 12000 + Math.random()*13000);
           }
         }
       } catch(e) {}
     }
 
-    // First post after 20s, then every 45-75s
-    const firstTimer = setTimeout(() => {
-      generatePost();
-      setInterval(generatePost, 45000 + Math.random()*30000);
-    }, 20000);
+    function scheduleNext(delay) {
+      nextTimer = setTimeout(async () => {
+        await generatePost();
+        if (active) scheduleNext(180000 + Math.random()*180000);
+      }, delay);
+    }
+
+    // First post after 60s, then every 3-6 minutes while the main feed is open.
+    scheduleNext(60000);
 
     // ── GMZ auto-posts ──────────────────────────────────────────
     // GMZ posts only reactively — see triggerGMZPost called from events/hot threads
-    return () => { active = false; clearTimeout(firstTimer); };
-  }, [chars.length]); // re-run if chars added
+    return () => { active = false; clearTimeout(nextTimer); };
+  }, [chars.length, tab, threadPost, viewChar, chatChar, activeGroupChat, editChar, activeEvent, activeMatch, composing]); // pause while the user is focused elsewhere
 
   function handleSaveChar(data) {
     const isNew = !chars.find(c => c.id === data.id) && data.id !== player.id;

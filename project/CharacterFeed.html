@@ -214,7 +214,7 @@ function pronounRoster(chars = []) {
 }
 
 function pronounRule(chars = []) {
-  return `PRONOUN RULE: Use these exact pronouns and do not infer from names, vibes, teams, or usernames. ${pronounRoster(chars)}. If a character is mentioned by @handle, keep their pronouns consistent.`;
+  return `PRONOUN RULE: Use these exact third-person pronouns and do not infer from names, vibes, teams, or usernames. ${pronounRoster(chars)}. This only controls third-person references like he/she/they/him/her/them; direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. If a character is mentioned by @handle, keep their pronouns consistent.`;
 }
 
 function compressImageFile(file, { maxSize = 720, quality = 0.78 } = {}) {
@@ -250,9 +250,25 @@ function ReplyGlyph({ size = 16 }) {
 
 // ─── Global dialogue rules ────────────────────────────────────────────
 const BANNED_PHRASES_RULE = `
-BANNED WORDS — do not use these in dialogue under any circumstance, no exceptions:
+BANNED WORDS - do not use these in dialogue under any circumstance, no exceptions:
 "darling", "sweetheart", "love" (as a pet name), "dear", "hun", "honey", "babe" (as a pet name).
-These feel forced and AI-generated. Use the person's name, handle, or no address at all. Real people don't constantly call each other pet names.`;
+These feel forced and AI-generated. Use the person's name, handle, or no address at all. Real people don't constantly call each other pet names.
+
+STYLE RULES:
+- Do not use em dashes or en dashes.
+- Avoid run-on sentences and stacked clauses.
+- Prefer one short sentence, or two very short sentences.
+- Keep replies punchy, readable, and conversational.`;
+
+function cleanGeneratedText(text = '') {
+  return String(text)
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/[—–]/g, '.')
+    .replace(/\s+([.,!?])/g, '$1')
+    .replace(/([.!?]){2,}/g, '$1')
+    .replace(/\s{2,}/g, ' ');
+}
 
 // ─── Bot pool ─────────────────────────────────────────────────────
 const BOT_COLORS = ['#8b0000','#1a3a1a','#1a1a4a','#3a1a00','#2a002a','#003a3a','#1a1a1a'];
@@ -661,6 +677,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       botComments,
       charComments,
       comments: Math.max(post.comments || 0, visibleCommentCount),
+      threadGenerated: botComments.length > 0 || charComments.length > 0 || post.threadGenerated,
+      threadUpdatedAt: Date.now(),
     });
   }, [botComments, charComments]);
 
@@ -682,16 +700,28 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const eligible = chars.filter(c => c.id !== post.charId);
     if (eligible.length === 0) { setLoadingChars(false); setLoadingBots(false); return; }
 
+    const mentionedHandles = new Set(
+      Array.from((post.text || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase())
+    );
+    const directlyMentioned = eligible.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
+    const directMentionIds = new Set(directlyMentioned.map(c => c.id));
+
     const charge = (c) => {
       const r = c.relationships?.[post.charId] ?? c.relationships?.player;
       if (r === undefined) return 25; // neutral default
       return Math.abs(r - 50) + 10; // distance from neutral, min 10
     };
-    const weighted = eligible.map(c => ({ c, w: charge(c) + Math.random()*30 }));
+    const weighted = eligible
+      .filter(c => !directMentionIds.has(c.id))
+      .map(c => ({ c, w: charge(c) + Math.random()*30 }));
     weighted.sort((a,b) => b.w - a.w);
 
-    // Pick 2-4 chars. More if engagement is high.
-    const picked = weighted.slice(0, 2 + Math.floor(Math.random()*3)).map(x => x.c);
+    // Pick 2-4 chars by default. Direct @mentions jump the line, then other characters can chime in.
+    const targetCount = Math.min(5, Math.max(2, directlyMentioned.length + 1 + Math.floor(Math.random()*2)));
+    const picked = [
+      ...directlyMentioned,
+      ...weighted.slice(0, Math.max(0, targetCount - directlyMentioned.length)).map(x => x.c),
+    ];
 
     const charRoster = picked.map((c,i) => {
       const rel = c.relationships?.[post.charId] ?? c.relationships?.player;
@@ -701,7 +731,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         rel > 10 ? 'tolerates the poster' :
         rel > -20 ? 'tense / complicated with the poster' :
         'genuinely dislikes the poster';
-      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) — ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}).`;
+      const mentionNote = directMentionIds.has(c.id) ? ' DIRECTLY @MENTIONED in the post; they should usually answer the tag.' : '';
+      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) — ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}).${mentionNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -717,14 +748,14 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character — match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, or escalate if it fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character — match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly @mentioned, treat it like they were tagged in public: they should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, or add an outside opinion.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, or escalate if it fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
         const parsed = JSON.parse(cleaned);
         charR1 = picked.map((c,i) => ({
           charId: c.id,
-          text: (parsed[i]||'').trim().replace(/^["']|["']$/g,''),
+          text: cleanGeneratedText(parsed[i] || ''),
           likes: Math.floor(Math.random()*8000),
           timestamp: baseTs + 60000 + i*30000 + Math.floor(Math.random()*120000),
         })).filter(c => c.text);
@@ -750,7 +781,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ].join('\n');
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
-      const botCount = 3 + Math.floor(Math.random()*4); // 3-6
+      const botCount = 1 + Math.floor(Math.random()*3); // 1-3
       const botsPicked = [...pool].sort(() => Math.random()-0.5).slice(0, botCount);
       const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
 
@@ -790,7 +821,7 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
         const parsed = JSON.parse(cleaned);
         bots = botsPicked.map((b,i) => ({
           bot: b.id,
-          text: (parsed[i]||'').trim().replace(/^["']|["']$/g,''),
+          text: cleanGeneratedText(parsed[i] || ''),
           likes: Math.floor(Math.random()*15000),
           timestamp: baseTs + 240000 + i*45000 + Math.floor(Math.random()*180000),
         })).filter(b => b.text);
@@ -844,7 +875,7 @@ Return ONLY the reply text. No other text.`
           if (cancelled) return;
           const clapback = {
             charId: fight.replier.id,
-            text: res.trim().replace(/^["']|["']$/g,''),
+            text: cleanGeneratedText(res),
             likes: Math.floor(Math.random()*20000) + 2000, // clapbacks pop off
             timestamp: baseTs + 480000 + Math.floor(Math.random()*240000),
             replyTo: fight.target.handle,
@@ -857,7 +888,7 @@ Return ONLY the reply text. No other text.`
 
           // ─── ROUND 4: bots react to the clapback ────────────
           const clapTranscript = `${author?.name || player.name}: "${post.text}"\n${fight.target.name}: "${fight.targetReply.text}"\n${fight.replier.name}: "${clapback.text}"`;
-          const reactBots = [...pool].sort(() => Math.random()-0.5).slice(0, 2 + Math.floor(Math.random()*3));
+          const reactBots = [...pool].sort(() => Math.random()-0.5).slice(0, 1 + Math.floor(Math.random()*2));
           const reactRoster = reactBots.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
           try {
             const res2 = await window.claude.complete({
@@ -869,7 +900,7 @@ Return ONLY the reply text. No other text.`
             const parsed2 = JSON.parse(cleaned2);
             const reactComments = reactBots.map((b,i) => ({
               bot: b.id,
-              text: (parsed2[i]||'').trim().replace(/^["']|["']$/g,''),
+              text: cleanGeneratedText(parsed2[i] || ''),
               likes: Math.floor(Math.random()*25000) + 3000,
               timestamp: baseTs + 600000 + i*30000,
             })).filter(b => b.text);
@@ -904,7 +935,7 @@ ${BANNED_PHRASES_RULE}
 Return ONLY SILENCE or the reply text.`
                   }]
                 });
-                const counterText = res3.trim().replace(/^["']|["']$/g,'');
+                const counterText = cleanGeneratedText(res3);
                 if (!cancelled && counterText && counterText.toUpperCase() !== 'SILENCE') {
                   const counter = {
                     charId: fight.target.id,
@@ -1063,12 +1094,13 @@ Original post by @${char?.handle}: "${post.text}"
 Your comment: "${cc.text}"
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
-Write ONE short response to ${player.name}. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. 6-24 words. No quotes.`
+Write ONE short response to ${player.name}. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. 6-24 words. No quotes.
+${BANNED_PHRASES_RULE}`
                 }]
               });
               const reply = {
                 charId: cChar.id,
-                text: res.trim().replace(/^["']|["']$/g,''),
+                text: cleanGeneratedText(res),
                 likes: Math.floor(Math.random()*9000),
                 timestamp: replyBaseTs + 0.2,
                 replyTo: player.handle,
@@ -1971,7 +2003,7 @@ ${pronounRule([char, player])}
 ${player.name} (@${player.handle}) just invited you to: ${setting.label} — "${setting.sub}" — vibe: ${vibe.label}.
 Respond in character to this invitation. Be natural, in-character, and specific. 1-2 sentences max. You can accept with enthusiasm, accept with attitude, be ambiguous/coy, or decline (but only if it really fits your personality). NO quotes around your response, just what you'd actually text back.` }]
       });
-      setInviteResponse(res.trim().replace(/^["']|["']$/g,''));
+      setInviteResponse(cleanGeneratedText(res));
       // Detect decline — if response contains "can't", "won't", "no", "not tonight", "busy" etc.
       const lower = res.toLowerCase();
       const declined = ['can\'t', 'won\'t', 'not tonight', 'busy', 'not interested', 'leave me', 'go away'].some(w => lower.includes(w)) && !lower.includes('can\'t wait') && !lower.includes('won\'t be late');
@@ -2097,7 +2129,7 @@ function SceneChatScreen({ char, player, setting, vibe, onClose }) {
         const res = await window.claude.complete({
           messages:[{ role:'user', content: buildScenePrompt('') + '\n\nOpen the scene with a single line. Format: actions in *third person asterisks*, spoken words in "quotes". Hints at inner state through physical tells only — never state thoughts directly. Short and atmospheric.' }]
         });
-        setMsgs([{ role:'char', text: res.trim().replace(/^["']|["']$/g,''), id: Date.now() }]);
+        setMsgs([{ role:'char', text: cleanGeneratedText(res), id: Date.now() }]);
       } catch(e) {
         setMsgs([{ role:'char', text: '*glances over, says nothing for a moment.*', id: Date.now() }]);
       }
@@ -2145,7 +2177,7 @@ ${BANNED_PHRASES_RULE}`;
       const res = await window.claude.complete({
         messages:[{ role:'user', content: buildScenePrompt(history) + `\n\nRespond to: "${userMsg.text}"\nFormat: actions in *third person asterisks*, dialogue in "quotes". No narration. No inner monologue spelled out.` }]
       });
-      const cleaned = res.trim().replace(/^["']|["']$/g,'');
+      const cleaned = cleanGeneratedText(res);
       setMsgs(prev => [...prev, { role:'char', text: cleaned, id: Date.now()+1 }]);
     } catch(e) {}
     setLoading(false);
@@ -2687,7 +2719,7 @@ Chat history:\n${historyStr}
 ${player.name} just said: "${input}"
 Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Sometimes address specific people by @handle. Sometimes ignore the question and say something tangential. Be natural.` }]
         });
-        const charMsg = { role:'char', charId: member.id, text: reply.trim().replace(/^["']|["']$/g,''), id: Date.now() + Math.random() };
+        const charMsg = { role:'char', charId: member.id, text: cleanGeneratedText(reply), id: Date.now() + Math.random() };
         updatedMsgs = [...updatedMsgs, charMsg];
         setMsgs([...updatedMsgs]);
         setGroupChats(gs => gs.map(g => g.id === group.id ? {...g, messages: [...updatedMsgs]} : g));
@@ -3230,31 +3262,82 @@ const SIDE_QUESTS = [
   { id:'sq3', label:'Get a Gryffindor to publicly agree with you about something.', xp:88 },
 ];
 
-function NotificationsScreen({ chars, feed }) {
-  const notifs = [
-    { id:1, type:'like', char:chars[0], text:'liked your post', time:'2m' },
-    { id:2, type:'mention', char:chars[1], text:'mentioned you in a post', time:'15m' },
-    { id:3, type:'reply', char:chars[2], text:'replied to your comment', time:'1h' },
-    { id:4, type:'follow', char:chars[3], text:'started following you', time:'3h' },
-    { id:5, type:'like', char:chars[1], text:'liked your reply', time:'5h' },
-  ];
+function NotificationsScreen({ chars, player, feed, onOpenThread, onCharClick }) {
+  const allChars = [...chars, player, GMZ_CHAR];
+  const playerHandle = (player.handle || '').toLowerCase();
+  const mentionRe = new RegExp(`@${playerHandle}\\b`, 'i');
+  function timeAgo(ts) {
+    const d = Math.max(0, (Date.now() - (ts || Date.now())) / 1000);
+    if (d < 60) return `${Math.floor(d)}s`;
+    if (d < 3600) return `${Math.floor(d/60)}m`;
+    if (d < 86400) return `${Math.floor(d/3600)}h`;
+    return `${Math.floor(d/86400)}d`;
+  }
+  const notifs = feed.flatMap(post => {
+    const items = [];
+    const poster = allChars.find(c => c.id === post.charId);
+    if (post.charId !== player.id && mentionRe.test(post.text || '')) {
+      items.push({ id:`mention-${post.id}`, type:'mention', char:poster, text:'mentioned you in a post', preview:post.text, timestamp:post.timestamp, post });
+    }
+    if (post.reply?.charId && post.reply.charId !== player.id && (post.charId === player.id || mentionRe.test(post.reply.text || ''))) {
+      const replier = allChars.find(c => c.id === post.reply.charId);
+      items.push({ id:`reply-${post.id}`, type:'reply', char:replier, text: post.charId === player.id ? 'replied to your post' : 'mentioned you in a reply', preview:post.reply.text, timestamp:(post.timestamp || Date.now()) + 1, post });
+    }
+    (post.charComments || []).forEach((cc, i) => {
+      if (cc.charId === player.id) return;
+      const replier = allChars.find(c => c.id === cc.charId);
+      const isForPlayer = post.charId === player.id || cc.replyTo === player.handle || mentionRe.test(cc.text || '');
+      if (!isForPlayer) return;
+      items.push({
+        id:`char-comment-${post.id}-${i}`,
+        type:'reply',
+        char:replier,
+        text: post.charId === player.id ? 'replied to your post' : 'replied to you',
+        preview:cc.text,
+        timestamp:cc.timestamp || post.timestamp,
+        post,
+      });
+    });
+    (post.botComments || []).forEach((bc, i) => {
+      if (bc.isPlayer) return;
+      const isForPlayer = post.charId === player.id || bc.replyTo === player.handle || mentionRe.test(bc.text || '');
+      if (!isForPlayer) return;
+      const bot = RECURRING_BOTS.find(b => b.id === bc.bot);
+      items.push({
+        id:`bot-comment-${post.id}-${i}`,
+        type:'reply',
+        bot,
+        text: post.charId === player.id ? 'reacted to your post' : 'reacted to you',
+        preview:bc.text,
+        timestamp:bc.timestamp || post.timestamp,
+        post,
+      });
+    });
+    return items;
+  }).sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 40);
   return (
     <div style={{flex:1, overflowY:'auto'}}>
       <div style={{padding:'16px', borderBottom:`1px solid ${C.border}`}}>
         <h1 style={{color:C.text, fontSize:22, fontWeight:700}}>Notifications</h1>
       </div>
+      {notifs.length === 0 && (
+        <div style={{padding:28, textAlign:'center', color:C.muted, fontSize:14, lineHeight:1.5}}>
+          No replies or mentions yet.
+        </div>
+      )}
       {notifs.map(n => (
-        <div key={n.id} style={{display:'flex', gap:10, padding:'14px 16px', borderBottom:`1px solid ${C.border}`, alignItems:'center'}}>
+        <div key={n.id} onClick={() => onOpenThread && onOpenThread(n.post)} style={{display:'flex', gap:10, padding:'14px 16px', borderBottom:`1px solid ${C.border}`, alignItems:'center', cursor:'pointer'}}>
           <div style={{position:'relative'}}>
-            <Avatar char={n.char} size={42} />
+            {n.bot ? <BotAvatar bot={n.bot} size={42} /> : <Avatar char={n.char} size={42} onClick={(e) => { e?.stopPropagation?.(); n.char && onCharClick && onCharClick(n.char); }} />}
             <div style={{position:'absolute', bottom:-2, right:-2, width:18, height:18, borderRadius:'50%', background: n.type==='like'?'#e91e8c':n.type==='mention'?C.blue:n.type==='reply'?C.purple:C.green, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, border:`2px solid ${C.bg}`}}>
               {n.type==='like'?'♥':n.type==='mention'?'@':n.type==='reply'?'↩':'➕'}
             </div>
           </div>
           <div style={{flex:1}}>
-            <span style={{fontWeight:700, color:C.text, fontSize:14}}>{n.char?.name} </span>
+            <span style={{fontWeight:700, color:C.text, fontSize:14}}>{n.bot?.name || n.char?.name} </span>
             <span style={{color:C.muted, fontSize:14}}>{n.text}</span>
-            <p style={{color:C.muted, fontSize:12, marginTop:2}}>{n.time} ago</p>
+            <p style={{color:C.text, fontSize:13, marginTop:4, lineHeight:1.35}}>{renderLinkedText((n.preview || '').slice(0,120), allChars, onCharClick)}</p>
+            <p style={{color:C.muted, fontSize:12, marginTop:3}}>{timeAgo(n.timestamp)} ago</p>
           </div>
         </div>
       ))}
@@ -3666,6 +3749,17 @@ function App() {
   function setDay(v)        { setDayRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats,eventLog,day:next,socialPresence}); return next; }); }
   function setSocialPresence(v) { setSocialPresenceRaw(prev => { const next = typeof v==='function'?v(prev):v;             serverSave({chars,player,feed,dms,groupChats,eventLog,day,socialPresence:next}); return next; }); }
 
+  useEffect(() => {
+    if (!stateLoaded) return;
+    const flushSave = () => serverSaveNow({ chars, player, feed, dms, groupChats, eventLog, day, socialPresence });
+    window.addEventListener('pagehide', flushSave);
+    window.addEventListener('beforeunload', flushSave);
+    return () => {
+      window.removeEventListener('pagehide', flushSave);
+      window.removeEventListener('beforeunload', flushSave);
+    };
+  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, socialPresence]);
+
   function addSocialPresence(gains) {
     setSocialPresence(prev => ({
       humor: Math.min(300, +(Number(prev?.humor || 0) + Number(gains?.humor || 0)).toFixed(2)),
@@ -3743,7 +3837,7 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
 - NO hashtags, NO quotes around the post, JUST the post text
 ${BANNED_PHRASES_RULE}` }] });
-      const cleanText = raw.trim().replace(/^["']|["']$/g,'');
+      const cleanText = cleanGeneratedText(raw);
       setFeed(f => [{
         id: `pull-${Date.now()}-${char.id}`,
         charId: char.id,
@@ -3814,10 +3908,35 @@ ${BANNED_PHRASES_RULE}` }] });
           { role:'user', content: `You just saw something happen (${context}). Slide into ${player.name}'s DMs with a short, in-character opening message — something you'd actually say given your personality. 1-2 sentences max.` }
         ]
       });
-      const dmMsg = { role:'char', text: msg, id: Date.now() };
+      const dmMsg = { role:'char', text: cleanGeneratedText(msg), id: Date.now() };
       setDms(d => ({ ...d, [triggerChar.id]: [...(d[triggerChar.id]||[]), dmMsg] }));
       setDmNotifs(n => ({ ...n, [triggerChar.id]: (n[triggerChar.id]||0) + 1 }));
     } catch(e) {}
+  }
+
+  function maybeTriggerDMsFromPlayerPost(post) {
+    if (!post?.text) return;
+    const mentionedHandles = new Set(
+      Array.from(post.text.matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase())
+    );
+    const mentionedChars = chars.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
+    const isHotOrMessy = /transfer|tryout|record|disciplinary|rumor|date|kiss|fight|foul|gmz|photo|sorry|explain|meet me|after dark/i.test(post.text);
+    let candidates = mentionedChars;
+    if (candidates.length === 0 && isHotOrMessy && Math.random() < 0.35) {
+      candidates = [...chars]
+        .sort((a,b) => (Math.abs((b.relationships?.player ?? 50) - 50)) - (Math.abs((a.relationships?.player ?? 50) - 50)))
+        .slice(0, 1);
+    }
+    candidates.slice(0, 2).forEach((char, idx) => {
+      const relationship = char.relationships?.player ?? 50;
+      const shouldDm = mentionedHandles.has((char.handle || '').toLowerCase())
+        ? Math.random() < (relationship < 30 ? 0.72 : 0.52)
+        : true;
+      if (!shouldDm) return;
+      setTimeout(() => {
+        triggerProactiveDM(char, `@${player.handle} posted publicly: "${post.text.slice(0,140)}"${mentionedHandles.has((char.handle || '').toLowerCase()) ? ` and tagged @${char.handle}` : ''}`);
+      }, 9000 + idx * 7000 + Math.random()*8000);
+    });
   }
 
   // ── Auto-post system ──────────────────────────────────────────
@@ -3870,9 +3989,10 @@ Recent campus feed:\n${recentContext}
 Write ONE social media post that is specifically directed at or about @${target.handle}. Rules:
 - Stay in character (personality: ${char.personality})
 - Use the pronouns listed above exactly. Do not misgender anyone.
-- 1-2 sentences, punchy — can be shade, a callout, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
+- 1-2 sentences, punchy. It can be shade, a callout, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
 - MUST tag @${target.handle} naturally in the text
-- NO hashtags, NO quotes around the post, just the post text`
+- NO hashtags, NO quotes around the post, just the post text
+${BANNED_PHRASES_RULE}`
           : `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), a ${char.personality} college student at Merlin's College of Magic (wizarding university, HP-inspired, college-aged).
 Description: ${char.description}
 ${pronounRule(promptPeople)}
@@ -3892,7 +4012,7 @@ ${BANNED_PHRASES_RULE}`;
 
         const raw = await window.claude.complete({ messages:[{ role:'user', content: prompt }] });
         if (!active) return;
-        const cleanText = raw.trim().replace(/^["']|["']$/g,'');
+        const cleanText = cleanGeneratedText(raw);
         const newPost = {
           id: `auto-${Date.now()}-${char.id}`,
           charId: char.id,
@@ -3920,9 +4040,10 @@ ${BANNED_PHRASES_RULE}`;
                     `You are ${replier.name} (@${replier.handle}; pronouns: ${pronounsFor(replier)}), personality: ${replier.personality}.
 ${pronounRule([replier, char, player])}
 @${char.handle} just posted: "${cleanText}"
-Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} if natural. No quotes, just the reply text.` }]
+Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} if natural. No quotes, just the reply text.
+${BANNED_PHRASES_RULE}` }]
                 });
-                const replyText = replyRaw.trim().replace(/^["']|["']$/g,'');
+                const replyText = cleanGeneratedText(replyRaw);
                 setFeed(f => f.map(p => p.id === newPost.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
               } catch(e) {}
             }, 12000 + Math.random()*13000);
@@ -3989,9 +4110,10 @@ Write ONE short reply (1 sentence, in character). Use the pronouns listed above 
         const raw = await window.claude.complete({ messages:[{ role:'user', content:
           `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), personality: ${char.personality}. Your team just ${won ? 'won' : 'lost'} a Quidditch match against ${won ? 'Gryffindor' : 'Slytherin'} ${score.home}–${score.away}.
 ${pronounRule([char, player, ...chars])}
-Write ONE punchy social media post reaction. Use the pronouns listed above exactly. In character. No hashtags. 1 sentence.`
+Write ONE punchy social media post reaction. Use the pronouns listed above exactly. In character. No hashtags. 1 sentence.
+${BANNED_PHRASES_RULE}`
         }]});
-        handleMatchPost(raw.trim().replace(/^["']|["']$/g,''), char.id);
+        handleMatchPost(cleanGeneratedText(raw), char.id);
       } catch(e) {}
     }
     // GMZ post-game
@@ -4025,9 +4147,10 @@ Write ONE GMZ gossip post. Rules:
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - If the context is a hot new transfer/photo/reputation reveal, frame the campus as excited, thirsty, curious, and impressed, with only light scandal edge.
 - Start with a hook ("BREAKING:", "SOURCES CONFIRM:", "EXCLUSIVE:", "WITNESSES SAY:", etc.)
-- No hashtags, no quotes, just the post text` }]
+- No hashtags, no quotes, just the post text
+${BANNED_PHRASES_RULE}` }]
       });
-      const cleanText = raw.trim().replace(/^["']|["']$/g,'');
+      const cleanText = cleanGeneratedText(raw);
       const newPost = {
         id: `gmz-${Date.now()}`,
         charId: '__gmz__',
@@ -4064,7 +4187,7 @@ Write ONE short DM (1-2 sentences max). Pick ONE angle:
 Tone: tabloid, breathless, slightly menacing in a fun way, lowercase casual mixed with ALL CAPS for emphasis. Use the pronouns listed above exactly. No greeting, no signoff, just the message itself. No quotes around it.
 ${BANNED_PHRASES_RULE}` }]
       });
-      const text = raw.trim().replace(/^["']|["']$/g,'');
+      const text = cleanGeneratedText(raw);
       const dmMsg = { role:'char', text, id: Date.now() };
       setDms(d => ({ ...d, [GMZ_CHAR.id]: [...(d[GMZ_CHAR.id]||[]), dmMsg] }));
       setDmNotifs(n => ({ ...n, [GMZ_CHAR.id]: (n[GMZ_CHAR.id]||0) + 1 }));
@@ -4116,9 +4239,10 @@ ${pronounRule([char, player, ...involved])}
 Campus event: "${ev.scenario}"
 ${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
 
-Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post.`
+Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post.
+${BANNED_PHRASES_RULE}`
           }]});
-          const clean = raw.trim().replace(/^["']|["']$/g,'');
+          const clean = cleanGeneratedText(raw);
           if (!clean) return;
           setFeed(f => f.map(p => p.id === basePosts[idx].id ? {...p, text: clean} : p));
         } catch(e) {}
@@ -4189,7 +4313,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
         case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} />;
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
-        case 'notifications': return <NotificationsScreen chars={chars} feed={feed} />;
+        case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
         case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return null;
       }
@@ -4219,6 +4343,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
             setComposing(false);
             // Player posts: simulate growing engagement
             if (post.charId === 'player') {
+              maybeTriggerDMsFromPlayerPost(post);
               const ticks = [
                 { delay: 1500,  l: 240,  r: 8,   c: 1 },
                 { delay: 4000,  l: 1200, r: 22,  c: 3 },

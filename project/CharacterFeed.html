@@ -260,6 +260,14 @@ STYLE RULES:
 - Prefer one short sentence, or two very short sentences.
 - Keep replies punchy, readable, and conversational.`;
 
+const CHARACTER_TONE_RULE = `
+CHARACTER TONE BALANCE:
+- Not every character should sound angry, hostile, or wounded.
+- Many replies should be playful, amused, flirty, unserious, awkward, distracted, smug, curious, or charmingly stupid.
+- Havoc should often read as physical, smug, impulsive, funny, himbo-adjacent, and bad at minding his business. He teases before he rages.
+- Rowan should often read as sly, playful, observant, funny, and smooth. He can stir trouble without sounding furious.
+- Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.`;
+
 function cleanGeneratedText(text = '') {
   return String(text)
     .trim()
@@ -711,17 +719,27 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       if (r === undefined) return 25; // neutral default
       return Math.abs(r - 50) + 10; // distance from neutral, min 10
     };
+    const embarrassmentContext = /embarrass|humiliat|fumble|awkward|cringe|caught|fell|tripped|missed|dropped|failed|mistake|bad look|everyone saw|publicly|got exposed|exposed|apologize|sorry|regret|disaster/i.test(post.text || '');
+    const snarkyResponder = embarrassmentContext
+      ? eligible
+          .filter(c => !directMentionIds.has(c.id))
+          .sort((a,b) => {
+            const score = c => /snark|sharp|blunt|funny|observant|gossip|shameless|rude|cutting|chaotic|provocative/i.test(c.personality || '') ? 2 : 0;
+            return (score(b) + charge(b)/100) - (score(a) + charge(a)/100);
+          })[0]
+      : null;
     const weighted = eligible
       .filter(c => !directMentionIds.has(c.id))
       .map(c => ({ c, w: charge(c) + Math.random()*30 }));
     weighted.sort((a,b) => b.w - a.w);
 
     // Pick 2-4 chars by default. Direct @mentions jump the line, then other characters can chime in.
-    const targetCount = Math.min(5, Math.max(2, directlyMentioned.length + 1 + Math.floor(Math.random()*2)));
+    const targetCount = Math.min(5, Math.max(embarrassmentContext ? 3 : 2, directlyMentioned.length + 1 + Math.floor(Math.random()*2)));
     const picked = [
       ...directlyMentioned,
+      ...(snarkyResponder && !directMentionIds.has(snarkyResponder.id) ? [snarkyResponder] : []),
       ...weighted.slice(0, Math.max(0, targetCount - directlyMentioned.length)).map(x => x.c),
-    ];
+    ].filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i).slice(0, targetCount);
 
     const charRoster = picked.map((c,i) => {
       const rel = c.relationships?.[post.charId] ?? c.relationships?.player;
@@ -732,7 +750,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         rel > -20 ? 'tense / complicated with the poster' :
         'genuinely dislikes the poster';
       const mentionNote = directMentionIds.has(c.id) ? ' DIRECTLY @MENTIONED in the post; they should usually answer the tag.' : '';
-      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) — ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}).${mentionNote}`;
+      const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
+      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}).${mentionNote}${embarrassmentNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -742,13 +761,16 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const attractionRule = hotTransferContext
       ? `\nCONTEXT NOTE: This thread is about ${player.name} as a striking new transfer with talent, attitude, and a reputation. The campus default is excitement, curiosity, attraction, competitive interest, and people trying not to look impressed. A few characters can be wary or test her, but do NOT make everyone bully, insult, or tear her down. Most reactions should be positive, intrigued, thirsty, amused, or impressed in each character's own voice.`
       : '';
+    const embarrassmentRule = embarrassmentContext
+      ? `\nEMBARRASSMENT NOTE: Someone publicly fumbled, exposed themself, apologized badly, looked foolish, or handed the timeline an opening. At least one custom character should call it out, tease them, sharpen the moment, or make the social consequence visible. It can be funny, dry, protective, flirty, or cruel depending on the character, but do not let the embarrassing moment pass unnoticed.`
+      : '';
 
     (async () => {
       let charR1 = [];
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character — match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly @mentioned, treat it like they were tagged in public: they should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, or add an outside opinion.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, or escalate if it fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}\n\n${CHARACTER_TONE_RULE}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly @mentioned, treat it like they were tagged in public: they should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -837,8 +859,8 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
       }
       if (!cancelled) setLoadingChars(false);
 
-      // ─── ROUND 3: char-vs-char clapback ───────────────────────
-      // Only fires if there are 2+ char replies AND at least one pair has bad blood
+      // ─── ROUND 3: char-vs-char reply ──────────────────────────
+      // Only fires if there are 2+ char replies and the relationship has enough charge.
       const pairs = [];
       for (let i = 0; i < charR1.length; i++) {
         for (let j = 0; j < charR1.length; j++) {
@@ -846,7 +868,7 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           const ci = allChars.find(x => x.id === charR1[i].charId);
           const cj = allChars.find(x => x.id === charR1[j].charId);
           const rel = ci?.relationships?.[cj?.id];
-          if (rel !== undefined && rel < 30) {
+          if (rel !== undefined && (rel < 10 || (rel < 35 && Math.random() < 0.35))) {
             pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel });
           }
         }
@@ -864,10 +886,11 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
 Original post by ${author?.name || player.name}: "${post.text}"
 
 ${pronounRule([author, player, fight.replier, fight.target])}
+${CHARACTER_TONE_RULE}
 
-You are ${fight.replier.name} (@${fight.replier.handle}; pronouns: ${pronounsFor(fight.replier)}). Your relationship with @${fight.target.handle} is bad (${fight.rel}/100). You see what they just said and you can't help yourself — you reply to THEM, not to the original post. Personality: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
+You are ${fight.replier.name} (@${fight.replier.handle}; pronouns: ${pronounsFor(fight.replier)}). Your relationship with @${fight.target.handle} is charged (${fight.rel}/100). You see what they just said and you can't help yourself. You reply to THEM, not to the original post. Personality: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
-Write ONE clapback (8-30 words). It should clearly be a reply to @${fight.target.handle} — quote their wording back at them, drag them, expose them, escalate. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
+Write ONE reply (8-26 words). It can be a tease, joke, flirt, smug correction, playful shove, dry observation, or actual clapback only if the character would truly go there. It should clearly answer @${fight.target.handle}. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
 ${BANNED_PHRASES_RULE}
 Return ONLY the reply text. No other text.`
             }]
@@ -893,7 +916,7 @@ Return ONLY the reply text. No other text.`
           try {
             const res2 = await window.claude.complete({
               messages:[{ role:'user', content:
-                `Thread escalated. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n\nWrite ${reactBots.length} reactions from anonymous audience accounts who just watched @${fight.replier.handle} clap back at @${fight.target.handle}. They can pick a winner, offer an opinion, ask a messy question, fan out, side-eye the motive, make a tactical read, or make the argument worse. Quote a line only occasionally; most comments should be fresh interjections.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, and "deceased/screaming" pileups. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n\nWrite ${reactBots.length} reactions from anonymous audience accounts who just watched @${fight.replier.handle} answer @${fight.target.handle}. They can pick a winner, offer an opinion, ask a messy question, fan out, side-eye the motive, make a tactical read, laugh at the joke, or make the argument worse. Quote a line only occasionally; most comments should be fresh interjections.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, and "deceased/screaming" pileups. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
             });
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -914,23 +937,24 @@ Return ONLY the reply text. No other text.`
 
             // ─── ROUND 5: optional counterpunch ────────────────
             // Heated threads can keep moving, but the target may also decide silence is meaner.
-            const counterChance = fight.rel < 0 ? 0.62 : fight.rel < 15 ? 0.46 : 0.28;
+            const counterChance = fight.rel < 0 ? 0.46 : fight.rel < 15 ? 0.32 : 0.16;
             if (Math.random() < counterChance) {
               try {
                 const res3 = await window.claude.complete({
                   messages:[{ role:'user', content:
-                    `A social media thread is turning into a fight.
+                    `A social media thread is getting attention.
 
 Original post by ${author?.name || player.name}: "${post.text}"
 ${fight.target.name} (@${fight.target.handle}) said: "${fight.targetReply.text}"
 ${fight.replier.name} (@${fight.replier.handle}) fired back: "${clapback.text}"
 
 ${pronounRule([author, player, fight.target, fight.replier])}
+${CHARACTER_TONE_RULE}
 
-You are ${fight.target.name} (@${fight.target.handle}; pronouns: ${pronounsFor(fight.target)}). Personality: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is bad (${fight.rel}/100).
+You are ${fight.target.name} (@${fight.target.handle}; pronouns: ${pronounsFor(fight.target)}). Personality: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is charged (${fight.rel}/100).
 
 Decide if you would answer or leave it on read. If silence is more in-character, return exactly: SILENCE
-Otherwise write ONE counter-reply (8-28 words) directly to @${fight.replier.handle}. It should escalate, dismiss, expose, or twist the knife. No hashtags. No quotes around the reply.
+Otherwise write ONE counter-reply (8-24 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, or sharp. Only twist the knife if that truly fits. No hashtags. No quotes around the reply.
 ${BANNED_PHRASES_RULE}
 Return ONLY SILENCE or the reply text.`
                   }]
@@ -1089,12 +1113,13 @@ Return ONLY SILENCE or the reply text.`
                 messages:[{ role:'user', content:
                   `You are ${cChar.name} (@${cChar.handle}; pronouns: ${pronounsFor(cChar)}). Personality: ${cChar.personality}.
 ${pronounRule([cChar, player, char])}
+${CHARACTER_TONE_RULE}
 
 Original post by @${char?.handle}: "${post.text}"
 Your comment: "${cc.text}"
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
-Write ONE short response to ${player.name}. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, or be awkward instead of angry. 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
                 }]
               });
@@ -3887,7 +3912,12 @@ ${BANNED_PHRASES_RULE}` }] });
       return s.slice(0, -1);
     });
   }
-  function handleOpenChat(char) { pushNav(); setChatChar(char); setTab('messages'); }
+  function handleOpenChat(char) {
+    pushNav();
+    setChatChar(char);
+    setTab('messages');
+    setDmNotifs(n => ({ ...n, [char.id]: 0 }));
+  }
   function handleViewChar(char) { pushNav(); setViewChar(char); }
   function handleEditChar(char) { pushNav(); setEditChar(char); }
   function handleCreateChar() { pushNav(); setEditChar({ name:'', handle:'', pronouns:'', house:'', bio:'', description:'', personality:'', followers:1000000 }); }
@@ -3905,7 +3935,9 @@ ${BANNED_PHRASES_RULE}` }] });
         messages: [
           { role:'user', content: sysPrompt },
           { role:'assistant', content: `Understood. I'm ${triggerChar.name}.` },
-          { role:'user', content: `You just saw something happen (${context}). Slide into ${player.name}'s DMs with a short, in-character opening message — something you'd actually say given your personality. 1-2 sentences max.` }
+          { role:'user', content: `You just saw something happen (${context}). Slide into ${player.name}'s DMs with a short, in-character opening message. Something you'd actually say given your personality. Do not default to anger; teasing, flirting, checking in, joking, or being nosy can fit better. 1-2 sentences max.
+${CHARACTER_TONE_RULE}
+${BANNED_PHRASES_RULE}` }
         ]
       });
       const dmMsg = { role:'char', text: cleanGeneratedText(msg), id: Date.now() };
@@ -3982,6 +4014,7 @@ ${BANNED_PHRASES_RULE}` }] });
           ? `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), a ${char.personality} college student at Merlin's College of Magic.
 Description: ${char.description}
 ${pronounRule([char, target, player])}
+${CHARACTER_TONE_RULE}
 Your relationship with @${target.handle} (${target.name}): ${char.relationships?.[target.id] < 30 ? 'rivals/bad blood' : char.relationships?.[target.id] < 60 ? 'complicated' : 'decent but complicated'}.
 
 Recent campus feed:\n${recentContext}
@@ -3989,13 +4022,14 @@ Recent campus feed:\n${recentContext}
 Write ONE social media post that is specifically directed at or about @${target.handle}. Rules:
 - Stay in character (personality: ${char.personality})
 - Use the pronouns listed above exactly. Do not misgender anyone.
-- 1-2 sentences, punchy. It can be shade, a callout, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
+- 1-2 sentences, punchy. It can be teasing, flirty, funny, smug, himbo-stupid, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
 - MUST tag @${target.handle} naturally in the text
 - NO hashtags, NO quotes around the post, just the post text
 ${BANNED_PHRASES_RULE}`
           : `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), a ${char.personality} college student at Merlin's College of Magic (wizarding university, HP-inspired, college-aged).
 Description: ${char.description}
 ${pronounRule(promptPeople)}
+${CHARACTER_TONE_RULE}
 Other people on campus: ${otherHandles}
 
 Recent campus feed posts:\n${recentContext}
@@ -4004,7 +4038,7 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 - Stay completely in character (personality: ${char.personality})
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - 1-2 sentences max, punchy
-- Optionally tag 0-2 of the other handles if it's natural — do NOT force it
+- Optionally tag 0-2 of the other handles if it's natural. Do NOT force it
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
 - NO hashtags, NO quotes around the post, JUST the post text
 - Make it feel real and casual, like they just typed it
@@ -4027,11 +4061,18 @@ ${BANNED_PHRASES_RULE}`;
         };
         setFeed(f => [newPost, ...f]);
 
-        // 15% chance a second char replies after a short beat
-        if (Math.random() < 0.15) {
+        const embarrassingPost = doCallout || /embarrass|humiliat|fumble|awkward|cringe|caught|fell|tripped|missed|dropped|failed|mistake|bad look|everyone saw|got exposed|exposed|apologize|sorry|regret|disaster/i.test(cleanText);
+        const replyChance = embarrassingPost ? 0.46 : 0.15;
+        // A second char may reply after a short beat. Public embarrassment gets noticed, but not always angrily.
+        if (Math.random() < replyChance) {
           const others = chars.filter(c => c.id !== char.id);
           if (others.length) {
-            const replier = others[Math.floor(Math.random()*others.length)];
+            const replier = embarrassingPost
+              ? [...others].sort((a,b) => {
+                  const score = c => /snark|sharp|blunt|funny|observant|gossip|shameless|rude|cutting|chaotic|provocative/i.test(c.personality || '') ? 2 : 0;
+                  return score(b) - score(a) || Math.random() - 0.5;
+                })[0]
+              : others[Math.floor(Math.random()*others.length)];
             setTimeout(async () => {
               if (!active) return;
               try {
@@ -4039,7 +4080,9 @@ ${BANNED_PHRASES_RULE}`;
                   messages:[{ role:'user', content:
                     `You are ${replier.name} (@${replier.handle}; pronouns: ${pronounsFor(replier)}), personality: ${replier.personality}.
 ${pronounRule([replier, char, player])}
+${CHARACTER_TONE_RULE}
 @${char.handle} just posted: "${cleanText}"
+${embarrassingPost ? 'This is a public embarrassment, bad look, messy callout, or obvious fumble. If your character would tease, expose, correct, flirt through it, make a stupid joke, or make the social consequence worse, do that. Do not let it pass politely, but do not default to rage.' : ''}
 Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} if natural. No quotes, just the reply text.
 ${BANNED_PHRASES_RULE}` }]
                 });

@@ -187,6 +187,62 @@ function renderLinkedText(text = '', allChars = [], onCharClick) {
   });
 }
 
+function getMentionQuery(text = '') {
+  const match = String(text).match(/(^|\s)@([a-z0-9_]*)$/i);
+  return match ? match[2].toLowerCase() : null;
+}
+
+function applyMentionToText(text = '', handle = '') {
+  const cleanHandle = String(handle).replace(/^@/, '');
+  return String(text).replace(/(^|\s)@([a-z0-9_]*)$/i, `$1@${cleanHandle} `);
+}
+
+function MentionSuggestions({ text, allChars = [], onPick }) {
+  const query = getMentionQuery(text);
+  if (query === null) return null;
+  const matches = allChars
+    .filter(c => c?.handle && c.handle.toLowerCase().startsWith(query))
+    .slice(0, 5);
+  if (!matches.length) return null;
+
+  return (
+    <div style={{
+      marginTop:8,
+      background:C.card,
+      border:`1px solid ${C.border}`,
+      borderRadius:14,
+      overflow:'hidden',
+      boxShadow:'0 12px 30px rgba(0,0,0,0.32)',
+    }}>
+      {matches.map(c => (
+        <button
+          key={c.id}
+          type="button"
+          onMouseDown={e => e.preventDefault()}
+          onClick={() => onPick(c.handle)}
+          style={{
+            width:'100%',
+            display:'flex',
+            alignItems:'center',
+            gap:9,
+            background:'none',
+            border:'none',
+            borderBottom:`1px solid ${C.border}`,
+            padding:'9px 10px',
+            color:C.text,
+            textAlign:'left',
+            cursor:'pointer',
+          }}
+        >
+          <Avatar char={c} size={30} />
+          <span style={{fontWeight:700, fontSize:14}}>{c.name}</span>
+          <span style={{color:C.muted, fontSize:13}}>@{c.handle}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const DEFAULT_PRONOUNS_BY_ID = {
   player:'she/her',
   havoc:'he/him',
@@ -328,6 +384,66 @@ function cleanGeneratedText(text = '') {
     .replace(/\s+([.,!?])/g, '$1')
     .replace(/([.!?]){2,}/g, '$1')
     .replace(/\s{2,}/g, ' ');
+}
+
+function looksLikePromptLeak(text = '') {
+  return /i need context|let me check|looking at the recent feed|i'm ready|i understand the character|what's the prompt|i can write as|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|here'?s/i.test(String(text));
+}
+
+function fallbackPostForChar(char, player) {
+  const handle = char?.handle || 'someone';
+  const pool = {
+    callum: [
+      'if the structure holds, the scoreboard handles the rest.',
+      'clean execution beats noise. every time.',
+      'some of you confuse motion with progress.',
+    ],
+    rowan: [
+      'some people show their whole strategy because nobody asked nicely enough.',
+      'not naming names. mostly because that would be generous.',
+      'funny how fast everyone gets honest once the angle changes.',
+    ],
+    havoc: [
+      'i did not start it. i improved it.',
+      'restraint remains a theory i do not personally endorse.',
+      'bad idea, good timing. i see no issue.',
+    ],
+    silas: [
+      'discipline is not a personality flaw just because gryffindor keeps failing it.',
+      'if you need chaos to look interesting, that is already an admission.',
+      'standards are only intimidating when you do not have them.',
+    ],
+    briar: [
+      'team bonding is not a synonym for inventing a new disciplinary category.',
+      'the next person calling impulse a strategy is running laps.',
+      'talent still has to answer to the scoreboard.',
+    ],
+  }[char?.id] || [
+    `@${player?.handle || 'keresvalen'} has half the campus pretending not to watch. cute.`,
+    'the timeline is doing that thing where everyone acts surprised by consequences.',
+    `${handle} logging on against better judgment again.`,
+  ];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function cleanSocialPostText(raw = '', char, player) {
+  const clean = cleanGeneratedText(raw)
+    .replace(/^post:\s*/i, '')
+    .replace(/^tweet:\s*/i, '')
+    .trim();
+  if (!clean || looksLikePromptLeak(clean) || clean.length > 280) {
+    return fallbackPostForChar(char, player);
+  }
+  return clean;
+}
+
+function repairPromptLeakPosts(feed = [], chars = [], player) {
+  const all = [...(chars || []), player, GMZ_CHAR].filter(Boolean);
+  return (feed || []).map(post => {
+    if (!looksLikePromptLeak(post?.text || '')) return post;
+    const author = all.find(c => c.id === post.charId) || player;
+    return { ...post, text: fallbackPostForChar(author, player), repairedPromptLeak: true };
+  });
 }
 
 // ─── Bot pool ─────────────────────────────────────────────────────
@@ -716,6 +832,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
   const [liked, setLiked] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replyOpen, setReplyOpen] = useState(false);
+  const [replyTarget, setReplyTarget] = useState(null);
   const replyInputRef = useRef(null);
   const [botComments, setBotComments] = useState(post.botComments || []);
   const [charComments, setCharComments] = useState(post.charComments || []);
@@ -1056,6 +1173,15 @@ Return ONLY SILENCE or the reply text.`
 
   const getBotById = id => RECURRING_BOTS.find(b => b.id === id) || RECURRING_BOTS[0];
 
+  function openReplyTarget(target) {
+    setReplyTarget(target);
+    setReplyOpen(true);
+    setReplyText('');
+    setReplyingToChar(null);
+    setReplyingToBot(null);
+    setTimeout(() => replyInputRef.current?.focus(), 50);
+  }
+
   // Merge char + bot comments into a single chronological feed.
   // Falls back to insertion order (using array index baked into ts) if timestamps tie.
   const mergedReplies = React.useMemo(() => {
@@ -1067,19 +1193,108 @@ Return ONLY SILENCE or the reply text.`
     return items;
   }, [charComments, botComments]);
 
-  function submitPostReply() {
+  async function submitPostReply() {
     const text = replyText.trim();
     if (!text) return;
+    const target = replyTarget || { kind:'post', handle: char?.handle, targetChar: char, sourceText: post.text };
+    const baseTs = Number(target.replyBaseTs || Date.now());
+
+    if (target.kind === 'bot' && target.bot) {
+      const bot = target.bot;
+      const botPlayerEntry = {
+        bot: '__player__',
+        text,
+        likes: 0,
+        isPlayer: true,
+        timestamp: baseTs + 0.1,
+        replyTo: bot.handle,
+        nestedReply: true,
+      };
+      setBotComments(prev => [...prev, botPlayerEntry]);
+      setReplyText('');
+      setReplyOpen(false);
+      setReplyTarget(null);
+      try {
+        const res = await window.claude.complete({
+          messages: [{ role:'user', content:
+            `You are ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university. Your personality: ${bot.bio || bot.type}.
+Original post: "${post.text}"
+Your comment: "${target.sourceText || ''}"
+${player.name} just replied to your comment: "${text}"
+Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining.`
+          }]
+        });
+        setBotComments(prev => [...prev, {
+          bot: bot.id,
+          text: cleanGeneratedText(res),
+          likes: Math.floor(Math.random()*3000),
+          timestamp: baseTs + 0.2,
+          replyTo: player.handle,
+          nestedReply: true,
+        }]);
+        triggerCharacterFollowups({
+          playerText: text,
+          targetChar: null,
+          sourceText: target.sourceText || '',
+          baseTs: baseTs + 0.25,
+          mode: 'direct',
+        });
+      } catch(e) {}
+      return;
+    }
+
     const playerEntry = {
       charId: player.id,
       text,
       likes: 0,
-      timestamp: Date.now(),
-      replyTo: char?.handle,
+      timestamp: target.kind === 'post' ? Date.now() : baseTs + 0.1,
+      replyTo: target.handle || char?.handle,
+      nestedReply: target.kind !== 'post',
     };
     setCharComments(prev => [...prev, playerEntry]);
     setReplyText('');
     setReplyOpen(false);
+    setReplyTarget(null);
+
+    if (target.kind === 'char' && target.targetChar) {
+      const targetChar = target.targetChar;
+      try {
+        const res = await window.claude.complete({
+          messages:[{ role:'user', content:
+            `You are ${targetChar.name} (@${targetChar.handle}; pronouns: ${pronounsFor(targetChar)}). Personality: ${targetChar.personality}.
+${pronounRule([targetChar, player, char])}
+${CHARACTER_TONE_RULE}
+${playerStance(targetChar, player)}
+
+Original post by @${char?.handle}: "${post.text}"
+Your comment: "${target.sourceText || ''}"
+${player.name} (@${player.handle}) replied to you: "${text}"
+
+Write ONE short response to ${player.name}. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, or be awkward instead of angry. 6-24 words. No quotes.
+${BANNED_PHRASES_RULE}`
+          }]
+        });
+        const reply = {
+          charId: targetChar.id,
+          text: cleanGeneratedText(res),
+          likes: Math.floor(Math.random()*9000),
+          timestamp: baseTs + 0.2,
+          replyTo: player.handle,
+          nestedReply: true,
+        };
+        setCharComments(prev => [...prev, reply]);
+        triggerCharacterFollowups({
+          playerText: text,
+          targetChar: null,
+          sourceText: target.sourceText || '',
+          baseTs: baseTs + 0.25,
+          mode: 'direct',
+          excludeIds: [targetChar.id],
+        });
+      } catch(e) {}
+      return;
+    }
+
     triggerCharacterFollowups({
       playerText: text,
       targetChar: char,
@@ -1181,7 +1396,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
         {post.photo && <img src={post.photo} alt="" style={{width:'100%', borderRadius:14, marginBottom:12, maxHeight:260, objectFit:'cover'}}/>}
         <p style={{color:C.muted, fontSize:13, marginBottom:12}}>{fmtTime(post.timestamp)} · <strong style={{color:C.text}}>{fmt(post.likes * 7.2 | 0)}</strong> Views</p>
         <div style={{borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`, padding:'10px 0', display:'flex', gap:16, alignItems:'center'}}>
-          <button onClick={() => { setReplyOpen(true); setTimeout(() => replyInputRef.current?.focus(), 50); }} style={{background:C.blue+'22', color:C.blue, border:'none', borderRadius:22, padding:'9px 18px', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:7}}>
+          <button onClick={() => openReplyTarget({ kind:'post', handle: char?.handle, targetChar: char, sourceText: post.text })} style={{background:C.blue+'22', color:C.blue, border:'none', borderRadius:22, padding:'9px 18px', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:7}}>
             <ReplyGlyph size={17} /> Reply
           </button>
           <div style={{display:'flex', alignItems:'center', gap:6, color:C.muted, fontSize:13}}>
@@ -1316,8 +1531,11 @@ ${BANNED_PHRASES_RULE}`
                     {cChar.id !== player.id && (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setReplyingToChar(isReplying ? null : i); }}
-                        style={{background:'none', border:'none', color: isReplying ? C.blue : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4, padding:'6px 8px 6px 0', minHeight:30}}>
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openReplyTarget({ kind:'char', handle:cChar.handle, targetChar:cChar, sourceText:cc.text, replyBaseTs:Number(cc.timestamp || post.timestamp || Date.now()) });
+                        }}
+                        style={{background:'none', border:'none', color: C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4, padding:'6px 8px 6px 0', minHeight:30}}>
                         <ReplyGlyph size={14} />
                         Reply
                       </button>
@@ -1328,7 +1546,7 @@ ${BANNED_PHRASES_RULE}`
                       {fmt((cc.likes||0) + (isLiked?1:0))}
                     </button>
                   </div>
-                  {isReplying && cChar.id !== player.id && (
+                  {false && isReplying && cChar.id !== player.id && (
                     <div style={{marginTop:10, display:'flex', gap:8, alignItems:'flex-end'}}>
                       <Avatar char={player} size={28}/>
                       <div style={{flex:1, background:C.card2, borderRadius:12, border:`1px solid ${charReplyText.trim() ? C.blue+'66' : C.border}`, padding:'8px 12px', transition:'border-color 0.2s'}}>
@@ -1430,8 +1648,11 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
                 <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setReplyingToBot(isReplying ? null : i); }}
-                    style={{background:'none', border:'none', color: isReplying ? C.blue : C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4, padding:'6px 8px 6px 0', minHeight:30}}>
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openReplyTarget({ kind:'bot', handle:bot.handle, bot, sourceText:bc.text, replyBaseTs:Number(bc.timestamp || post.timestamp || Date.now()) });
+                    }}
+                    style={{background:'none', border:'none', color: C.muted, fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:4, padding:'6px 8px 6px 0', minHeight:30}}>
                     <ReplyGlyph size={14} />
                     Reply
                   </button>
@@ -1442,7 +1663,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
                     {fmt(bc.likes + (isLiked ? 1 : 0))}
                   </button>
                 </div>
-                {isReplying && (
+                {false && isReplying && (
                   <div style={{marginTop:10, display:'flex', gap:8, alignItems:'flex-end'}}>
                     <Avatar char={player} size={28}/>
                     <div style={{flex:1, background:C.card2, borderRadius:12, border:`1px solid ${botReplyText.trim() ? C.blue+'66' : C.border}`, padding:'8px 12px', transition:'border-color 0.2s'}}>
@@ -1502,13 +1723,13 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
             value={replyText}
             onChange={e => setReplyText(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Escape') { setReplyOpen(false); setReplyText(''); }
+              if (e.key === 'Escape') { setReplyOpen(false); setReplyText(''); setReplyTarget(null); }
               if (e.key === 'Enter' && !e.shiftKey && replyText.trim()) {
                 e.preventDefault();
                 submitPostReply();
               }
             }}
-            placeholder={`Reply to @${char?.handle}…`}
+            placeholder={`Reply to @${replyTarget?.handle || char?.handle}…`}
             rows={1}
             style={{
               width:'100%',
@@ -1518,10 +1739,18 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
               background:'none',
               border:'none',
               color:C.text,
-              fontSize:15,
+              fontSize:16,
               lineHeight:1.35,
               outline:'none',
               display:'block',
+            }}
+          />
+          <MentionSuggestions
+            text={replyText}
+            allChars={allChars}
+            onPick={handle => {
+              setReplyText(t => applyMentionToText(t, handle));
+              setTimeout(() => replyInputRef.current?.focus(), 20);
             }}
           />
         </div>
@@ -1995,6 +2224,7 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
   const [loading, setLoading] = useState(false);
   const msgs = dms[char.id] || [];
   const bottomRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollTop = 9999;
@@ -2068,7 +2298,7 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
             <div style={{
               maxWidth:'75%', padding:'10px 14px', borderRadius: m.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
               background: m.role === 'user' ? C.blue : C.card2, color:'#fff', fontSize:14, lineHeight:1.5,
-            }}>{m.text}</div>
+            }}>{renderLinkedText(m.text, allChars)}</div>
           </div>
         ))}
         {loading && (
@@ -2084,15 +2314,66 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
         )}
       </div>
       {/* Input */}
-      <div style={{padding:'10px 12px', borderTop:`1px solid ${C.border}`, display:'flex', gap:8, alignItems:'flex-end'}}>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-          placeholder={`Message ${char.name.split(' ')[0]}...`}
-          style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, borderRadius:20, padding:'10px 14px', color:C.text, fontSize:14, outline:'none'}} />
-        <button onClick={send} disabled={!input.trim() || loading} style={{
-          background: input.trim() ? C.blue : '#333', border:'none', borderRadius:'50%', width:38, height:38,
-          color:'#fff', cursor: input.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+      <div style={{
+        padding:`10px 12px ${bottomSafe(10)} 12px`,
+        borderTop:`1px solid ${C.border}`,
+        background:C.bg,
+        display:'flex',
+        gap:10,
+        alignItems:'flex-end',
+        boxShadow:'0 -10px 24px rgba(0,0,0,0.24)',
+        flexShrink:0,
+      }}>
+        <Avatar char={player} size={34}/>
+        <div style={{
+          flex:1,
+          minWidth:0,
+          background:C.card2,
+          borderRadius:18,
+          border:`1px solid ${input.trim() ? C.blue+'66' : C.border}`,
+          padding:'10px 13px',
+          transition:'border-color 0.2s',
         }}>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && input.trim()) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder={`Message ${char.name.split(' ')[0]}...`}
+            rows={1}
+            style={{
+              width:'100%',
+              minHeight:42,
+              maxHeight:96,
+              resize:'none',
+              background:'none',
+              border:'none',
+              color:C.text,
+              fontSize:16,
+              lineHeight:1.35,
+              outline:'none',
+              display:'block',
+            }}
+          />
+          <MentionSuggestions
+            text={input}
+            allChars={allChars}
+            onPick={handle => {
+              setInput(t => applyMentionToText(t, handle));
+              setTimeout(() => inputRef.current?.focus(), 20);
+            }}
+          />
+        </div>
+        <button onClick={send} disabled={!input.trim() || loading} style={{
+          background: input.trim() ? C.blue : C.card2, border:'none', borderRadius:'50%', width:48, height:48, minWidth:48,
+          color:'#fff', cursor: input.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:20,
+        }}>
+          →
         </button>
       </div>
     </div>
@@ -2100,12 +2381,23 @@ function ChatScreen({ char, player, allChars, feed, dms, setDms, onBack }) {
 }
 
 // ─── Profile Screen ───────────────────────────────────────────────
-function ProfileScreen({ player, chars, socialPresence, onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
+function ProfileScreen({ player, chars, socialPresence, eventLog = [], onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
+  const loggedRelationshipAdds = eventLog.reduce((acc, entry) => {
+    if (entry?.relationshipApplied) return acc;
+    (entry?.scoreChanges || []).forEach(ch => {
+      if (!ch?.avatar || typeof ch.value !== 'number') return;
+      acc[ch.avatar] = +(Number(acc[ch.avatar] || 0) + Number(ch.value || 0)).toFixed(2);
+    });
+    return acc;
+  }, {});
   const relationships = chars
-    .filter(c => c.relationships && Object.prototype.hasOwnProperty.call(c.relationships, 'player'))
+    .filter(c => (
+      (c.relationships && Object.prototype.hasOwnProperty.call(c.relationships, 'player')) ||
+      Object.prototype.hasOwnProperty.call(loggedRelationshipAdds, c.id)
+    ))
     .map(c => ({
       char: c,
-      value: c.relationships.player,
+      value: +((Number(c.relationships?.player || 0) + Number(loggedRelationshipAdds[c.id] || 0)).toFixed(2)),
     }));
   const socialRows = [
     ['😂','Humor',socialPresence?.humor ?? 0,'#4dabf7'],
@@ -2241,24 +2533,37 @@ const SCENE_VIBES = [
   { id:'more',     label:'Something more…',   emoji:'🔥', color:'#e91e8c' },
 ];
 
-function SceneSetupModal({ char, player, onClose, onStart }) {
+function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
   const [step, setStep] = useState('setup'); // setup | invite | declined
   const [setting, setSetting] = useState(null);
   const [vibe, setVibe] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([char.id]);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResponse, setInviteResponse] = useState(null);
+  const sceneChoices = chars.filter(c => c?.description && c.id !== 'player' && c.id !== '__gmz__');
+  const selectedChars = sceneChoices.filter(c => selectedIds.includes(c.id));
+
+  function toggleSceneChar(id) {
+    if (id === char.id) return;
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
 
   async function sendInvite() {
-    if (!setting || !vibe) return;
+    if (!setting || !vibe || selectedChars.length === 0) return;
     setInviteLoading(true);
     setStep('invite');
     try {
+      const roster = selectedChars.map(c => `${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}): ${c.personality}. ${c.description?.slice(0,150)||c.bio}`).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
-          `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. Description: ${char.description?.slice(0,200)||char.bio}.
-${pronounRule([char, player])}
-${player.name} (@${player.handle}) just invited you to: ${setting.label} — "${setting.sub}" — vibe: ${vibe.label}.
-Respond in character to this invitation. Be natural, in-character, and specific. 1-2 sentences max. You can accept with enthusiasm, accept with attitude, be ambiguous/coy, or decline (but only if it really fits your personality). NO quotes around your response, just what you'd actually text back.` }]
+          `${player.name} (@${player.handle}) is setting up a scene at ${setting.label} — "${setting.sub}" — vibe: ${vibe.label}.
+
+Invited characters:
+${roster}
+
+${pronounRule([player, ...selectedChars])}
+
+Write a short in-character group acceptance preview. It can include one or two quick lines from the invited characters, but keep it compact and natural. 1-3 sentences total. If there are multiple characters, let the chemistry of the group show. NO quotes around the whole response.` }]
       });
       setInviteResponse(cleanGeneratedText(res));
       // Detect decline — if response contains "can't", "won't", "no", "not tonight", "busy" etc.
@@ -2321,17 +2626,43 @@ Respond in character to this invitation. Be natural, in-character, and specific.
             ))}
           </div>
 
-          <button onClick={sendInvite} disabled={!setting || !vibe} style={{
-            width:'100%', background: (setting && vibe) ? C.text : C.card2,
-            color: (setting && vibe) ? C.bg : C.muted,
+          <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>WHO</p>
+          <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
+            {sceneChoices.map(c => {
+              const active = selectedIds.includes(c.id);
+              const locked = c.id === char.id;
+              return (
+                <button key={c.id} onClick={() => toggleSceneChar(c.id)} style={{
+                  display:'flex', alignItems:'center', gap:10,
+                  background: active ? `${C.blue}18` : C.card2,
+                  border:`1.5px solid ${active ? C.blue : C.border}`,
+                  borderRadius:12, padding:'9px 12px', cursor: locked ? 'default' : 'pointer',
+                  textAlign:'left',
+                }}>
+                  <Avatar char={c} size={30}/>
+                  <div style={{flex:1, minWidth:0}}>
+                    <p style={{color:C.text, fontSize:13, fontWeight:700}}>{c.name}</p>
+                    <p style={{color:C.muted, fontSize:11}}>@{c.handle}</p>
+                  </div>
+                  <span style={{color:active ? C.blue : C.muted, fontSize:18}}>{active ? '✓' : '+'}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <button onClick={sendInvite} disabled={!setting || !vibe || selectedChars.length === 0} style={{
+            width:'100%', background: (setting && vibe && selectedChars.length) ? C.text : C.card2,
+            color: (setting && vibe && selectedChars.length) ? C.bg : C.muted,
             border:'none', borderRadius:14, padding:'14px', fontSize:15, fontWeight:700,
-            cursor: (setting && vibe) ? 'pointer' : 'default', transition:'all 0.2s',
+            cursor: (setting && vibe && selectedChars.length) ? 'pointer' : 'default', transition:'all 0.2s',
           }}>Send invite</button>
         </>}
 
         {step === 'invite' && inviteLoading && (
           <div style={{textAlign:'center', padding:'40px 0'}}>
-            <Avatar char={char} size={54}/>
+            <div style={{display:'flex', justifyContent:'center'}}>
+              {selectedChars.slice(0,4).map((c,i) => <div key={c.id} style={{marginLeft:i ? -12 : 0}}><Avatar char={c} size={54}/></div>)}
+            </div>
             <p style={{color:C.muted, fontSize:14, marginTop:16}}>Waiting to hear back…</p>
           </div>
         )}
@@ -2339,17 +2670,19 @@ Respond in character to this invitation. Be natural, in-character, and specific.
         {(step === 'accepted' || step === 'declined') && inviteResponse && (
           <div>
             <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:20}}>
-              <Avatar char={char} size={40}/>
+              <div style={{display:'flex'}}>
+                {selectedChars.slice(0,3).map((c,i) => <div key={c.id} style={{marginLeft:i ? -10 : 0}}><Avatar char={c} size={40}/></div>)}
+              </div>
               <div>
-                <p style={{color:C.text, fontWeight:700}}>{char.name.split(' ')[0]}</p>
-                <p style={{color:C.muted, fontSize:12}}>@{char.handle}</p>
+                <p style={{color:C.text, fontWeight:700}}>{selectedChars.map(c => c.name.split(' ')[0]).join(', ')}</p>
+                <p style={{color:C.muted, fontSize:12}}>{selectedChars.length} invited</p>
               </div>
             </div>
             <div style={{background:C.card2, borderRadius:14, padding:'14px 16px', marginBottom:20}}>
               <p style={{color:C.text, fontSize:15, lineHeight:1.65, fontStyle:'italic'}}>"{inviteResponse}"</p>
             </div>
             {step === 'accepted' ? (
-              <button onClick={() => onStart(char, setting, vibe)} style={{
+              <button onClick={() => onStart(selectedChars, setting, vibe)} style={{
                 width:'100%', background:C.blue, color:'#fff', border:'none',
                 borderRadius:14, padding:'14px', fontSize:15, fontWeight:700, cursor:'pointer',
               }}>Start the scene →</button>
@@ -2366,11 +2699,14 @@ Respond in character to this invitation. Be natural, in-character, and specific.
   );
 }
 
-function SceneChatScreen({ char, player, setting, vibe, onClose }) {
+function SceneChatScreen({ char, sceneChars, player, setting, vibe, onClose }) {
+  const participants = (sceneChars && sceneChars.length ? sceneChars : [char]).filter(Boolean);
+  const primaryChar = participants[0];
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const getSceneChar = id => participants.find(c => c.id === id) || primaryChar;
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollTop = 9999;
@@ -2384,11 +2720,16 @@ function SceneChatScreen({ char, player, setting, vibe, onClose }) {
       await new Promise(res => setTimeout(res, 2000 + Math.random()*3000));
       try {
         const res = await window.claude.complete({
-          messages:[{ role:'user', content: buildScenePrompt('') + '\n\nOpen the scene with a single line. Format: actions in *third person asterisks*, spoken words in "quotes". Hints at inner state through physical tells only — never state thoughts directly. Short and atmospheric.' }]
+          messages:[{ role:'user', content: buildScenePrompt('') + '\n\nOpen the scene with 1-2 short lines from the invited character(s). Return ONLY a JSON array of objects like [{"handle":"havocfang","text":"*He leans against the wall.* \\"You picked a dramatic spot.\\""}]. Use exact handles from the roster. Format actions in *third person asterisks*, spoken words in "quotes". Hints at inner state through physical tells only. Short and atmospheric.' }]
         });
-        setMsgs([{ role:'char', text: cleanGeneratedText(res), id: Date.now() }]);
+        const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
+        const openers = parsed.slice(0,2).map((m, i) => {
+          const speaker = participants.find(c => c.handle === String(m.handle || '').replace('@','')) || participants[i] || primaryChar;
+          return { role:'char', charId:speaker.id, text: cleanGeneratedText(m.text || ''), id: Date.now() + i };
+        }).filter(m => m.text);
+        setMsgs(openers.length ? openers : [{ role:'char', charId:primaryChar.id, text:'*glances over, saying nothing for a moment.*', id: Date.now() }]);
       } catch(e) {
-        setMsgs([{ role:'char', text: '*glances over, says nothing for a moment.*', id: Date.now() }]);
+        setMsgs([{ role:'char', charId:primaryChar.id, text: '*glances over, saying nothing for a moment.*', id: Date.now() }]);
       }
       setLoading(false);
     }
@@ -2396,9 +2737,11 @@ function SceneChatScreen({ char, player, setting, vibe, onClose }) {
   }, []);
 
   function buildScenePrompt(history) {
-    return `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. ${char.description?.slice(0,200)||char.bio}
+    const roster = participants.map(c => `${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}): ${c.personality}. ${c.description?.slice(0,220)||c.bio}`).join('\n');
+    return `You are writing a live scene with these characters:
+${roster}
 
-${pronounRule([char, player])}
+${pronounRule([player, ...participants])}
 
 SCENE: ${setting.label} — ${setting.sub}
 VIBE: ${vibe.label} ${vibe.emoji}
@@ -2410,7 +2753,7 @@ RESPONSE FORMAT — follow this exactly:
 - Thoughts are NEVER stated directly. At most a very brief physical tell that hints at them: *something flickers across her face* — not "she thinks" or "she wonders".
 - A response might be just dialogue, just an action, or both — whatever feels natural.
 - Keep it SHORT: 1-3 lines total. This is live conversation, not a story.
-- Stay completely in character — personality: ${char.personality}.
+- Stay completely in character for whoever is speaking. Let the group chemistry matter.
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - The vibe is ${vibe.label}. Honor it.
 - If the player writes [something in brackets], treat it as a physical action and react naturally.
@@ -2429,13 +2772,17 @@ ${BANNED_PHRASES_RULE}`;
     await new Promise(res => setTimeout(res, typingDelay));
     try {
       const history = [...msgs, userMsg].map(m =>
-        m.role === 'user' ? `${player.name}: "${m.text}"` : `${char.name}: ${m.text}`
+        m.role === 'user' ? `${player.name}: "${m.text}"` : `${getSceneChar(m.charId)?.name}: ${m.text}`
       ).join('\n');
       const res = await window.claude.complete({
-        messages:[{ role:'user', content: buildScenePrompt(history) + `\n\nRespond to: "${userMsg.text}"\nFormat: actions in *third person asterisks*, dialogue in "quotes". No narration. No inner monologue spelled out.` }]
+        messages:[{ role:'user', content: buildScenePrompt(history) + `\n\nRespond to: "${userMsg.text}"\nChoose the character or characters who would naturally answer. In a group scene, not everyone needs to speak every turn, but more than one may jump in if the moment invites it.\nReturn ONLY a JSON array of 1-3 objects like [{"handle":"rowancade","text":"..."}]. Use exact handles from the roster. Format actions in *third person asterisks*, dialogue in "quotes". No narration. No inner monologue spelled out.` }]
       });
-      const cleaned = cleanGeneratedText(res);
-      setMsgs(prev => [...prev, { role:'char', text: cleaned, id: Date.now()+1 }]);
+      const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
+      const replies = parsed.slice(0,3).map((m, i) => {
+        const speaker = participants.find(c => c.handle === String(m.handle || '').replace('@','')) || participants[i] || primaryChar;
+        return { role:'char', charId:speaker.id, text: cleanGeneratedText(m.text || ''), id: Date.now()+1+i };
+      }).filter(m => m.text);
+      if (replies.length) setMsgs(prev => [...prev, ...replies]);
     } catch(e) {}
     setLoading(false);
   }
@@ -2447,9 +2794,11 @@ ${BANNED_PHRASES_RULE}`;
       {/* Header */}
       <div style={{padding:'12px 16px', borderBottom:`1px solid ${C.border}`, background:C.bg, display:'flex', alignItems:'center', gap:10}}>
         <button onClick={onClose} style={{background:'none', border:'none', color:C.blue, fontSize:22, cursor:'pointer', lineHeight:1}}>×</button>
-        <Avatar char={char} size={34}/>
+        <div style={{display:'flex'}}>
+          {participants.slice(0,3).map((c,i) => <div key={c.id} style={{marginLeft:i ? -9 : 0}}><Avatar char={c} size={34}/></div>)}
+        </div>
         <div style={{flex:1}}>
-          <p style={{color:C.text, fontWeight:700, fontSize:14}}>{char.name.split(' ')[0]}</p>
+          <p style={{color:C.text, fontWeight:700, fontSize:14}}>{participants.map(c => c.name.split(' ')[0]).join(', ')}</p>
           <p style={{color:C.muted, fontSize:11}}>{setting.emoji} {setting.label}</p>
         </div>
         <div style={{background:`${vibeColor}18`, border:`1px solid ${vibeColor}44`, borderRadius:20, padding:'4px 10px', display:'flex', alignItems:'center', gap:4}}>
@@ -2469,7 +2818,7 @@ ${BANNED_PHRASES_RULE}`;
           const isMe = m.role === 'user';
           return (
             <div key={m.id} style={{display:'flex', flexDirection: isMe?'row-reverse':'row', gap:8, alignItems:'flex-end'}}>
-              {!isMe && <Avatar char={char} size={28}/>}
+              {!isMe && <Avatar char={getSceneChar(m.charId)} size={28}/>}
               {isMe && <Avatar char={player} size={28}/>}
               <div style={{
                 maxWidth:'76%', padding:'10px 14px',
@@ -2745,16 +3094,16 @@ Only output the JSON array, nothing else.` }]
       {/* Scene setup modal */}
       {showSceneSetup && !activeScene && (
         <SceneSetupModal
-          char={char} player={player}
+          char={char} chars={allChars} player={player}
           onClose={() => setShowSceneSetup(false)}
-          onStart={(c, setting, vibe) => { setShowSceneSetup(false); setActiveScene({ setting, vibe }); }}
+          onStart={(sceneChars, setting, vibe) => { setShowSceneSetup(false); setActiveScene({ chars: sceneChars, setting, vibe }); }}
         />
       )}
 
       {/* Active scene */}
       {activeScene && (
         <SceneChatScreen
-          char={char} player={player}
+          char={char} sceneChars={activeScene.chars} player={player}
           setting={activeScene.setting} vibe={activeScene.vibe}
           onClose={() => setActiveScene(null)}
         />
@@ -2945,6 +3294,7 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, setGroupCh
   const [loading, setLoading] = useState(false);
   const [msgs, setMsgs] = useState(group.messages || []);
   const bottomRef = useRef(null);
+  const inputRef = useRef(null);
   const members = group.members.map(id => allChars.find(c => c.id === id)).filter(Boolean);
   const aiMembers = members.filter(m => m.id !== player.id);
 
@@ -3029,22 +3379,73 @@ ${BANNED_PHRASES_RULE}` }]
                 <div style={{
                   padding:'9px 13px', borderRadius: isMe?'16px 16px 4px 16px':'16px 16px 16px 4px',
                   background: isMe ? C.blue : C.card2, color:'#fff', fontSize:13, lineHeight:1.5,
-                }}>{m.text}</div>
+                }}>{renderLinkedText(m.text, allChars)}</div>
               </div>
             </div>
           );
         })}
         {loading && <div style={{color:C.muted, fontSize:13, paddingLeft:8}}>Someone is typing...</div>}
       </div>
-      <div style={{padding:'10px 12px', borderTop:`1px solid ${C.border}`, display:'flex', gap:8}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()}
-          placeholder="Message the group..."
-          style={{flex:1, background:C.card2, border:`1px solid ${C.border}`, borderRadius:20, padding:'10px 14px', color:C.text, fontSize:14, outline:'none'}}/>
-        <button onClick={send} disabled={!input.trim()||loading} style={{
-          background:input.trim()?C.blue:'#333', border:'none', borderRadius:'50%', width:38, height:38,
-          color:'#fff', cursor:input.trim()?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+      <div style={{
+        padding:`10px 12px ${bottomSafe(10)} 12px`,
+        borderTop:`1px solid ${C.border}`,
+        background:C.bg,
+        display:'flex',
+        gap:10,
+        alignItems:'flex-end',
+        boxShadow:'0 -10px 24px rgba(0,0,0,0.24)',
+        flexShrink:0,
+      }}>
+        <Avatar char={player} size={34}/>
+        <div style={{
+          flex:1,
+          minWidth:0,
+          background:C.card2,
+          borderRadius:18,
+          border:`1px solid ${input.trim() ? C.blue+'66' : C.border}`,
+          padding:'10px 13px',
+          transition:'border-color 0.2s',
         }}>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>{
+              if (e.key === 'Enter' && !e.shiftKey && input.trim()) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder="Message the group..."
+            rows={1}
+            style={{
+              width:'100%',
+              minHeight:42,
+              maxHeight:96,
+              resize:'none',
+              background:'none',
+              border:'none',
+              color:C.text,
+              fontSize:16,
+              lineHeight:1.35,
+              outline:'none',
+              display:'block',
+            }}
+          />
+          <MentionSuggestions
+            text={input}
+            allChars={allChars}
+            onPick={handle => {
+              setInput(t => applyMentionToText(t, handle));
+              setTimeout(() => inputRef.current?.focus(), 20);
+            }}
+          />
+        </div>
+        <button onClick={send} disabled={!input.trim()||loading} style={{
+          background:input.trim()?C.blue:C.card2, border:'none', borderRadius:'50%', width:48, height:48, minWidth:48,
+          color:'#fff', cursor:input.trim()?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:20,
+        }}>
+          →
         </button>
       </div>
     </div>
@@ -3117,8 +3518,9 @@ function ComposeModal({ chars, player, onClose, onPost }) {
           <div style={{flex:1}}>
             <textarea value={text} onChange={e => setText(e.target.value)}
               placeholder="What's happening?"
-              style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:15, outline:'none', resize:'none', minHeight:80, lineHeight:1.6}}
+              style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:16, outline:'none', resize:'none', minHeight:80, lineHeight:1.6}}
             />
+            <MentionSuggestions text={text} allChars={allChars} onPick={handle => setText(t => applyMentionToText(t, handle))} />
             {/* Photo preview */}
             {photo && (
               <div style={{position:'relative', marginTop:8}}>
@@ -3898,9 +4300,11 @@ function App() {
   }
 
   function applySavedState(saved) {
+    const savedChars = saved.chars || chars;
+    const savedPlayer = saved.player || player;
     if (saved.chars)      setCharsRaw(saved.chars);
     if (saved.player)     setPlayerRaw(saved.player);
-    if (saved.feed)       setFeedRaw(saved.feed);
+    if (saved.feed)       setFeedRaw(repairPromptLeakPosts(saved.feed, savedChars, savedPlayer));
     if (saved.dms)        setDmsRaw(saved.dms);
     if (saved.groupChats) setGroupChatsRaw(normalizeGroupChats(saved.groupChats));
     if (saved.eventLog)   setEventLogRaw(saved.eventLog);
@@ -4038,6 +4442,35 @@ function App() {
       aura: Math.min(300, +(Number(prev?.aura || 0) + Number(gains?.aura || 0)).toFixed(2)),
       drama: Math.min(300, +(Number(prev?.drama || 0) + Number(gains?.drama || 0)).toFixed(2)),
     }));
+  }
+
+  function getCharsWithRelationshipLogChanges(list, scoreChanges = []) {
+    const relChanges = scoreChanges
+      .filter(ch => ch?.avatar && typeof ch.value === 'number')
+      .map(ch => ({ id: ch.avatar, value: Number(ch.value || 0) }));
+    if (!relChanges.length) return list;
+    return list.map(char => {
+      const change = relChanges.find(ch => ch.id === char.id);
+      if (!change) return char;
+      const current = Number(char.relationships?.player || 0);
+      const next = Math.max(-100, Math.min(100, +(current + change.value).toFixed(2)));
+      return {
+        ...char,
+        relationships: {
+          ...(char.relationships || {}),
+          player: next,
+        },
+      };
+    });
+  }
+
+  function handleEventLog(entry) {
+    const nextChars = getCharsWithRelationshipLogChanges(chars, entry?.scoreChanges || []);
+    const loggedEntry = entry ? { ...entry, relationshipApplied: true } : entry;
+    const nextLog = [loggedEntry, ...eventLog].slice(0, 30);
+    setCharsRaw(nextChars);
+    setEventLogRaw(nextLog);
+    serverSave({chars:nextChars, player, feed, dms, groupChats, eventLog:nextLog, day, socialPresence});
   }
   const [activeGroupChat, setActiveGroupChat] = useState(null);
   const [tab, setTab] = useState('feed');
@@ -4275,6 +4708,7 @@ Write ONE social media post that is specifically directed at or about @${target.
 - 1-2 sentences, punchy. It can be teasing, flirty, funny, smug, himbo-stupid, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
 - MUST tag @${target.handle} naturally in the text
 - NO hashtags, NO quotes around the post, just the post text
+- Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
 ${BANNED_PHRASES_RULE}`
           : `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), a ${char.personality} college student at Merlin's College of Magic (wizarding university, HP-inspired, college-aged).
 Description: ${char.description}
@@ -4293,11 +4727,12 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
 - NO hashtags, NO quotes around the post, JUST the post text
 - Make it feel real and casual, like they just typed it
+- Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
 ${BANNED_PHRASES_RULE}`;
 
         const raw = await window.claude.complete({ messages:[{ role:'user', content: prompt }] });
         if (!active) return;
-        const cleanText = cleanGeneratedText(raw);
+        const cleanText = cleanSocialPostText(raw, char, player);
         const newPost = {
           id: `auto-${Date.now()}-${char.id}`,
           charId: char.id,
@@ -4405,10 +4840,10 @@ ${BANNED_PHRASES_RULE}` }]
         const raw = await window.claude.complete({ messages:[{ role:'user', content:
           `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), personality: ${char.personality}. Your team just ${won ? 'won' : 'lost'} a Quidditch match against ${won ? 'Gryffindor' : 'Slytherin'} ${score.home}–${score.away}.
 ${pronounRule([char, player, ...chars])}
-Write ONE punchy social media post reaction. Use the pronouns listed above exactly. In character. No hashtags. 1 sentence.
+Write ONE punchy social media post reaction. Use the pronouns listed above exactly. In character. No hashtags. 1 sentence. Do not explain your reasoning or mention prompts/context/rules.
 ${BANNED_PHRASES_RULE}`
         }]});
-        handleMatchPost(cleanGeneratedText(raw), char.id);
+        handleMatchPost(cleanSocialPostText(raw, char, player), char.id);
       } catch(e) {}
     }
     // GMZ post-game
@@ -4443,9 +4878,10 @@ Write ONE GMZ gossip post. Rules:
 - If the context is a hot new transfer/photo/reputation reveal, frame the campus as excited, thirsty, curious, and impressed, with only light scandal edge.
 - Start with a hook ("BREAKING:", "SOURCES CONFIRM:", "EXCLUSIVE:", "WITNESSES SAY:", etc.)
 - No hashtags, no quotes, just the post text
+- Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
 ${BANNED_PHRASES_RULE}` }]
       });
-      const cleanText = cleanGeneratedText(raw);
+      const cleanText = cleanSocialPostText(raw, GMZ_CHAR, player);
       const newPost = {
         id: `gmz-${Date.now()}`,
         charId: '__gmz__',
@@ -4536,10 +4972,10 @@ ${playerStance(char, player)}
 Campus event: "${ev.scenario}"
 ${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
 
-Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post.
+Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
 ${BANNED_PHRASES_RULE}`
           }]});
-          const clean = cleanGeneratedText(raw);
+          const clean = cleanSocialPostText(raw, char, player);
           if (!clean) return;
           setFeed(f => f.map(p => p.id === basePosts[idx].id ? {...p, text: clean} : p));
         } catch(e) {}
@@ -4611,7 +5047,7 @@ ${BANNED_PHRASES_RULE}`
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} setGroupChats={setGroupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
-        case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
+        case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} eventLog={eventLog} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return null;
       }
     })();
@@ -4632,7 +5068,7 @@ ${BANNED_PHRASES_RULE}`
           <LiveMatchModal match={activeMatch} chars={chars} player={player} onClose={() => setActiveMatch(null)} onPostToFeed={handleMatchPost} onMatchEnd={handleMatchEnd} />
         )}
         {activeEvent && (
-          <EventModal event={activeEvent} chars={chars} player={player} feed={feed} onClose={() => setActiveEvent(null)} onSubmit={handleEventSubmit} onLog={(entry) => setEventLog(l => [entry, ...l])} onSocialPresenceGain={addSocialPresence} />
+          <EventModal event={activeEvent} chars={chars} player={player} feed={feed} onClose={() => setActiveEvent(null)} onSubmit={handleEventSubmit} onLog={handleEventLog} onSocialPresenceGain={addSocialPresence} />
         )}
         {composing && (
           <ComposeModal chars={chars} player={player} onClose={() => setComposing(false)} onPost={post => {

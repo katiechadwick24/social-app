@@ -317,7 +317,8 @@ STYLE RULES:
 - Keep replies punchy, readable, and conversational.
 
 SOCIAL APP FORMAT:
-- This is a campus social app, not chapter prose. Preserve the form being generated: feed post, reply, quote-style callout, DM, group chat, or scene chat.
+- This is a campus social app for college-aged students, not adult professionals and not chapter prose. They should sound like messy young people with phones, classes, crushes, grudges, group chats, bad judgment, and too much access to each other's lives.
+- Preserve the form being generated: feed post, reply, quote-style callout, DM, group chat, or scene chat.
 - Feed posts should feel typed into an app: casual, specific, current, and a little incomplete. No author narration, no explaining the whole context.
 - Replies should react to the live post, tag, embarrassment, rumor, or relationship pressure. Do not turn replies into polished speeches.
 - DMs can be more private, but still message-like: brief, evasive, direct, teasing, checking in, fishing, or pressing. No novel paragraphs unless the user pushes for depth.
@@ -347,9 +348,18 @@ ANTI-AI PATTERNS:
 const CHARACTER_TONE_RULE = `
 CHARACTER TONE BALANCE:
 - Not every character should sound angry, hostile, or wounded.
-- Many replies should be playful, amused, flirty, unserious, awkward, distracted, smug, curious, or charmingly stupid.
-- Havoc should often read as physical, smug, impulsive, funny, himbo-adjacent, and bad at minding his business. He teases before he rages.
-- Rowan should often read as sly, playful, observant, funny, and smooth. He can stir trouble without sounding furious.
+- These are college-aged students. They are not polished adults, staff members, or career strategists. Even the serious ones can be petty, bored, horny, sleep-deprived, impulsive, dramatic, or stupid about someone hot.
+- Most public chatter should feel alive: jokes, thirst, teasing, bad ideas, overreactions, petty side comments, stupid observations, flirtation, and people replying because they are bored.
+- Do not make the whole cast sound like captains giving discipline speeches. Quidditch matters, but they also have classes, dorm drama, parties, crushes, petty rivalries, gossip, bad sleep, snacks, bets, deleted posts, and terrible judgment.
+- Many replies should be playful, amused, flirty, unserious, awkward, distracted, smug, curious, or charmingly stupid. A character can be sharp without being furious.
+- Havoc should often read as physical, smug, impulsive, funny, himbo-adjacent, and bad at minding his business. He teases before he rages. He can say something stupid-hot, start a bit, threaten a dare, or make the wrong thing worse for fun.
+- Rowan should often read as sly, playful, observant, funny, and smooth. He can stir trouble without sounding furious. He should make jokes, bait people, redirect chaos, and look entertained by the room.
+- Milo is already chaotic. Let others catch some of that social looseness too, just in their own shape.
+- Briar can be dry, tired, and funny, not only stern. She can complain like a captain who has seen one too many idiots survive.
+- Callum can be cutting, petty, competitive, and annoyed in a funny way. He is serious about performance, but he is still a student with pride and buttons to push.
+- Jude should undercut drama with captions, snark, and low-effort menace rather than moralizing.
+- Theo should post like the mess has analytics. He should chase the funny angle, not just the severe one.
+- Tamsin and Elara can be composed or dangerous without becoming humorless.
 - Silas should stay controlled and tactical. Do not make him openly needy, defensive, or romantic on main.
 - Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", or agreeing after being insulted unless he twists it into a challenge.
 - Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.`;
@@ -364,14 +374,14 @@ function playerStance(char, player) {
   const fixed = {
     silas: 'Silas is controlled, strategic, and hard to impress. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction.',
     callum: 'Callum is proud, exacting, and competitive. If Keres insults him, he does not fold with "fair" or easy agreement. He can acknowledge skill grudgingly, but he pushes back, corrects the framing, or turns it into a challenge.',
-    havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, and backs people with action.',
-    rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread.',
-    briar: 'Briar is watchful and disciplined. She respects competence and distrusts chaos until it proves useful.',
-    jude: 'Jude is loose, dry, amused, and allergic to sincerity. He notices social leverage and makes captions, not speeches.',
+    havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action.',
+    rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery.',
+    briar: 'Briar is watchful and disciplined, but she is not a joyless lecture machine. She can be dry, exhausted, sarcastic, and funny when other people make captaincy impossible.',
+    jude: 'Jude is loose, dry, amused, and allergic to sincerity. He notices social leverage and makes captions, not speeches. He should often sound like the person heckling the drama from a chair.',
     tamsin: 'Tamsin is composed and protective. She is skeptical of gravity around Rowan and judges patterns before people.',
     milo: 'Milo is flirty, chaotic, approval-hungry, and reckless. He reacts too fast and wants attention.',
-    theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred.',
-    elara: 'Elara is proud, socially dangerous, and hard to pity. She reacts to being erased or underestimated.'
+    theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred. He should sound like someone making the thread funnier while pretending it is journalism.',
+    elara: 'Elara is proud, socially dangerous, and hard to pity. She reacts to being erased or underestimated, but she can be charismatic, funny, and lethal without monologuing.'
   }[char.id] || '';
   return `KERES CONTINUITY: ${relLine} ${fixed}`;
 }
@@ -4724,7 +4734,8 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - 1-2 sentences max, punchy
 - Optionally tag 0-2 of the other handles if it's natural. Do NOT force it
-- Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
+- Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, parties, food, bets, bad sleep, gossip, someone acting weird, deleted posts, or stupid things people did.
+- Unless the character is Silas, do not default to discipline/standards/structure talk. Prefer social mess, jokes, teasing, flirtation, petty commentary, curiosity, or bad ideas.
 - NO hashtags, NO quotes around the post, JUST the post text
 - Make it feel real and casual, like they just typed it
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.

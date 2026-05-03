@@ -815,7 +815,7 @@ function fallbackChatLine(char, player, group = false) {
       : ['say what you mean.', 'that is not an answer.', 'you are enjoying this too much.'],
     jude: group
       ? ['beautiful. no notes except probably several consequences.', 'that sentence has detention energy.', 'i am choosing to believe this is someone else’s problem.']
-      : ['that is either a threat or flirting. annoying overlap.', 'sure. let us pretend this is normal.', 'heroic dedication to making this worse.'],
+      : ['best friends is a lot. teammates with terrible judgment, maybe.', 'that is either a threat or flirting. annoying overlap.', 'sure. let us pretend this is normal.'],
     tamsin: group
       ? ['i looked away for one minute and somehow that was optimistic.', 'that was almost a plan. i am choosing to be encouraged.', 'please tell me someone brought snacks to this bad decision.']
       : ['i am listening. try not to make me regret it.', 'that is more honest than most people manage. inconveniently useful.', 'i can work with direct. dramatic, but direct.'],
@@ -829,6 +829,14 @@ function fallbackChatLine(char, player, group = false) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+function looksLikeJudePsychoanalysis(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\btamsin\b/i.test(lower)
+    || /\bshe(?:'?s|\s+is)\s+(?:the\s+one\s+who(?:'d|\s+would)\s+have\s+actual\s+opinions|also\s+not\s+wrong\s+about\s+most\s+things)\b/i.test(lower)
+    || /\b(?:actually sharp instead of just looking like|means you know what you're doing|sharp people who know what they're doing|worse to be around|can't pretend you didn't see it coming|cannot pretend you did not see it coming)\b/i.test(lower)
+    || /\bwhich is worse because\b/i.test(lower);
+}
+
 function cleanChatText(text = '', char = null, player = null, group = false) {
   const names = [char?.name, char?.handle, char?.handle ? `@${char.handle}` : ''].filter(Boolean).map(escapeRegExp);
   let clean = cleanGeneratedText(text)
@@ -839,6 +847,9 @@ function cleanChatText(text = '', char = null, player = null, group = false) {
     .trim();
   if (char?.id === 'rowan' && /\bshould i be worried\b/i.test(clean)) {
     return 'tamsin is always already worried. the question is how much evidence she has.';
+  }
+  if (char?.id === 'jude' && looksLikeJudePsychoanalysis(clean)) {
+    return fallbackChatLine(char, player, group);
   }
   if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeIdentityConfusion(clean, char)) return fallbackChatLine(char, player, group);
   return clean;
@@ -1192,8 +1203,28 @@ function relationshipLogicFor(char) {
 - If gossip involves Rowan, Havoc, Keres, kissing, hair, or GMZ, Tamsin can be dryly amused and protective, not automatically cruel. She should sound like an older sister who saw this coming.`,
     havoc: `HAVOC SOCIAL LOGIC:
 - Havoc and Rowan are close enough that gossip involving both of them is not abstract. If Keres mentions Rowan, GMZ, hair, or a messy scene, Havoc should react like someone inside the joke, not like a detached spectator.`,
+    jude: `JUDE TEAMMATE LOGIC:
+- Keres is Jude's Slytherin teammate, not a project for Tamsin to evaluate. Jude should usually react to Keres like she is funny, annoying, useful, and already part of his side's mess.
+- If Keres is being silly, asking to be friends, asking to be best friends, or fishing for reassurance, Jude should meet the joke with dry rapport. He can pretend to complain, but the subtext is amused teammate affection.
+- Jude is not close with Tamsin and should not treat Tamsin as an authority on whether he and Keres should be friends. Mention Tamsin only if the latest user message directly asks about her, and even then make it clear she is not his keeper.
+- Avoid psychoanalyzing Keres. Do not turn her playful bids into warnings about what she "really is", what she "knows she is doing", or why sharp people are dangerous.`,
   };
   return byId[char?.id] || '';
+}
+
+function dmSituationRulesFor(char, player, latestUserText = '') {
+  if (char?.id !== 'jude') return '';
+  const text = String(latestUserText || '');
+  const friendshipBid = /\b(?:best\s+friends?|friends?|be\s+with\s+me|against\s+me|team(?:mate)?s?)\b/i.test(text);
+  const tamsinMention = /\btamsin\b/i.test(text);
+  const playfulKeres = /\b(?:best\s+friends?|friends?|fun|parties|silly|annoying|chaos|lmao|lol|lmfao|wym|with\s+me|against\s+me)\b/i.test(text);
+  if (!friendshipBid && !tamsinMention && !playfulKeres) return '';
+  return `CURRENT DM SITUATION FOR JUDE:
+- Keres is making a playful teammate bid, not asking for a psychological assessment.
+- Answer with dry amusement, low-effort snark, faux-annoyance, or reluctant rapport.
+- Do not cite Tamsin as the person with "actual opinions" or as the judge of whether Jude and Keres should be friends.
+- If Keres asks why Tamsin matters, admit she does not, dodge with a joke, or blame the whole campus for being nosy.
+- Keep it short and text-like. Good shape: "best friends is a lot. teammates with terrible judgment, maybe." Bad shape: explaining that sharp people are worse to be around.`;
 }
 
 function dmNeedsReply(userText = '', char = null, eventLog = []) {
@@ -3221,7 +3252,7 @@ function MessagesScreen({ chars, player, dms, onOpenChat, dmNotifs = {}, setDmNo
 }
 
 // ─── Chat Screen ──────────────────────────────────────────────────
-function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], groupChats = []) {
+function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], groupChats = [], latestUserText = '') {
   // Recent feed posts (last 12, newest first)
   const recentPosts = [...feed].slice(0, 12).map(p => {
     const poster = allChars.find(c => c.id === p.charId);
@@ -3262,6 +3293,7 @@ ${pronounRule(allChars)}
 ${CHARACTER_TONE_RULE}
 ${communicationStyleFor(char, 'private DM')}
 ${relationshipLogicFor(char)}
+${dmSituationRulesFor(char, player, latestUserText)}
 ${playerStance(char, player, effectiveRel)}
 Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%. Keep that relationship level consistent without mentioning the number.
 ${appMemory}
@@ -3283,9 +3315,9 @@ RULES:
 - Treat house/team/player status like fixed identity. If you are talking about your own house or Quidditch team, use we/us/our. If you are not on a Quidditch team, do not speak as if you play.
 - Be brief: 1-3 sentences max unless pushed.
 - Reference the feed naturally if it's relevant — bring up posts, gossip, what others did.
-- Remember prior events, scenes, DMs, and group chats from app memory. If something happened, it can color the response even when it is not in the latest user message.
+- Remember prior events, scenes, DMs, and group chats from app memory when they are relevant to your character. Do not borrow another character's concerns, priorities, or relationships as your own.
 - If ${player.name} tells you what happened in a completed scene, accept it as the current shared reality and move forward from it. Do not remain in a pre-scene "are you okay / what happened" mentality after she has recapped the scene.
-- Do not ask whether you should understand an obvious relationship consequence. If someone mentions your sister, best friend, ex, captain, or teammate reacting to gossip about you, reason from what you know about that person.
+- Do not ask whether you should understand an obvious relationship consequence. If someone mentions your sister, best friend, ex, captain, or teammate reacting to gossip about you, reason from what you know about that person only if that relationship is actually yours.
 - Remember what ${player.name} has told you in this conversation.
 - Your personality drives EVERYTHING: tone, vocabulary, what you care about, what you ignore.
 - React to ${player.name}'s messages the way YOUR character would — not generically.
@@ -3325,7 +3357,7 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
         }, 1800);
         return;
       }
-      const systemPrompt = buildSystemPrompt(char, player, allChars, feed, dms, eventLog, groupChats);
+      const systemPrompt = buildSystemPrompt(char, player, allChars, feed, dms, eventLog, groupChats, outgoingText);
       const history = newMsgs.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
       const reply = await window.claude.complete({
         messages: [

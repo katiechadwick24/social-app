@@ -473,6 +473,336 @@ THREAD PATTERN VARIETY:
 - Avoid serial echo structures like "X landed different when Y", "X lands harder when Y", "it works because Y", or "the bit is X" across multiple characters.
 - When replying to a reply, answer the new social pressure in the speaker's own voice instead of polishing the last speaker's phrasing.`;
 
+const CHARACTER_DIALOGUE_CONSTRAINTS = {
+  havoc: {
+    lane: 'physical instigator and bad influence',
+    moves: [
+      'dare someone',
+      'shove the bit forward',
+      'back a teammate with action',
+      'confidently misread on purpose',
+      'make the wrong idea sound fun',
+    ],
+    shapes: [
+      'imperative or dare',
+      'short verdict plus action',
+      'direct @handle challenge',
+      'bad idea framed as help',
+    ],
+    avoid: [
+      'media-analysis words like analytics, engagement, ranking, headline, poll, spreadsheet, or documentation',
+      'dry spectator captions that could belong to Jude',
+      'polished thread recap or moral analysis',
+    ],
+    reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|caption is writing|caption writes|discourse|narrative)\b/i,
+    publicFallbacks: [
+      'say less. bad idea, better timing.',
+      'i can make that worse in under ten seconds.',
+      '{player} do it again. slower this time.',
+      'someone hold my broom before i become useful.',
+    ],
+  },
+  silas: {
+    lane: 'controlled leverage and clean correction',
+    moves: [
+      'cut to the useful pressure point',
+      'correct sloppy logic',
+      'turn chaos into leverage',
+      'make Gryffindor look inefficient',
+    ],
+    shapes: [
+      'clipped command',
+      'one surgical correction',
+      'dry standard-setting line',
+      'short threat hidden as advice',
+    ],
+    avoid: [
+      'open neediness',
+      'rambling captain speeches',
+      'goofy physical dares',
+      'media-commentator language unless he is mocking it',
+    ],
+    publicFallbacks: [
+      'be specific or be quiet.',
+      'useful, if accidentally.',
+      'that was almost a point. unfortunate ending.',
+      'cleaner next time. if you can manage it.',
+    ],
+  },
+  callum: {
+    lane: 'exacting competitor and annoyed standards',
+    moves: [
+      'challenge the premise',
+      'attack wasted effort',
+      'defend standards without folding',
+      'get petty about execution',
+    ],
+    shapes: [
+      'clean correction',
+      'annoyed question',
+      'terse refusal',
+      'specific critique',
+    ],
+    avoid: [
+      'easy concessions',
+      'generic rage',
+      'invented match facts',
+      'Havoc-style bad-idea enthusiasm',
+    ],
+    publicFallbacks: [
+      'try a cleaner angle.',
+      'that was not the clever version of that thought.',
+      'you are enjoying being wrong.',
+      'standards are not the villain here.',
+    ],
+  },
+  briar: {
+    lane: 'captain exhaustion with practical bite',
+    moves: [
+      'name the paperwork',
+      'threaten practice consequences',
+      'protect structure',
+      'deadpan the disaster',
+    ],
+    shapes: [
+      'tired practical complaint',
+      'clipboard threat',
+      'dry one-sentence diagnosis',
+      'captain note to the room',
+    ],
+    avoid: [
+      'pure joyless scolding',
+      'Theo-style coverage language',
+      'Silas-style cold leverage',
+      'Milo-level chaos',
+    ],
+    publicFallbacks: [
+      'i am adding this to the list for practice.',
+      'fantastic. a new category of problem.',
+      'this is why supervision keeps finding me.',
+      'morale should not require incident reports.',
+    ],
+  },
+  rowan: {
+    lane: 'sly timing and smiling trap',
+    moves: [
+      'notice who reacted',
+      'redirect the joke',
+      'make the room prove his point',
+      'cover an accomplice while teasing them',
+    ],
+    shapes: [
+      'smooth aside',
+      'smiling question',
+      'understated trap',
+      'casual redirect',
+    ],
+    avoid: [
+      'Havoc blunt-force dares',
+      'Theo metrics',
+      'Jude lazy nihilism',
+      'overexplained strategy',
+    ],
+    publicFallbacks: [
+      'terrible idea. suspiciously good timing.',
+      'i would like my objection ignored with dignity.',
+      'funny how quickly everyone looked.',
+      'that was almost subtle. almost.',
+    ],
+  },
+  milo: {
+    lane: 'reckless charm and eager overreaction',
+    moves: [
+      'volunteer too fast',
+      'flirt before thinking',
+      'cheer the chaos',
+      'admit confusion with confidence',
+    ],
+    shapes: [
+      'breathless question',
+      'too-fast agreement',
+      'flirty panic',
+      'bright bad idea',
+    ],
+    avoid: [
+      'controlled tactical reads',
+      'dry older-student composure',
+      'detached media analysis',
+      'clean menace',
+    ],
+    publicFallbacks: [
+      'wait are we doing bad ideas because yes.',
+      'i understood half of that and support all of it.',
+      'dangerous sentence. say more.',
+      'this feels illegal. continue.',
+    ],
+  },
+  elara: {
+    lane: 'poised danger and proud social pressure',
+    moves: [
+      'needle with dignity',
+      'make old history visible',
+      'subtweet the room',
+      'smile with teeth',
+    ],
+    shapes: [
+      'polished jab',
+      'plausible-deniability aside',
+      'dangerous compliment',
+      'controlled social warning',
+    ],
+    avoid: [
+      'begging',
+      'open woundedness',
+      'Havoc-style crashing in',
+      'Theo-style analytics',
+    ],
+    publicFallbacks: [
+      'charming. awful, but charming.',
+      'how generous of everyone to notice now.',
+      'careful. some history has excellent hearing.',
+      'i hate that i laughed.',
+    ],
+  },
+  theo: {
+    lane: 'media-brained commentator making the funny angle public',
+    moves: [
+      'turn the beat into a caption',
+      'invent a poll or ranking',
+      'threaten a clip, crop, or screenshot',
+      'frame the mess as engagement',
+      'pretend journalism made him do it',
+    ],
+    shapes: [
+      'mock headline',
+      'caption note',
+      'ranking or poll fragment',
+      'metrics-as-joke',
+      'screenshot evidence line',
+    ],
+    avoid: [
+      'Havoc physical dares, shove language, or threat-to-act energy',
+      'Jude low-effort menace like "beautiful. no notes"',
+      'sincere moralizing',
+    ],
+    reject: /\b(?:shove|square up|throw hands|punch|bite|i'?ll\s+(?:hit|swing)|i will\s+(?:hit|swing)|hit\s+(?:him|her|them|you|me)|beautiful\.?\s+no notes|no notes except|detention energy|someone else'?s problem|i support this getting worse)\b/i,
+    publicFallbacks: [
+      'new poll: who made this worse fastest.',
+      'saving this as exhibit a in bad timing.',
+      'caption is writing itself and it is rude.',
+      'engagement forecast: deeply annoying, wildly clickable.',
+    ],
+  },
+  jude: {
+    lane: 'low-effort dry damage from the edge of the room',
+    moves: [
+      'undercut the drama',
+      'make one ugly little caption',
+      'refuse sincerity',
+      'sound unbothered while making it worse',
+      'drop a faintly threatening aside',
+    ],
+    shapes: [
+      'two tiny fragments',
+      'deadpan verdict',
+      'fake refusal',
+      'under-the-breath @handle line',
+      'casual consequence note',
+    ],
+    avoid: [
+      'Theo analytics, engagement, rankings, polls, headlines, spreadsheets, or documentation',
+      'Havoc physical dares and action threats',
+      'captain speeches',
+      'psychoanalysis',
+    ],
+    reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|data says|camera roll|clip dealer)\b/i,
+    publicFallbacks: [
+      'awful. keep going.',
+      'sure. nothing here can become evidence.',
+      'beautifully stupid. almost useful.',
+      'that is a problem with better lighting.',
+    ],
+  },
+  tamsin: {
+    lane: 'composed older-sister precision and dry concern',
+    moves: [
+      'ask the inconvenient question',
+      'notice the pattern',
+      'offer dry practical help',
+      'protect without admitting softness',
+    ],
+    shapes: [
+      'polished dry aside',
+      'precise question',
+      'quiet warning',
+      'practical correction',
+    ],
+    avoid: [
+      'casual cruelty',
+      'Havoc blunt-force chaos',
+      'Theo metrics',
+      'Jude lazy menace',
+    ],
+    publicFallbacks: [
+      'unhelpful. unfortunately funny.',
+      'that answered more than you think it did.',
+      'i am choosing not to encourage this publicly.',
+      'please try to make the next bad idea quieter.',
+    ],
+  },
+};
+
+function dialogueList(items = []) {
+  return (items || []).filter(Boolean).join('; ');
+}
+
+function dialogueContractSummaryFor(char) {
+  const spec = CHARACTER_DIALOGUE_CONSTRAINTS[char?.id];
+  if (!spec) return 'use this character profile for motive, vocabulary, and what they would ignore';
+  return `${spec.lane}. Moves: ${dialogueList(spec.moves)}. Shapes: ${dialogueList(spec.shapes)}. Avoid: ${dialogueList(spec.avoid)}`;
+}
+
+function dialogueContractFor(char, mode = 'public') {
+  const spec = CHARACTER_DIALOGUE_CONSTRAINTS[char?.id];
+  if (!spec) {
+    return `DIALOGUE CONTRACT: Use the profile for motive, vocabulary, and what this speaker ignores. In ${mode}, pick one immediate social move and one sentence shape before writing. Avoid generic snark and generic sincerity.`;
+  }
+  return `DIALOGUE CONTRACT: ${dialogueContractSummaryFor(char)}. In ${mode}, this contract is required voice control, not flavor text. If the draft could be swapped with another character by changing only the name, rewrite it before output.`;
+}
+
+function multiSpeakerDialogueSeparationRule(chars = [], mode = 'public') {
+  const constrained = (chars || []).filter(c => c && CHARACTER_DIALOGUE_CONSTRAINTS[c.id]);
+  if (constrained.length < 2) return '';
+  const hasRegressionSet = constrained.some(c => c.id === 'theo')
+    && constrained.some(c => c.id === 'jude')
+    && constrained.some(c => c.id === 'havoc');
+  return `MULTI-SPEAKER DIALOGUE SEPARATION:
+- Assign each speaker a different social move, sentence shape, and voice lane before writing.
+- Do not let two replies use the same key verb, same setup/payoff shape, or same observer-recapping angle.
+${hasRegressionSet ? '- Regression case: Theo, Jude, and Havoc must split cleanly. Theo uses media machinery. Jude uses low-effort dry damage. Havoc uses physical bad-idea escalation. They must not converge on the same caption/comeback pattern.' : '- If two lines could swap speakers and still work, rewrite the later line around that speaker\'s contract.'}
+${constrained.map(c => `@${c.handle}: ${dialogueContractSummaryFor(c)}`).join('\n')}`;
+}
+
+function replaceDialoguePlaceholders(text = '', char = null, player = null) {
+  const playerHandle = player?.handle ? `@${player.handle}` : (player?.name || 'you');
+  const ownHandle = char?.handle ? `@${char.handle}` : (char?.name || 'i');
+  return String(text || '').replace(/\{player\}/g, playerHandle).replace(/\{self\}/g, ownHandle);
+}
+
+function fallbackDialogueContractLine(char, player) {
+  const spec = CHARACTER_DIALOGUE_CONSTRAINTS[char?.id];
+  const pool = spec?.publicFallbacks || ['say that again, slower.', 'that is a choice.', 'interesting. inconveniently.'];
+  return replaceDialoguePlaceholders(pool[Math.floor(Math.random() * pool.length)], char, player);
+}
+
+function violatesCharacterDialogueContract(text = '', char = null) {
+  const spec = CHARACTER_DIALOGUE_CONSTRAINTS[char?.id];
+  if (!spec || !text) return false;
+  const clean = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  if (spec.reject && spec.reject.test(clean)) return true;
+  return false;
+}
+
 function communicationStyleFor(char, mode = 'public') {
   const common = `${COMMUNICATION_PATTERN_RULE}
 MODE: ${mode}. Write like a real message in that medium, not a scene summary, debate speech, or polished character monologue.`;
@@ -492,7 +822,8 @@ MODE: ${mode}. Write like a real message in that medium, not a scene summary, de
     ? 'GMZ is tabloid pressure with a student account rhythm: hooks, sources, screenshots, timing, quote-bait, and plausible rumor language. They can exaggerate public uncertainty, but not create hard canon.'
     : '';
   return `${common}
-SPEAKER MICRO-VOICE: ${gmz || byId}`;
+SPEAKER MICRO-VOICE: ${gmz || byId}
+${char?.id === '__gmz__' ? '' : dialogueContractFor(char, mode)}`;
 }
 
 function playerStance(char, player, relationshipOverride) {
@@ -718,6 +1049,10 @@ function dialoguePatternFlags(text = '') {
   if (/\b(?:the\s+)?one\s+(?:saying|posting|doing|making|calling)\s+it\b/.test(clean)) flags.add('the-one-doing-it');
   if (/\b(?:harder|better|different|fine)\s+when\b/.test(clean)) flags.add('adjective-when');
   if (/\b(?:compliment|insult|joke|line|caption)\b.{0,36}\b(?:land|lands|landed|hit|hits|worked|works)\b/.test(clean)) flags.add('commentary-lands');
+  if (/\b(?:bad|terrible|awful|great|excellent|useful)\s+for\b.{0,60}\b(?:bad|terrible|awful|great|excellent|useful)\s+for\b/.test(clean)) flags.add('x-for-y-contrast');
+  if (/\b(?:caption|headline|ranking|poll|analytics|engagement|documentation|spreadsheet|thread loading|receipts)\b/.test(clean)) flags.add('media-spectator-frame');
+  if (/\b(?:beautiful|awful|terrible)\b.{0,18}\b(?:no notes|keep going|useful|almost proud)\b/.test(clean)) flags.add('dry-verdict-fragment');
+  if (/\b(?:support|respect|endorse)\b.{0,28}\b(?:getting worse|the bit|this mess|bad idea)\b/.test(clean)) flags.add('support-the-mess');
   return flags;
 }
 
@@ -758,6 +1093,9 @@ function hasDialoguePatternCollision(candidate = '', previousTexts = []) {
     if (flags.has('land') && prevFlags.has('land') && (flags.has('adjective-when') || prevFlags.has('adjective-when') || flags.has('commentary-lands') || prevFlags.has('commentary-lands'))) return true;
     if (flags.has('the-one-doing-it') && prevFlags.has('the-one-doing-it')) return true;
     if (flags.has('bit') && prevFlags.has('bit') && hasRepeatedDialogueNgram(candidate, [prev])) return true;
+    for (const shared of ['x-for-y-contrast', 'media-spectator-frame', 'dry-verdict-fragment', 'support-the-mess']) {
+      if (flags.has(shared) && prevFlags.has(shared)) return true;
+    }
     return false;
   });
 }
@@ -860,6 +1198,9 @@ function cleanChatText(text = '', char = null, player = null, group = false) {
   }
   if (char?.id === 'jude' && looksLikeJudePsychoanalysis(clean)) {
     return fallbackChatLine(char, player, group);
+  }
+  if (char && violatesCharacterDialogueContract(clean, char)) {
+    return fallbackDialogueContractLine(char, player);
   }
   if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeIdentityConfusion(clean, char)) return fallbackChatLine(char, player, group);
   return clean;
@@ -1014,7 +1355,7 @@ function cleanSocialPostText(raw = '', char, player) {
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || clean.length > 280) {
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || violatesCharacterDialogueContract(clean, char) || clean.length > 280) {
     return fallbackPostForChar(char, player);
   }
   return clean;
@@ -1087,8 +1428,13 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   if (char && (isSelfNarration(clean, char) || looksLikeSelfPronounDrift(clean, char, opts))) {
     return fallbackSelfReferenceLine(char, player);
   }
+  if (char && violatesCharacterDialogueContract(clean, char)) {
+    return fallbackDialogueContractLine(char, player);
+  }
   if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || hasDialoguePatternCollision(clean, opts.avoidTexts || []) || looksLikeIdentityConfusion(clean, char) || clean.length > 360) {
-    return opts.bot ? fallbackBotLine(opts.bot) : (opts.playfulBanter ? fallbackPublicBanterLine(char, player) : fallbackChatLine(char, player, false));
+    if (opts.bot) return fallbackBotLine(opts.bot);
+    if (char) return opts.playfulBanter ? fallbackPublicBanterLine(char, player) : fallbackDialogueContractLine(char, player);
+    return fallbackChatLine(char, player, false);
   }
   return clean;
 }
@@ -1972,13 +2318,14 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const exPressureRule = havocKeresPressure
       ? `\nEX PRESSURE NOTE: Elara March has public history with Havoc. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention here, so Elara should notice and be a little displeased.' : ''} If she replies, let it feel like a proud ex noticing the room has shifted: sharp, charismatic, jealous with dignity, socially dangerous, and never pleading.`
       : '';
+    const dialogueSeparationRule = multiSpeakerDialogueSeparationRule(picked, 'public feed reply');
 
     (async () => {
       let charR1 = [];
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, or same "X lands/works/hits different when Y" logic.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, or bystander, not necessarily the person the rumor is about. They should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, speculate about what GMZ left unsaid, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, or same "X lands/works/hits different when Y" logic.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, or bystander, not necessarily the person the rumor is about. They should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, speculate about what GMZ left unsaid, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -2109,6 +2456,7 @@ Original post by ${author?.name || player.name}: "${post.text}"
 
 ${pronounRule([author, player, fight.replier, fight.target])}
 ${CHARACTER_TONE_RULE}
+${communicationStyleFor(fight.replier, 'public character-to-character reply')}
 ${playfulThreadRule}
 ${stanceFor(fight.replier)}
 ${stanceFor(fight.target)}
@@ -2179,7 +2527,7 @@ Return ONLY the reply text. No other text.`
                   const bot = pool.find(b => b.id === botTarget.bot);
                   const resBot = await window.claude.complete({
                     messages:[{ role:'user', content:
-                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
                   });
                   const botReply = cleanSocialReplyText(resBot, responder, player, { avoidTexts: [post.text, clapback.text, botTarget.text], playfulBanter: !!playfulThreadRule, selfSubject: responder.id === authorId || characterMentionedInText(`${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, responder) });
                   if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
@@ -2213,6 +2561,7 @@ ${fight.replier.name} (@${fight.replier.handle}) fired back: "${clapback.text}"
 
 ${pronounRule([author, player, fight.target, fight.replier])}
 ${CHARACTER_TONE_RULE}
+${communicationStyleFor(fight.target, 'public counter-reply')}
 ${playfulThreadRule}
 ${stanceFor(fight.target)}
 ${stanceFor(fight.replier)}
@@ -2395,6 +2744,7 @@ ${identityPromptFor(targetChar)}
 Voice cues: ${targetChar.personality}.
 ${pronounRule([targetChar, player, char])}
 ${CHARACTER_TONE_RULE}
+${communicationStyleFor(targetChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(targetChar)}
 ${threadRoleContext(post.text || '', char, [player, ...chars, GMZ_CHAR])}
@@ -2510,6 +2860,7 @@ ${BANNED_PHRASES_RULE}`
     if (!responders.length) return;
 
     try {
+      const dialogueSeparationRule = multiSpeakerDialogueSeparationRule(responders, 'public thread follow-up');
       const roster = responders.map((c,i) => {
         const priorLines = speakerThreadHistory(c.id, 4);
         const defenseNote = backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)
@@ -2542,6 +2893,7 @@ ${threadMemory}
 ${threadRoleContext(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, char, [player, ...chars, GMZ_CHAR])}
 ${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText])}
+${dialogueSeparationRule}
 ${gmzSpeculationRule}
 
 Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy-but-playful question, speculate, defend someone, make a joke, or escalate if it truly fits. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, deflection, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. On GMZ threads, speculation, alibi theories, source guesses, and "what is GMZ not saying" questions are expected as long as uncertainty stays visible.
@@ -2682,6 +3034,7 @@ ${identityPromptFor(cChar)}
 Voice cues: ${cChar.personality}.
 ${pronounRule([cChar, player, char])}
 ${CHARACTER_TONE_RULE}
+${communicationStyleFor(cChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(cChar)}
 ${threadRoleContext(post.text || '', char, [player, ...chars, GMZ_CHAR])}

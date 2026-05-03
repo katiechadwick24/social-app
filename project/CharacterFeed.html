@@ -869,15 +869,18 @@ function stripSpeakerLabelRegex(char) {
   if (!char?.name && !char?.handle) return /^$/;
   const name = char?.name ? escapeRegExp(char.name) : '';
   const handle = char?.handle ? escapeRegExp(char.handle.replace(/^@/, '')) : '';
+  const lead = String.raw`^\s*(?:#+\s*)?`;
+  const tail = String.raw`\s*(?::|[-–—])?\s*`;
   if (name && handle) {
-    return new RegExp(`^\\s*(?:${name}\\s*(?:\\(\\s*@?${handle}\\s*\\))?|@?${handle})\\s*:?\\s*`, 'i');
+    return new RegExp(`${lead}(?:${name}\\s*(?:\\(\\s*@?${handle}\\s*\\))?|@?${handle})${tail}`, 'i');
   }
-  return new RegExp(`^\\s*(?:${name || `@?${handle}`})\\s*:?\\s*`, 'i');
+  return new RegExp(`${lead}(?:${name || `@?${handle}`})${tail}`, 'i');
 }
 
 function looksLikePromptLeak(text = '') {
   const normalized = String(text).replace(/[‘’]/g, "'").toLowerCase();
-  return /i need context|i don't have enough|i do not have enough|need more context|need to know what'?s happening|what'?s the most recent|let me check|looking at the recent feed|i'm ready|i understand (?:the character|the rules|continuity|the identity|silas|callum|pronouns|house|team)|i know the rules|identity rule|identity:|target identity|original poster identity|pronouns and houses|pronouns locked|house logic|team logic|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|personality:|description:|relationship with @|current relationship with|i understand continuity|i understand the identity|i understand silas|i understand callum|college students are|here'?s/i.test(normalized);
+  return /^#+\s*[a-z][a-z\s.'-]+\s*\(@?[a-z0-9_]+\)/i.test(String(text || '').trim())
+    || /i need context|i don't have enough|i do not have enough|need more context|need to know what'?s happening|what'?s the most recent|let me check|looking at the recent feed|i'm ready|i understand (?:the character|the rules|continuity|the identity|silas|callum|pronouns|house|team)|i know the rules|identity rule|identity:|target identity|original poster identity|pronouns and houses|pronouns locked|house logic|team logic|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|personality:|description:|relationship with @|current relationship with|i understand continuity|i understand the identity|i understand silas|i understand callum|college students are|here'?s/i.test(normalized);
 }
 
 function fallbackPostForChar(char, player) {
@@ -977,7 +980,9 @@ function isSelfNarration(text = '', char) {
 function looksLikeSelfPronounDrift(text = '', char, opts = {}) {
   if (!opts.selfSubject || !char || !text) return false;
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
-  const hasOtherPersonAnchor = /@[a-z0-9_]+/i.test(lower) || /\b(?:callum|havoc|silas|rowan|milo|theo|jude|briar|elara|tamsin|keres|gmz)\b/i.test(lower.replace(new RegExp(`\\b${escapeRegExp((char.name || '').split(/\\s+/)[0]).toLowerCase()}\\b|\\b${escapeRegExp(String(char.handle || '').toLowerCase())}\\b`, 'gi'), ''));
+  const withoutOwnIdentity = lower.replace(new RegExp(`\\b${escapeRegExp((char.name || '').split(/\\s+/)[0]).toLowerCase()}\\b|\\b${escapeRegExp(String(char.handle || '').toLowerCase())}\\b`, 'gi'), '');
+  const withoutDirectAddress = withoutOwnIdentity.replace(/^\s*@?[a-z0-9_]+\b[:,]?\s*/i, '');
+  const hasOtherPersonAnchor = /\B@[a-z0-9_]+\b/i.test(withoutDirectAddress) || /\b(?:callum|havoc|silas|rowan|milo|theo|jude|briar|elara|tamsin|keres|gmz)\b/i.test(withoutDirectAddress);
   if (hasOtherPersonAnchor) return false;
   const pronouns = pronounsFor(char).toLowerCase();
   if (pronouns.includes('he/him')) return /\b(?:he|him|his|himself)\b/i.test(lower);

@@ -49,7 +49,9 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "darkMode": true,
-  "accentColor": "#4dabf7"
+  "accentColor": "#4dabf7",
+  "fontSize": 14,
+  "compactFeed": false
 }/*EDITMODE-END*/;
 
 function bottomSafe(extra = 0) {
@@ -78,6 +80,11 @@ function buildTheme(tweaks) {
 
 // C is set globally and updated when tweaks change
 let C = buildTheme(TWEAK_DEFAULTS);
+
+function tweakFont(base, tweaks = {}) {
+  const selected = clamp(Number(tweaks.fontSize ?? 14), 12, 18);
+  return Math.max(10, base + selected - 14);
+}
 
 // ─── House ring colors ────────────────────────────────────────────
 const HOUSE_COLORS = {
@@ -2169,11 +2176,13 @@ function BottomNav({ tab, setTab, dmNotifs = {} }) {
 }
 
 // ─── Post Card ────────────────────────────────────────────────────
-function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
+function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, tweaks = TWEAK_DEFAULTS }) {
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
   const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
   const [liked, setLiked] = useState(false);
+  const compact = !!tweaks.compactFeed;
+  const fs = (base) => tweakFont(base, tweaks);
 
   function timeAgo(ts) {
     const d = Math.max(0, (Date.now() - ts) / 1000);
@@ -2192,31 +2201,31 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
     : post.reply?.text;
 
   return (
-    <div style={{padding:'16px 16px', borderBottom:`1px solid ${C.border}`}}>
-      <div style={{display:'flex', gap:12}}>
-        <Avatar char={char} size={52} onClick={() => char.id !== '__gmz__' && onCharClick(char)} />
+    <div style={{padding: compact ? '10px 14px' : '16px 16px', borderBottom:`1px solid ${C.border}`}}>
+      <div style={{display:'flex', gap: compact ? 10 : 12}}>
+        <Avatar char={char} size={compact ? 44 : 52} onClick={() => char.id !== '__gmz__' && onCharClick(char)} />
         <div style={{flex:1, minWidth:0}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
             <div style={{display:'flex', alignItems:'center', gap:4, flexWrap:'wrap'}}>
-              <span style={{fontWeight:700, fontSize:14, color:C.text, cursor:'pointer'}} onClick={() => onCharClick(char)}>{char.name}</span>
+              <span style={{fontWeight:700, fontSize:fs(14), color:C.text, cursor:'pointer'}} onClick={() => onCharClick(char)}>{char.name}</span>
               <CharBadge char={char} />
-              <span style={{color:C.muted, fontSize:13}}>@{char.handle}</span>
-              <span style={{color:C.muted, fontSize:13}}>· {timeAgo(post.timestamp)}</span>
+              <span style={{color:C.muted, fontSize:fs(13)}}>@{char.handle}</span>
+              <span style={{color:C.muted, fontSize:fs(13)}}>· {timeAgo(post.timestamp)}</span>
             </div>
             <span style={{color:C.muted, fontSize:18, cursor:'pointer', padding:'0 4px'}}>···</span>
           </div>
-          <p style={{color:C.text, fontSize:14, lineHeight:1.5, marginTop:4, cursor:'pointer'}} onClick={() => onOpenThread && onOpenThread(post)}>{renderText(safePostText)}</p>
-          {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', borderRadius:12, marginTop:8, maxHeight:220, objectFit:'cover', cursor:'pointer'}} />}
-          <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
-            <button onClick={() => onOpenThread && onOpenThread(post)} style={{background:'none',border:'none',color:C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+          <p style={{color:C.text, fontSize:fs(14), lineHeight: compact ? 1.35 : 1.5, marginTop:compact ? 2 : 4, cursor:'pointer'}} onClick={() => onOpenThread && onOpenThread(post)}>{renderText(safePostText)}</p>
+          {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', borderRadius:12, marginTop:compact ? 6 : 8, maxHeight:compact ? 160 : 220, objectFit:'cover', cursor:'pointer'}} />}
+          <div style={{display:'flex', gap:compact ? 16 : 20, marginTop:compact ? 7 : 10, alignItems:'center'}}>
+            <button onClick={() => onOpenThread && onOpenThread(post)} style={{background:'none',border:'none',color:C.muted,fontSize:fs(12),cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
               <ReplyGlyph size={16} />
               {fmt(post.comments)}
             </button>
-            <button style={{background:'none',border:'none',color:C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+            <button style={{background:'none',border:'none',color:C.muted,fontSize:fs(12),cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
               {fmt(post.reposts)}
             </button>
-            <button onClick={() => { setLiked(!liked); onLike && onLike(post.id, liked); }} style={{background:'none',border:'none',color: liked ? '#e91e8c' : C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+            <button onClick={() => { setLiked(!liked); onLike && onLike(post.id, liked); }} style={{background:'none',border:'none',color: liked ? '#e91e8c' : C.muted,fontSize:fs(12),cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill={liked ? '#e91e8c' : 'none'} stroke={liked ? '#e91e8c' : 'currentColor'} strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
               {fmt(post.likes + (liked ? 1 : 0))}
             </button>
@@ -2227,17 +2236,17 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
         </div>
       </div>
       {replyChar && (
-        <div style={{marginLeft:50, marginTop:10, padding:'10px 12px', background:C.card2, borderRadius:12, borderLeft:`3px solid ${C.border}`}}>
+        <div style={{marginLeft:compact ? 42 : 50, marginTop:compact ? 8 : 10, padding:compact ? '8px 10px' : '10px 12px', background:C.card2, borderRadius:12, borderLeft:`3px solid ${C.border}`}}>
           <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:4}}>
-            <Avatar char={replyChar} size={32} />
-            <span style={{fontWeight:700, fontSize:13, color:C.text}}>{replyChar.name}</span>
+            <Avatar char={replyChar} size={compact ? 28 : 32} />
+            <span style={{fontWeight:700, fontSize:fs(13), color:C.text}}>{replyChar.name}</span>
             <CharBadge char={replyChar} />
-            <span style={{color:C.muted, fontSize:12}}>@{replyChar.handle}</span>
+            <span style={{color:C.muted, fontSize:fs(12)}}>@{replyChar.handle}</span>
           </div>
-          <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{renderText(safeReplyText)}</p>
+          <p style={{color:C.text, fontSize:fs(13), lineHeight:compact ? 1.35 : 1.5}}>{renderText(safeReplyText)}</p>
           <div style={{display:'flex', alignItems:'center', gap:4, marginTop:6}}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill={liked ? '#e91e8c' : C.muted}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            <span style={{color:C.muted, fontSize:12}}>{fmt(post.likes * 62)}</span>
+            <span style={{color:C.muted, fontSize:fs(12)}}>{fmt(post.likes * 62)}</span>
           </div>
         </div>
       )}
@@ -3659,7 +3668,7 @@ function MatchDayBanner({ match, day, onWatch }) {
 }
 
 // ─── Feed Screen ──────────────────────────────────────────────────
-function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, setTab, onCompose, onOpenThread, onWatchMatch, currentMatch, onRefreshFeed }) {
+function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, setTab, onCompose, onOpenThread, onWatchMatch, currentMatch, onRefreshFeed, tweaks = TWEAK_DEFAULTS, onOpenTweaks }) {
   const [showEvent, setShowEvent] = useState(false);
   const [pullStart, setPullStart] = useState(null);
   const [pullDistance, setPullDistance] = useState(0);
@@ -3703,6 +3712,20 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
               <span style={{color:C.text, fontWeight:700}}>Day {day}</span>
             </div>
             <div style={{display:'flex', gap:8}}>
+              <button
+                onClick={onOpenTweaks}
+                title="Tweaks"
+                style={{width:42, height:42, background:C.card2, border:'none', color:C.muted, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}}
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M4 7h10" />
+                  <path d="M18 7h2" />
+                  <path d="M4 17h2" />
+                  <path d="M10 17h10" />
+                  <circle cx="16" cy="7" r="2" />
+                  <circle cx="8" cy="17" r="2" />
+                </svg>
+              </button>
               <div style={{width:42, height:42, background:C.card2, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer'}} onClick={() => setTab('profile')}>
                 <svg viewBox="0 0 24 24" width="24" height="24" fill={C.muted}><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
               </div>
@@ -3722,7 +3745,7 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
 
         {/* Posts */}
         {feed.map(post => (
-          <PostCard key={post.id} post={post} chars={chars} player={player} onCharClick={onCharClick} onOpenThread={onOpenThread} />
+          <PostCard key={post.id} post={post} chars={chars} player={player} onCharClick={onCharClick} onOpenThread={onOpenThread} tweaks={tweaks} />
         ))}
 
         {/* Spacer */}
@@ -6159,6 +6182,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
 // ─── Main App ─────────────────────────────────────────────────────
 function App() {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [tweaksOpen, setTweaksOpen] = useState(false);
   C = buildTheme(tweaks);
 
   // ── Server-side persistence ───────────────────────────────────
@@ -7220,7 +7244,7 @@ ${BANNED_PHRASES_RULE}`
   } else {
     const mainScreen = (() => {
       switch(tab) {
-        case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} />;
+        case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} setGroupChats={setGroupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
@@ -7289,10 +7313,13 @@ ${BANNED_PHRASES_RULE}`
     ) : (
       <IOSDevice dark={tweaks.darkMode}>{appContent}</IOSDevice>
     )}
-    <TweaksPanel>
+    <TweaksPanel open={tweaksOpen} onOpenChange={setTweaksOpen}>
       <TweakToggle label="Dark mode" value={tweaks.darkMode} onChange={v => setTweak('darkMode', v)} />
       <TweakSection label="Accent color" />
       <TweakColor label="Accent" value={tweaks.accentColor} onChange={v => setTweak('accentColor', v)} />
+      <TweakSection label="Feed" />
+      <TweakSlider label="Font size" value={tweaks.fontSize} min={12} max={18} step={1} unit="px" onChange={v => setTweak('fontSize', v)} />
+      <TweakToggle label="Compact feed" value={tweaks.compactFeed} onChange={v => setTweak('compactFeed', v)} />
     </TweaksPanel>
     </>
   );

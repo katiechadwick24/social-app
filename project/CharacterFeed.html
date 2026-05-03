@@ -2038,11 +2038,11 @@ Return ONLY SILENCE or the reply text.`
     return mergedReplies.slice(-limit).map((item, idx) => {
       if (item.kind === 'char') {
         const speaker = allChars.find(c => c.id === item.data.charId);
-        const target = item.data.replyTo ? ` replying to @${item.data.replyTo}` : '';
+        const target = item.data.replyTo ? ` -> @${item.data.replyTo}` : '';
         return `${idx + 1}. @${speaker?.handle || '?'}${target}: "${item.data.text}"`;
       }
       const speaker = getBotById(item.data.bot);
-      const target = item.data.replyTo ? ` replying to @${item.data.replyTo}` : '';
+      const target = item.data.replyTo ? ` -> @${item.data.replyTo}` : '';
       return `${idx + 1}. @${speaker?.handle || '?'}${target}: "${item.data.text}"`;
     }).join('\n');
   }
@@ -2466,11 +2466,6 @@ ${BANNED_PHRASES_RULE}`
                     <span style={{color:C.muted, fontSize:13}}>·</span>
                     <span style={{color:C.muted, fontSize:13}}>{timeAgo(cc.timestamp || post.timestamp)}</span>
                   </div>
-                  {cc.replyTo && (
-                    <p style={{color:C.muted, fontSize:12, margin:'2px 0 6px'}}>
-                      Replying to <span style={{color:C.blue}}>@{cc.replyTo}</span>
-                    </p>
-                  )}
                   <p style={{color:C.text, fontSize:14, lineHeight:1.5, margin:0}}>{renderText(cc.text)}</p>
                   <div style={{display:'flex', gap:24, marginTop:10, alignItems:'center'}}>
                     {cChar.id !== player.id && (
@@ -2499,7 +2494,7 @@ ${BANNED_PHRASES_RULE}`
                           value={charReplyText}
                           onChange={e => setCharReplyText(e.target.value)}
                           onKeyDown={e => e.key === 'Enter' && handleCharReply()}
-                          placeholder={`Reply to @${cChar.handle}…`}
+                          placeholder="Write a reply…"
                           style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:13, outline:'none'}}
                           autoFocus
                         />
@@ -2621,7 +2616,7 @@ Return ONLY the reply text.`
                         value={botReplyText}
                         onChange={e => setBotReplyText(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleBotReply()}
-                        placeholder={`Reply to @${bot.handle}…`}
+                        placeholder="Write a reply…"
                         style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:13, outline:'none'}}
                         autoFocus
                       />
@@ -2679,7 +2674,7 @@ Return ONLY the reply text.`
                 submitPostReply();
               }
             }}
-            placeholder={`Reply to @${replyTarget?.handle || char?.handle}…`}
+            placeholder="Write a reply…"
             rows={1}
             style={{
               width:'100%',

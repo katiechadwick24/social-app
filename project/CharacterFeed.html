@@ -365,7 +365,7 @@ SOCIAL APP FORMAT:
 - Feed posts should feel typed into an app: casual, specific, current, and a little incomplete. No author narration, no explaining the whole context.
 - Replies should react to the live post, tag, embarrassment, rumor, or relationship pressure. Do not turn replies into polished speeches.
 - DMs can be more private, but still message-like: brief, evasive, direct, teasing, checking in, fishing, or pressing. No novel paragraphs unless the user pushes for depth.
-- Group chats should overlap socially. People can ignore the exact question, answer the wrong part, pile on, deflect, or make it worse.
+- Group chats should overlap socially. People can ignore the exact question, answer the wrong part, pile on, deflect, or make it worse. Everyone listed in the group chat is present and can read the message. Do not talk about a present member like they are absent; address them with @handle, "you", or "captain" if that fits.
 - Quidditch is a public pressure system, not the whole world. Let posts also pull from classes, dorms, exes, siblings, parties, rumors, punishments, professors, injuries, money, reputation, and who was seen with whom.
 - Use handles, screenshots, clips, likes, deleted posts, subtweets, quote-post energy, comment threads, edits, and GMZ gossip as story mechanics.
 - Make public vs private matter. A line on the feed should carry reputation risk; a DM can dodge, soften, threaten, flirt, or ask for the version nobody posted.
@@ -380,6 +380,7 @@ CANON AND FACT RULES:
 - Do not invent scoreboard results, game attendance, wins/losses, who showed up to matches, who missed practice, who dodged, who started a fight, or who made a mistake unless it appears in the visible thread or current event. Trash talk can be mean without inventing hard facts.
 - Trash talk is normal Quidditch culture, not a social crime. Characters can insult rival houses, rival teams, plays, captains, training, habits, and public mistakes. Do not make them act shocked that someone talked trash unless the line crosses a real personal boundary.
 - Preserve house and team logic. Treat house/team like pronouns: exact, sticky, and not guessable from vibes. If a character is on Gryffindor, Slytherin, Ravenclaw, or Hufflepuff, they should not talk about that house or team like outsiders. They can roast their own side, but it should sound like "we/us/our team/my captain/our mess", not "they/them/Gryffindor is boring" unless they are clearly quoting or distancing as a joke. Rival houses can and should use "they/them" and be openly smug. Do not write "Slytherin could never", "Gryffindor could never", etc. if someone from that house just did the thing in the visible thread.
+- Teams and houses are allowed to snipe at each other for fun. Treat rival-house trash talk as sport, flirting, boredom, or group entertainment unless it targets a real personal wound. Characters should not become defensive about taking shots at a rival team; they can enjoy it, add to it, or pivot to "our mess is funnier but theirs is easier."
 - House is not the same as Quidditch team. Ravenclaw students are not automatically Ravenclaw Quidditch players. Tamsin Cade is Ravenclaw, but she is not on a Quidditch team; she can critique Quidditch as a sharp observer, sister, or student, not as someone who needs to "show up" on the pitch.
 - When context is thin, stay broad, teasing, evasive, or ask a pointed question instead of filling the gap with invented lore.
 
@@ -450,10 +451,34 @@ function playerStance(char, player, relationshipOverride) {
   return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} ${teamLine} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
 }
 
+function isHouseTeamCallout(text = '', char) {
+  if (!char) return false;
+  const lower = String(text || '').toLowerCase();
+  const handle = (char.handle || '').toLowerCase();
+  const house = (houseFor(char) || '').toLowerCase();
+  const team = (char.team || '').toLowerCase();
+  const addressed = handle && lower.includes(`@${handle}`);
+  const secondPersonTeam = addressed && /\b(your|you lot|you all|half your|your whole)\s+(team|house|side|lot)\b/.test(lower);
+  const namedGroup = [house, team].filter(Boolean).some(name => lower.includes(name));
+  const attackWords = /\b(half|boring|basic|mess|imploding|wrong|poor|bad|disaster|trash|could never|cannot|can't|doesn't|don't|incompetent|grimacing|foreboding|fix|crack|ahead of|consistent)\b/.test(lower);
+  return !!(secondPersonTeam || (namedGroup && attackWords));
+}
+
+function backsHouseTeam(text = '', char) {
+  if (!char) return false;
+  const lower = String(text || '').toLowerCase();
+  const house = (houseFor(char) || '').toLowerCase();
+  const team = (char.team || '').toLowerCase();
+  const names = [house, team].filter(Boolean);
+  if (!names.some(name => lower.includes(name))) return false;
+  return /\b(we|our|us|right|exactly|back|backing|defend|illogical|talking back|not wrong|agree|said what|same team|my house|my team)\b/.test(lower);
+}
+
 function cleanGeneratedText(text = '') {
   return String(text)
     .trim()
     .replace(/^["']|["']$/g, '')
+    .replace(/[‘’]/g, "'")
     .replace(/[—–]/g, '.')
     .replace(/\bheart emoji\b/gi, '❤️')
     .replace(/\b(?:sparkle|sparkles) emoji\b/gi, '✨')
@@ -518,16 +543,22 @@ function fallbackChatLine(char, player, group = false) {
 
 function cleanChatText(text = '', char = null, player = null, group = false) {
   const names = [char?.name, char?.handle, char?.handle ? `@${char.handle}` : ''].filter(Boolean).map(escapeRegExp);
+  const fullNameTag = char?.name && char?.handle
+    ? new RegExp(`^\\s*${escapeRegExp(char.name)}\\s*\\(\\s*@?${escapeRegExp(char.handle)}\\s*\\)\\s*:?\\s*`, 'i')
+    : /^$/;
   let clean = cleanGeneratedText(text)
     .replace(/[“”]/g, '"')
+    .replace(fullNameTag, '')
     .replace(names.length ? new RegExp(`^\\s*(?:${names.join('|')})\\s*:\\s*`, 'i') : /^$/, '')
+    .replace(/^\s*["']|["']\s*$/g, '')
     .trim();
   if (!clean || looksLikePromptLeak(clean)) return fallbackChatLine(char, player, group);
   return clean;
 }
 
 function looksLikePromptLeak(text = '') {
-  return /i need context|let me check|looking at the recent feed|i'm ready|i understand the character|what's the prompt|i can write as|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|here'?s/i.test(String(text));
+  const normalized = String(text).replace(/[‘’]/g, "'").toLowerCase();
+  return /i need context|let me check|looking at the recent feed|i'm ready|i understand|i know the rules|identity rule|pronouns and houses|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|here'?s/i.test(normalized);
 }
 
 function fallbackPostForChar(char, player) {
@@ -588,6 +619,14 @@ function cleanSelfNarration(text = '', char) {
     .replace(new RegExp(`^${nameGroup}\\s+will\\s+`, 'i'), "i will ");
 }
 
+function stripLeadingSelfMention(text = '', char) {
+  if (!char?.handle || !text) return text;
+  const handle = escapeRegExp(char.handle.replace(/^@/, ''));
+  return String(text)
+    .replace(new RegExp(`^\\s*@${handle}\\s*:?\\s*`, 'i'), '')
+    .trim();
+}
+
 function isSelfNarration(text = '', char) {
   if (!char?.name || !text) return false;
   const first = (char.name || '').split(/\s+/)[0];
@@ -597,7 +636,7 @@ function isSelfNarration(text = '', char) {
 }
 
 function cleanSocialPostText(raw = '', char, player) {
-  const clean = cleanSelfNarration(cleanGeneratedText(raw), char)
+  const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw), char), char)
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
@@ -619,7 +658,7 @@ function fallbackBotLine(bot = {}) {
 }
 
 function cleanSocialReplyText(raw = '', char, player, opts = {}) {
-  const clean = cleanSelfNarration(cleanGeneratedText(raw), char)
+  const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw), char), char)
     .replace(/^reply:\s*/i, '')
     .replace(/^comment:\s*/i, '')
     .trim();
@@ -1199,6 +1238,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const directMentionIds = new Set(directlyMentioned.map(c => c.id));
     const authorId = author?.id || post.charId;
     const isKeresPost = post.charId === 'player' || mentionedHandles.has((player.handle || '').toLowerCase());
+    const houseTeamDefenders = eligible.filter(c => isHouseTeamCallout(post.text, c));
+    const defenderIds = new Set(houseTeamDefenders.map(c => c.id));
 
     const charge = (c) => {
       const r = isKeresPost ? playerRelFor(c) : (c.relationships?.[post.charId] ?? c.relationships?.player);
@@ -1218,6 +1259,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       .filter(c => !directMentionIds.has(c.id))
       .map(c => {
         let w = charge(c) + Math.random()*30;
+        if (defenderIds.has(c.id)) w += 55;
         if (c.id === 'silas' && isKeresPost && !/slytherin|tryout|captain|strategy|quidditch|pitch|match|foul|chaser|seeker|keeper|beater/i.test(post.text || '')) w *= 0.28;
         if (c.id === 'silas' && authorId === 'havoc') w *= 0.35;
         if (c.id === 'callum' && authorId === 'havoc') w *= 0.72;
@@ -1229,6 +1271,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const targetCount = Math.min(4, Math.max(embarrassmentContext ? 2 : 1, directlyMentioned.length + 1 + (Math.random() < 0.35 ? 1 : 0)));
     let picked = [
       ...directlyMentioned,
+      ...houseTeamDefenders,
       ...(snarkyResponder && !directMentionIds.has(snarkyResponder.id) ? [snarkyResponder] : []),
       ...weighted.slice(0, Math.max(0, targetCount - directlyMentioned.length)).map(x => x.c),
     ].filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i).slice(0, targetCount);
@@ -1249,8 +1292,9 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         rel > -20 ? 'tense / complicated with the poster' :
         'genuinely dislikes the poster';
       const mentionNote = directMentionIds.has(c.id) ? ' DIRECTLY @MENTIONED in the post; they should usually answer the tag.' : '';
+      const houseDefenseNote = isHouseTeamCallout(post.text, c) ? ' HOUSE/TEAM CALLOUT: the post insults or needles their house/team. They should answer with more bite, defend or undercut the insult, or hit back. Do not shrug, agree mildly, or say "I guess".' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
-      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${stanceFor(c)}${mentionNote}${embarrassmentNote}`;
+      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${stanceFor(c)}${mentionNote}${houseDefenseNote}${embarrassmentNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -1698,12 +1742,23 @@ ${BANNED_PHRASES_RULE}`
     const tagged = candidatePool.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
     const target = targetChar && targetChar.id !== player.id && targetChar.id !== '__gmz__' ? [targetChar] : [];
     const sourceAuthorId = targetChar?.id || post.charId;
+    const sameHouseBacked = candidatePool.filter(c =>
+      !tagged.some(t => t.id === c.id) &&
+      !target.some(t => t.id === c.id) &&
+      (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c))
+    ).sort((a,b) => {
+      const directA = isHouseTeamCallout(sourceText || post.text, a) ? 1 : 0;
+      const directB = isHouseTeamCallout(sourceText || post.text, b) ? 1 : 0;
+      return directB - directA;
+    });
     const charged = [...candidatePool]
-      .filter(c => c.id !== post.charId && !target.some(t => t.id === c.id) && !tagged.some(t => t.id === c.id))
+      .filter(c => c.id !== post.charId && !target.some(t => t.id === c.id) && !tagged.some(t => t.id === c.id) && !sameHouseBacked.some(t => t.id === c.id))
       .map(c => {
         let w = Math.abs((playerRelFor(c) ?? 50) - 50) + Math.random()*18;
+        if (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)) w += 45;
         if (sourceAuthorId === 'havoc' && c.id === 'silas') w *= 0.22;
         if (sourceAuthorId === 'havoc' && c.id === 'callum' && !mentionedHandles.has('callumpike')) w *= 0.35;
+        if (c.id === 'callum' && !mentionedHandles.has('callumpike') && !backsHouseTeam(playerText, c) && !isHouseTeamCallout(sourceText || post.text, c)) w *= 0.45;
         if (c.id === 'silas' && !mentionedHandles.has('silasmontague') && Math.random() < 0.45) w *= 0.3;
         if (mode === 'direct' && c.id === 'havoc' && !mentionedHandles.has('havocfang')) w *= 0.28;
         return { c, w };
@@ -1711,13 +1766,18 @@ ${BANNED_PHRASES_RULE}`
       .sort((a,b) => b.w - a.w)
       .map(x => x.c);
     const wantedCount = mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0);
-    const responders = [...target, ...tagged, ...charged]
+    const responders = [...target, ...tagged, ...sameHouseBacked, ...charged]
       .filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i)
       .slice(0, wantedCount);
     if (!responders.length) return;
 
     try {
-      const roster = responders.map((c,i) => `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${stanceFor(c)}`).join('\n');
+      const roster = responders.map((c,i) => {
+        const defenseNote = backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)
+          ? ' HOUSE/TEAM STAKE: their house/team is being backed or insulted here. They should feel pulled back into the thread and answer with bite, agreement, or direct pushback instead of letting a random rival take over.'
+          : '';
+        return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${stanceFor(c)}${defenseNote}`;
+      }).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
           `A social media thread is active at Merlin's College of Magic.
@@ -1732,7 +1792,7 @@ ${player.name} (@${player.handle}) just commented: "${playerText}"
 ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
 
 Characters in order:
 ${roster}
@@ -3775,14 +3835,15 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, setGroupCh
         const reply = await window.claude.complete({ messages:[{ role:'user', content:
           `You are ${member.name} (@${member.handle}; pronouns: ${pronounsFor(member)}) in a group chat called "${group.name}".
 Personality: ${member.personality}. ${member.description?.slice(0,200)}
-Other people in this chat: ${otherMembers}, and ${player.name} (@${player.handle}).
+Other people currently present in this chat: ${otherMembers}.
 ${pronounRule([member, player, ...members])}
 ${CHARACTER_TONE_RULE}
 ${playerStance(member, player)}
 Recent campus feed:\n${recentFeed}
 Chat history:\n${historyStr}
 ${player.name} just said: "${input}"
-Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Sometimes address specific people by @handle. Sometimes ignore the question and say something tangential. Be natural.
+Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound.
+Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Everyone listed as present can see this message. If you mean someone in the chat, talk to them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. Sometimes ignore the question and say something tangential. Be natural.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]
         });
@@ -5145,7 +5206,7 @@ ${BANNED_PHRASES_RULE}` }
       const reply = await window.claude.complete({ messages:[{ role:'user', content:
         `You are ${member.name} (@${member.handle}; pronouns: ${pronounsFor(member)}) in a group chat called "${group.name}".
 Personality: ${member.personality}. ${member.description?.slice(0,220)}
-Other people in this chat: ${otherMembers}.
+Other people currently present in this chat: ${otherMembers}.
 ${pronounRule([member, player, ...members])}
 ${CHARACTER_TONE_RULE}
 ${playerStance(member, player)}
@@ -5155,7 +5216,8 @@ Recent group chat history:
 ${historyStr || '(new group chat)'}
 
 The chat went quiet. Pop back in naturally because of this context: ${context}
-Write ONE short in-character group chat message. It can revive the bit, @someone, ask a messy question, flirt, complain, gossip, or drag the conversation sideways. It should feel like a person came back after a lull, not like a formal announcement. 4-22 words. No quotes.
+Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound.
+Write ONE short in-character group chat message. Everyone listed as present can see it. If you mean someone in the chat, address them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. It can revive the bit, @someone, ask a messy question, flirt, complain, gossip, or drag the conversation sideways. It should feel like a person came back after a lull, not like a formal announcement. 4-22 words. No quotes.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]
       });

@@ -140,8 +140,12 @@ function Avatar({ char, size = 42, onClick }) {
 
 // ─── Verified / Quidditch badge ──────────────────────────────────
 function isQuidditchPlayer(char) {
+  if (!char) return false;
+  const role = (char.position || char.bio || '').toLowerCase();
+  if (/former|commentator|student|sister|alumna/.test(role)) return false;
+  if (/(beater|chaser|keeper|seeker|captain|reserve)/.test(role)) return true;
   const text = ((char.bio||'') + ' ' + (char.description||'')).toLowerCase();
-  return ['beater','chaser','keeper','seeker','quidditch'].some(w => text.includes(w));
+  return /(chaser trialist|trying out as a chaser|quidditch captain)/.test(text);
 }
 function CharBadge({ char }) {
   if (!char) return null;
@@ -300,15 +304,16 @@ function houseRoster(chars = []) {
     .filter(Boolean)
     .map(c => {
       const house = houseFor(c) || 'unknown house';
-      const team = c.team || house;
-      const position = c.position ? `, ${c.position}` : '';
-      return `${c.name} (@${c.handle}): ${house}${team ? `, ${team}` : ''}${position}`;
+      const plays = isQuidditchPlayer(c);
+      const team = plays ? (c.team || house) : '';
+      const position = plays && c.position ? `, ${c.position}` : c.position ? `, non-player role: ${c.position}` : '';
+      return `${c.name} (@${c.handle}): house ${house}${team ? `, Quidditch team ${team}` : ', not on a Quidditch team'}${position}`;
     })
     .join('; ');
 }
 
 function pronounRule(chars = []) {
-  return `IDENTITY RULE: Use these exact third-person pronouns and house/team facts. Do not infer from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. This controls third-person references and house logic; direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. If a character is mentioned by @handle, keep their pronouns and house/team consistent. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
+  return `IDENTITY RULE: Use these exact third-person pronouns and house/team facts. Do not infer from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. This controls third-person references and house logic; direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. If a character is mentioned by @handle, keep their pronouns and house/team consistent. A non-player can comment on Quidditch, but should not speak like they personally play, practice, show up for matches, or need to prove anything on the pitch. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
 }
 
 function compressImageFile(file, { maxSize = 720, quality = 0.78 } = {}) {
@@ -371,8 +376,11 @@ CANON AND FACT RULES:
 - If a character would not know something, they cannot state it as fact. They may speculate, ask, misread, subtweet, gossip, or say "rumor is", but keep uncertainty visible.
 - GMZ and gossip accounts can exaggerate public rumors, but they still cannot create hard canon. Frame unconfirmed claims as rumor, alleged sightings, sources, or timeline speculation.
 - Prefer reacting to visible app evidence: the post text, tags, replies, likes, clips, screenshots, current relationship notes, and recent messages.
+- Do not accuse someone of dodging, not showing up, refusing to play, missing a game, ducking a challenge, or failing the team unless the visible post/thread explicitly says that happened. If you need pressure without facts, use "you keep changing the framing", "say what you mean", "that sounded cleaner in your head", or ask a pointed question.
+- Do not invent scoreboard results, game attendance, wins/losses, who showed up to matches, who missed practice, who dodged, who started a fight, or who made a mistake unless it appears in the visible thread or current event. Trash talk can be mean without inventing hard facts.
 - Trash talk is normal Quidditch culture, not a social crime. Characters can insult rival houses, rival teams, plays, captains, training, habits, and public mistakes. Do not make them act shocked that someone talked trash unless the line crosses a real personal boundary.
 - Preserve house and team logic. Treat house/team like pronouns: exact, sticky, and not guessable from vibes. If a character is on Gryffindor, Slytherin, Ravenclaw, or Hufflepuff, they should not talk about that house or team like outsiders. They can roast their own side, but it should sound like "we/us/our team/my captain/our mess", not "they/them/Gryffindor is boring" unless they are clearly quoting or distancing as a joke. Rival houses can and should use "they/them" and be openly smug. Do not write "Slytherin could never", "Gryffindor could never", etc. if someone from that house just did the thing in the visible thread.
+- House is not the same as Quidditch team. Ravenclaw students are not automatically Ravenclaw Quidditch players. Tamsin Cade is Ravenclaw, but she is not on a Quidditch team; she can critique Quidditch as a sharp observer, sister, or student, not as someone who needs to "show up" on the pitch.
 - When context is thin, stay broad, teasing, evasive, or ask a pointed question instead of filling the gap with invented lore.
 
 ANTI-AI PATTERNS:
@@ -408,6 +416,7 @@ CHARACTER TONE BALANCE:
 - Tamsin and Elara can be composed or dangerous without becoming humorless.
 - Silas should stay controlled and tactical. Do not make him openly needy, defensive, or romantic on main. He should absolutely enjoy Gryffindor trash talk, especially if Keres is targeting Gryffindor's structure, habits, or players. He may correct sloppy logic, but he should not become protective of Gryffindor or offended on their behalf.
 - Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", "let's see it", "prove it", or agreeing after being insulted. He should track the actual logic of the exchange, not randomly defend Havoc or accuse Keres of judging if she is clearly appreciating the chaos.
+- Callum should not invent sporting facts to win an argument. He can attack the wording, question the premise, defend Gryffindor's standards, or get petty about Slytherin, but he should not claim Keres dodged, missed, or failed unless the visible thread says so.
 - Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.`;
 
 function playerStance(char, player, relationshipOverride) {
@@ -432,8 +441,11 @@ function playerStance(char, player, relationshipOverride) {
   const relationshipNuance = char.id === 'tamsin' && rel > 0
     ? 'Because Tamsin and Keres currently have positive trust, she can still be sharp, but she should not treat normal Slytherin-vs-Gryffindor trash talk as weird, betrayal, or overstepping. She respects directness and information exchange; skepticism should be precise, not random hostility.'
     : '';
-  const teamLine = char.team || char.house
-    ? `TEAM CONTINUITY: ${char.name} is ${char.team ? `on ${char.team}` : `in ${char.house}`}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic. They may roast their own side, but not like an outsider. If discussing a rival team/house, trash talk is allowed and expected.`
+  const playsQuidditch = isQuidditchPlayer(char);
+  const teamLine = char.team || char.house || char.position
+    ? playsQuidditch
+      ? `TEAM CONTINUITY: ${char.name} is on ${char.team || char.house}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic. They may roast their own side, but not like an outsider. If discussing a rival team/house, trash talk is allowed and expected.`
+      : `TEAM CONTINUITY: ${char.name} is in ${char.house || 'their house'} but is not on a Quidditch team${char.position ? ` (${char.position})` : ''}. They can comment on Quidditch as an observer, friend, sibling, gossip participant, or student, but not as someone personally playing or needing to show up on the pitch.`
     : '';
   return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} ${teamLine} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
 }
@@ -1062,6 +1074,10 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
   if (!char) return null;
 
   const renderText = (text) => renderLinkedText(text, allChars, onCharClick);
+  const safePostText = cleanSocialPostText(post.text, char, player);
+  const safeReplyText = replyChar && post.reply?.text
+    ? cleanSocialReplyText(post.reply.text, replyChar, player)
+    : post.reply?.text;
 
   return (
     <div style={{padding:'16px 16px', borderBottom:`1px solid ${C.border}`}}>
@@ -1077,7 +1093,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
             </div>
             <span style={{color:C.muted, fontSize:18, cursor:'pointer', padding:'0 4px'}}>···</span>
           </div>
-          <p style={{color:C.text, fontSize:14, lineHeight:1.5, marginTop:4, cursor:'pointer'}} onClick={() => onOpenThread && onOpenThread(post)}>{renderText(post.text)}</p>
+          <p style={{color:C.text, fontSize:14, lineHeight:1.5, marginTop:4, cursor:'pointer'}} onClick={() => onOpenThread && onOpenThread(post)}>{renderText(safePostText)}</p>
           {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', borderRadius:12, marginTop:8, maxHeight:220, objectFit:'cover', cursor:'pointer'}} />}
           <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
             <button onClick={() => onOpenThread && onOpenThread(post)} style={{background:'none',border:'none',color:C.muted,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
@@ -1106,7 +1122,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread }) {
             <CharBadge char={replyChar} />
             <span style={{color:C.muted, fontSize:12}}>@{replyChar.handle}</span>
           </div>
-          <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{renderText(post.reply.text)}</p>
+          <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{renderText(safeReplyText)}</p>
           <div style={{display:'flex', alignItems:'center', gap:4, marginTop:6}}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill={liked ? '#e91e8c' : C.muted}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
             <span style={{color:C.muted, fontSize:12}}>{fmt(post.likes * 62)}</span>
@@ -1122,6 +1138,10 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
   const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
+  const safePostText = char ? cleanSocialPostText(post.text, char, player) : post.text;
+  const safePostReplyText = replyChar && post.reply?.text
+    ? cleanSocialReplyText(post.reply.text, replyChar, player)
+    : post.reply?.text;
   const playerRelFor = (c) => effectivePlayerRelationship(c, [], dms, groupChats).value;
   const stanceFor = (c) => playerStance(c, player, playerRelFor(c));
   const [liked, setLiked] = useState(false);
@@ -1759,7 +1779,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
           </div>
           <span style={{color:C.muted, fontSize:20}}>···</span>
         </div>
-        <p style={{color:C.text, fontSize:17, lineHeight:1.6, marginBottom:12}}>{renderText(post.text)}</p>
+        <p style={{color:C.text, fontSize:17, lineHeight:1.6, marginBottom:12}}>{renderText(safePostText)}</p>
         {post.photo && <img src={post.photo} alt="" style={{width:'100%', borderRadius:14, marginBottom:12, maxHeight:260, objectFit:'cover'}}/>}
         <p style={{color:C.muted, fontSize:13, marginBottom:12}}>{fmtTime(post.timestamp)} · <strong style={{color:C.text}}>{fmt(post.likes * 7.2 | 0)}</strong> Views</p>
         <div style={{borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`, padding:'10px 0', display:'flex', gap:16, alignItems:'center'}}>
@@ -1788,7 +1808,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
                 <CharBadge char={replyChar} />
                 <span style={{color:C.muted, fontSize:13}}>@{replyChar.handle}</span>
               </div>
-              <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{renderText(post.reply.text)}</p>
+              <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{renderText(safePostReplyText)}</p>
               <div style={{display:'flex', gap:16, marginTop:8, alignItems:'center'}}>
                 <span style={{color:C.muted, fontSize:12, display:'flex', alignItems:'center', gap:4}}>
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
@@ -4376,11 +4396,11 @@ function NotificationsScreen({ chars, player, feed, onOpenThread, onCharClick })
     const items = [];
     const poster = allChars.find(c => c.id === post.charId);
     if (post.charId !== player.id && mentionRe.test(post.text || '')) {
-      items.push({ id:`mention-${post.id}`, type:'mention', char:poster, text:'mentioned you in a post', preview:post.text, timestamp:post.timestamp, post });
+      items.push({ id:`mention-${post.id}`, type:'mention', char:poster, text:'mentioned you in a post', preview: poster ? cleanSocialPostText(post.text, poster, player) : post.text, timestamp:post.timestamp, post });
     }
     if (post.reply?.charId && post.reply.charId !== player.id && (post.charId === player.id || mentionRe.test(post.reply.text || ''))) {
       const replier = allChars.find(c => c.id === post.reply.charId);
-      items.push({ id:`reply-${post.id}`, type:'reply', char:replier, text: post.charId === player.id ? 'replied to your post' : 'mentioned you in a reply', preview:post.reply.text, timestamp:(post.timestamp || Date.now()) + 1, post });
+      items.push({ id:`reply-${post.id}`, type:'reply', char:replier, text: post.charId === player.id ? 'replied to your post' : 'mentioned you in a reply', preview: replier ? cleanSocialReplyText(post.reply.text, replier, player) : post.reply.text, timestamp:(post.timestamp || Date.now()) + 1, post });
     }
     (post.charComments || []).forEach((cc, i) => {
       if (cc.charId === player.id) return;
@@ -4392,7 +4412,7 @@ function NotificationsScreen({ chars, player, feed, onOpenThread, onCharClick })
         type:'reply',
         char:replier,
         text: post.charId === player.id ? 'replied to your post' : 'replied to you',
-        preview:cc.text,
+        preview: replier ? cleanSocialReplyText(cc.text, replier, player) : cc.text,
         timestamp:cc.timestamp || post.timestamp,
         post,
       });
@@ -4407,7 +4427,7 @@ function NotificationsScreen({ chars, player, feed, onOpenThread, onCharClick })
         type:'reply',
         bot,
         text: post.charId === player.id ? 'reacted to your post' : 'reacted to you',
-        preview:bc.text,
+        preview:cleanSocialReplyText(bc.text, null, player, { bot }),
         timestamp:bc.timestamp || post.timestamp,
         post,
       });

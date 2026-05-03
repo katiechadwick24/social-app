@@ -485,9 +485,19 @@ function sameHouseOrTeam(a, b) {
   return !!((aTeam && bTeam && aTeam === bTeam) || (aHouse && bHouse && aHouse === bHouse));
 }
 
+function characterMentionedInText(text = '', char) {
+  if (!char) return false;
+  const raw = String(text || '');
+  const handle = (char.handle || '').toLowerCase();
+  const name = (char.name || '').toLowerCase().trim();
+  const firstName = name.split(/\s+/)[0] || '';
+  if (handle && new RegExp(`@${escapeRegExp(handle)}\\b`, 'i').test(raw)) return true;
+  if (name && new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i').test(raw)) return true;
+  return !!(firstName.length >= 4 && new RegExp(`\\b${escapeRegExp(firstName)}\\b`, 'i').test(raw));
+}
+
 function mentionedCharactersInText(text = '', roster = []) {
-  const handles = new Set(Array.from(String(text || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase()));
-  return (roster || []).filter(c => handles.has((c.handle || '').toLowerCase()));
+  return (roster || []).filter(c => characterMentionedInText(text, c));
 }
 
 function teammateStakeInText(text = '', responder, roster = []) {
@@ -578,16 +588,16 @@ function cleanChatText(text = '', char = null, player = null, group = false) {
 
 function looksLikePromptLeak(text = '') {
   const normalized = String(text).replace(/[‘’]/g, "'").toLowerCase();
-  return /i need context|let me check|looking at the recent feed|i'm ready|i understand|i know the rules|identity rule|pronouns and houses|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|here'?s/i.test(normalized);
+  return /i need context|i don't have enough|i do not have enough|need more context|need to know what'?s happening|what'?s the most recent|let me check|looking at the recent feed|i'm ready|i understand|i know the rules|identity rule|pronouns and houses|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|here'?s/i.test(normalized);
 }
 
 function fallbackPostForChar(char, player) {
   const handle = char?.handle || 'someone';
   const pool = {
     callum: [
-      'if the structure holds, the scoreboard handles the rest.',
-      'clean execution beats noise. every time.',
-      'some of you confuse motion with progress.',
+      'someone in charms just tried to flex and set their sleeve on fire. strong start.',
+      'practice was quiet for six minutes. new school record.',
+      'if anyone asks, i was not tutoring first years. i was preventing a disaster.',
     ],
     rowan: [
       'some people show their whole strategy because nobody asked nicely enough.',
@@ -600,14 +610,14 @@ function fallbackPostForChar(char, player) {
       'bad idea, good timing. i see no issue.',
     ],
     silas: [
-      'discipline is not a personality flaw just because gryffindor keeps failing it.',
-      'if you need chaos to look interesting, that is already an admission.',
-      'standards are only intimidating when you do not have them.',
+      'gryffindor left a playbook unattended. tragic. unrelated, i am reading.',
+      'someone explain why the library is louder than the pitch today.',
+      'if anyone needs me, no you do not.',
     ],
     briar: [
       'team bonding is not a synonym for inventing a new disciplinary category.',
-      'the next person calling impulse a strategy is running laps.',
-      'talent still has to answer to the scoreboard.',
+      'the next person tracking mud into the changing room is meeting my clipboard.',
+      'whoever taught the first years victory chants owes me an apology.',
     ],
   }[char?.id] || [
     `@${player?.handle || 'keresvalen'} has half the campus pretending not to watch. cute.`,
@@ -735,7 +745,7 @@ function repairPromptLeakGroupChats(groups = [], chars = [], player) {
   const all = [...(chars || []), player].filter(Boolean);
   return (groups || []).map(group => ({
     ...group,
-    messages: (group.messages || []).map(m => {
+    messages: (group.messages || []).filter(m => !m?.revived).map(m => {
       if (m?.role !== 'char') return m;
       const char = all.find(c => c.id === m.charId);
       return { ...m, text: cleanChatText(m.text || '', char, player, true) };
@@ -745,7 +755,7 @@ function repairPromptLeakGroupChats(groups = [], chars = [], player) {
 
 function loggedRelationshipAddsByChar(eventLog = {}) {
   return (eventLog || []).reduce((acc, entry) => {
-    if (entry?.relationshipApplied) return acc;
+    if (entry?.relationshipApplied || entry?.type === 'scene') return acc;
     (entry?.scoreChanges || []).forEach(ch => {
       if (!ch?.avatar || typeof ch.value !== 'number') return;
       acc[ch.avatar] = +(Number(acc[ch.avatar] || 0) + Number(ch.value || 0)).toFixed(2);
@@ -1262,10 +1272,14 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const mentionedHandles = new Set(
       Array.from((post.text || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase())
     );
-    const directlyMentioned = eligible.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
+    const mentionedByName = mentionedCharactersInText(post.text || '', eligible);
+    const directlyMentioned = eligible.filter(c =>
+      mentionedHandles.has((c.handle || '').toLowerCase()) ||
+      mentionedByName.some(m => m.id === c.id)
+    );
     const directMentionIds = new Set(directlyMentioned.map(c => c.id));
     const authorId = author?.id || post.charId;
-    const isKeresPost = post.charId === 'player' || mentionedHandles.has((player.handle || '').toLowerCase());
+    const isKeresPost = post.charId === 'player' || characterMentionedInText(post.text || '', player);
     const houseTeamDefenders = eligible.filter(c => isHouseTeamCallout(post.text, c));
     const defenderIds = new Set(houseTeamDefenders.map(c => c.id));
     const teammateDefenders = eligible.filter(c =>
@@ -1301,15 +1315,16 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       });
     weighted.sort((a,b) => b.w - a.w);
 
-    // Pick 1-3 chars by default. Direct @mentions jump the line, then other characters can chime in.
+    // Pick 1-3 chars by default. Direct mentions jump the line, then other characters can chime in.
     const targetCount = Math.min(4, Math.max(embarrassmentContext ? 2 : 1, directlyMentioned.length + 1 + (Math.random() < 0.35 ? 1 : 0)));
+    const targetLimit = Math.min(5, Math.max(targetCount, directlyMentioned.length));
     let picked = [
       ...directlyMentioned,
       ...houseTeamDefenders,
       ...teammateDefenders,
       ...(snarkyResponder && !directMentionIds.has(snarkyResponder.id) ? [snarkyResponder] : []),
       ...weighted.slice(0, Math.max(0, targetCount - directlyMentioned.length)).map(x => x.c),
-    ].filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i).slice(0, targetCount);
+    ].filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i).slice(0, targetLimit);
     if (authorId === 'havoc' && picked.some(c => c.id === 'silas') && picked.some(c => c.id === 'callum')) {
       picked = picked.filter(c => c.id !== (Math.random() < 0.65 ? 'silas' : 'callum'));
     }
@@ -1326,7 +1341,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         rel > 10 ? 'tolerates the poster' :
         rel > -20 ? 'tense / complicated with the poster' :
         'genuinely dislikes the poster';
-      const mentionNote = directMentionIds.has(c.id) ? ' DIRECTLY @MENTIONED in the post; they should usually answer the tag.' : '';
+      const mentionNote = directMentionIds.has(c.id) ? ' DIRECTLY MENTIONED in the post by @handle or name; they should usually answer the callout.' : '';
       const houseDefenseNote = isHouseTeamCallout(post.text, c) ? ' HOUSE/TEAM CALLOUT: the post insults or needles their house/team. They should answer with more bite, defend or undercut the insult, or hit back. Do not shrug, agree mildly, or say "I guess".' : '';
       const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
@@ -1349,7 +1364,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}\n\n${CHARACTER_TONE_RULE}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly @mentioned, treat it like they were tagged in public: they should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}\n\n${CHARACTER_TONE_RULE}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public: they should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -1650,6 +1665,15 @@ Return ONLY SILENCE or the reply text.`
     }).join('\n');
   }
 
+  function speakerThreadHistory(charId, limit = 4) {
+    if (!charId) return '';
+    return mergedReplies
+      .filter(item => item.kind === 'char' && item.data.charId === charId && item.data.text)
+      .slice(-limit)
+      .map((item, idx) => `${idx + 1}. "${item.data.text}"`)
+      .join('\n');
+  }
+
   async function submitPostReply() {
     const text = replyText.trim();
     if (!text) return;
@@ -1717,6 +1741,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
     if (target.kind === 'char' && target.targetChar) {
       const targetChar = target.targetChar;
       const currentTranscript = chronologicalTranscript(12);
+      const priorTargetLines = speakerThreadHistory(targetChar.id, 5);
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
@@ -1728,11 +1753,12 @@ ${stanceFor(targetChar)}
 Original post by @${char?.handle}: "${post.text}"
 Recent visible thread:
 ${currentTranscript || '(no earlier replies shown)'}
+${priorTargetLines ? `\nYour previous public lines in this thread:\n${priorTargetLines}` : ''}
 
 Your comment: "${target.sourceText || ''}"
 ${player.name} (@${player.handle}) replied to you: "${text}"
 
-Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a pointed question, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a pointed question, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
           }]
         });
@@ -1774,7 +1800,12 @@ ${BANNED_PHRASES_RULE}`
     const transcript = chronologicalTranscript(12);
     const excluded = new Set(excludeIds);
     const candidatePool = chars.filter(c => c.id !== player.id && !excluded.has(c.id));
-    const tagged = candidatePool.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
+    const mentionedByName = mentionedCharactersInText(playerText || '', candidatePool);
+    const tagged = candidatePool.filter(c =>
+      mentionedHandles.has((c.handle || '').toLowerCase()) ||
+      mentionedByName.some(m => m.id === c.id)
+    );
+    const taggedIds = new Set(tagged.map(c => c.id));
     const target = targetChar && targetChar.id !== player.id && targetChar.id !== '__gmz__' ? [targetChar] : [];
     const sourceAuthorId = targetChar?.id || post.charId;
     const sameHouseBacked = candidatePool.filter(c =>
@@ -1792,15 +1823,15 @@ ${BANNED_PHRASES_RULE}`
         let w = Math.abs((playerRelFor(c) ?? 50) - 50) + Math.random()*18;
         if (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c) || teammateStakeInText(`${sourceText || post.text} ${playerText}`, c, [player, ...chars])) w += 45;
         if (sourceAuthorId === 'havoc' && c.id === 'silas') w *= 0.22;
-        if (sourceAuthorId === 'havoc' && c.id === 'callum' && !mentionedHandles.has('callumpike')) w *= 0.35;
-        if (c.id === 'callum' && !mentionedHandles.has('callumpike') && !backsHouseTeam(playerText, c) && !isHouseTeamCallout(sourceText || post.text, c)) w *= 0.45;
-        if (c.id === 'silas' && !mentionedHandles.has('silasmontague') && Math.random() < 0.45) w *= 0.3;
-        if (mode === 'direct' && c.id === 'havoc' && !mentionedHandles.has('havocfang')) w *= 0.28;
+        if (sourceAuthorId === 'havoc' && c.id === 'callum' && !taggedIds.has('callum')) w *= 0.35;
+        if (c.id === 'callum' && !taggedIds.has('callum') && !backsHouseTeam(playerText, c) && !isHouseTeamCallout(sourceText || post.text, c)) w *= 0.45;
+        if (c.id === 'silas' && !taggedIds.has('silas') && Math.random() < 0.45) w *= 0.3;
+        if (mode === 'direct' && c.id === 'havoc' && !taggedIds.has('havoc')) w *= 0.28;
         return { c, w };
       })
       .sort((a,b) => b.w - a.w)
       .map(x => x.c);
-    const wantedCount = mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0);
+    const wantedCount = Math.max(tagged.length, mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0));
     const responders = [...target, ...tagged, ...sameHouseBacked, ...charged]
       .filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i)
       .slice(0, wantedCount);
@@ -1808,13 +1839,17 @@ ${BANNED_PHRASES_RULE}`
 
     try {
       const roster = responders.map((c,i) => {
+        const priorLines = speakerThreadHistory(c.id, 4);
         const defenseNote = backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)
           ? ' HOUSE/TEAM STAKE: their house/team is being backed or insulted here. They should feel pulled back into the thread and answer with bite, agreement, or direct pushback instead of letting a random rival take over.'
           : '';
         const teammateNote = teammateStakeInText(`${sourceText || post.text} ${playerText}`, c, [player, ...chars])
           ? ' TEAMMATE STAKE: someone from their house/team is tagged, backed, or under pressure. In most cases they take their teammate side first, even if they roast them while doing it.'
           : '';
-        return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${stanceFor(c)}${defenseNote}${teammateNote}`;
+        const continuityNote = priorLines
+          ? ` PREVIOUS LINES BY THIS CHARACTER IN THIS THREAD: ${priorLines.replace(/\n/g, ' ')} Keep their stance consistent; do not flip sides unless the flip is intentional and acknowledged.`
+          : '';
+        return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${stanceFor(c)}${defenseNote}${teammateNote}${continuityNote}`;
       }).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
@@ -1831,7 +1866,7 @@ ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 
 Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
-Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting.
+Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting. Stance rule: if a character has already taken a side in this thread, keep that side unless the text clearly gives them a reason to change and they acknowledge the change.
 
 Characters in order:
 ${roster}
@@ -1954,6 +1989,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
               return next;
             });
             try {
+              const priorCharLines = speakerThreadHistory(cChar.id, 5);
               const res = await window.claude.complete({
                 messages:[{ role:'user', content:
                   `You are ${cChar.name} (@${cChar.handle}; pronouns: ${pronounsFor(cChar)}). Personality: ${cChar.personality}.
@@ -1964,11 +2000,12 @@ ${stanceFor(cChar)}
 Original post by @${char?.handle}: "${post.text}"
 Recent visible thread:
 ${chronologicalTranscript(12) || '(no earlier replies shown)'}
+${priorCharLines ? `\nYour previous public lines in this thread:\n${priorCharLines}` : ''}
 
 Your comment: "${cc.text}"
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
-Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, or be awkward instead of angry. 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, or be awkward instead of angry. 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
                 }]
               });
@@ -3422,6 +3459,51 @@ function relationshipStageLabel(value) {
   return 'Bad Blood';
 }
 
+function fallbackProfileFeeling(char, rel = 0) {
+  const positive = rel > 8;
+  const warm = rel > 0;
+  const guarded = rel < 0;
+  const pool = {
+    tamsin: positive
+      ? ['I trust her more than I planned to, which is inconvenient.']
+      : guarded
+        ? ['I am watching her closely before I decide what she is.']
+        : ['She is interesting enough to observe, not enough to excuse.'],
+    havoc: warm
+      ? ['She is trouble in a way that makes standing still feel stupid.']
+      : ['She hits back fast. Obviously I noticed.'],
+    rowan: warm
+      ? ['She keeps changing the room before anyone admits they are watching.']
+      : ['She is either a problem or the point, which is inconveniently funny.'],
+    silas: warm
+      ? ['She is useful, sharp, and far too aware of it.']
+      : ['She has talent. Whether she has discipline remains the question.'],
+    callum: warm
+      ? ['She is good, which is annoying because pretending otherwise would be sloppy.']
+      : ['She talks like the scoreboard already belongs to her. It does not.'],
+    jude: warm
+      ? ['She makes the room worse in a way I respect professionally.']
+      : ['She is loud enough to be useful and annoying enough to be fun.'],
+  }[char?.id] || (warm
+    ? ['I am paying attention, which is already more than most people get.']
+    : guarded
+      ? ['I am keeping my distance until the pattern gets clearer.']
+      : ['I am watching the situation develop with terrible judgment.']);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function cleanProfileFeelingText(raw = '', char, rel = 0) {
+  const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw), char), char)
+    .replace(/^current feeling:\s*/i, '')
+    .replace(/^feeling:\s*/i, '')
+    .replace(/^["']|["']$/g, '')
+    .trim();
+  if (!clean || looksLikePromptLeak(clean) || isSelfNarration(clean, char) || clean.length > 180) {
+    return fallbackProfileFeeling(char, rel);
+  }
+  return clean;
+}
+
 function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats = [], onBack, onDM, feed, allChars, onOpenThread, onSceneEnd }) {
   const { hasRelationship: hasPlayerRel, value: rel } = effectivePlayerRelationship(char, eventLog, dms, groupChats);
   const [following, setFollowing] = useState(false);
@@ -3449,20 +3531,27 @@ function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats =
           return `@${poster?.handle||p.charId}: "${p.text}"`;
         }).join('\n');
         const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
+        const logContext = (eventLog || [])
+          .filter(e => e && e.type !== 'dm')
+          .slice(0,8)
+          .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
+          .join('\n');
         const f = await window.claude.complete({
           messages:[{ role:'user', content:`You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. Description: ${char.description?.slice(0,200)||''}.
 The player is ${player.name} (@${player.handle}) — ${player.bio}.
 ${pronounRule([char, player, ...allChars])}
 ${playerStance(char, player, rel)}
+${BANNED_PHRASES_RULE}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
 Recent campus posts:\n${recentContext}
 ${dmContext ? `\nRecent private DMs with ${player.name}:\n${dmContext}` : ''}
+${logContext ? `\nRecent action/scene memory:\n${logContext}` : ''}
 
-In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. If the DMs show trust, alliance, flirting, attraction, or honesty, reflect that instead of resetting to neutral. First person, in character. Use the pronouns listed above exactly.` }]
+In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. If DMs or scenes show trust, alliance, flirting, attraction, or honesty, reflect that instead of resetting to neutral. If context is thin, make a guarded in-character observation based on the relationship score. Never ask for more context. First person, in character. Use the pronouns listed above exactly.` }]
         });
-        setFeeling(f);
+        setFeeling(cleanProfileFeelingText(f, char, rel));
       } catch(e) {
-        setFeeling('Watching everything unfold from a safe distance. Loving it.');
+        setFeeling(fallbackProfileFeeling(char, rel));
       }
       setFeelingLoading(false);
     }
@@ -3475,16 +3564,23 @@ In 1 punchy sentence (under 20 words), describe your current feeling right now s
           return `@${poster?.handle||p.charId}: "${p.text}"`;
         }).join('\n');
         const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
+        const logContext = (eventLog || [])
+          .filter(e => e && e.type !== 'dm')
+          .slice(0,8)
+          .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
+          .join('\n');
         const res = await window.claude.complete({
           messages:[{ role:'user', content:`You are analyzing ${char.name}'s current emotional state toward ${player.name} based on their personality and recent campus activity.
 ${pronounRule([char, player, ...allChars])}
 ${playerStance(char, player, rel)}
+${BANNED_PHRASES_RULE}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
 
 ${char.name} personality: ${char.personality}
 ${char.name} description: ${char.description?.slice(0,200)||char.bio}
 Recent campus posts:\n${recentContext}
 ${dmContext ? `\nRecent private DMs with ${player.name}:\n${dmContext}` : ''}
+${logContext ? `\nRecent action/scene memory:\n${logContext}` : ''}
 
 Return ONLY a JSON array of 2-4 vibe objects, each with:
 - "label": short phrase (2-4 words, e.g. "lowkey obsessed", "genuinely irritated", "pretending not to care", "slightly jealous", "grudging respect", "chaotic energy", "watching closely")
@@ -3504,7 +3600,7 @@ Only output the JSON array, nothing else.` }]
 
     loadFeeling();
     loadVibes();
-  }, [char.id, rel, dms]);
+  }, [char.id, rel, dms, eventLog]);
 
   const relLabel = hasPlayerRel
     ? (chemistry === 'default' ? relationshipStageLabel(rel) : CHEMISTRY_LABELS[chemistry] || CHEMISTRY_LABELS.default)
@@ -4601,6 +4697,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
   const [logShowDMs, setLogShowDMs] = useState(false);
   const toggleLog = (key) => setLogCollapsed(c => ({...c, [key]: !c[key]}));
   const filteredLog = logShowDMs ? eventLog : eventLog.filter(e => e.type !== 'dm');
+  const eventEntries = (eventLog || []).filter(e => e?.type === 'event' || e?.scenario || e?.action || e?.outcome || typeof e?.xp === 'number');
 
   return (
     <div style={{flex:1, overflowY:'auto', display:'flex', flexDirection:'column'}}>
@@ -4662,7 +4759,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
       {/* EVENTS */}
       {activeSection === 'events' && (
         <div>
-          {eventLog.length === 0 ? (
+          {eventEntries.length === 0 ? (
             <div style={{padding:'40px 16px', textAlign:'center'}}>
               <div style={{fontSize:36, marginBottom:12}}>📣</div>
               <p style={{color:C.muted, fontSize:14}}>No events yet.</p>
@@ -4670,19 +4767,19 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
                 Trigger your first event
               </button>
             </div>
-          ) : eventLog.map((ev, i) => (
+          ) : eventEntries.map((ev, i) => (
             <div key={i} style={{padding:'16px', borderBottom:`1px solid ${C.border}`}}>
               <div style={{display:'flex', gap:10, alignItems:'flex-start'}}>
                 <div style={{width:38, height:38, borderRadius:'50%', background:'#1a1a3a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0}}>📣</div>
                 <div style={{flex:1}}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
-                    <span style={{color:C.muted, fontSize:12}}>Event · {timeAgo(ev.timestamp)}</span>
-                    <span style={{color:C.yellow, fontSize:12, fontWeight:700}}>+{ev.xp} XP</span>
+                    <span style={{color:C.muted, fontSize:12}}>Event · {timeAgo(ev.timestamp || Date.now())}</span>
+                    <span style={{color:C.yellow, fontSize:12, fontWeight:700}}>+{Number(ev.xp || 0)} XP</span>
                   </div>
-                  <p style={{color:C.muted, fontSize:13, lineHeight:1.5, marginBottom:8}}>{ev.scenario}</p>
+                  <p style={{color:C.muted, fontSize:13, lineHeight:1.5, marginBottom:8}}>{ev.scenario || ev.title || 'Custom event'}</p>
                   <div style={{background:C.card2, borderRadius:10, padding:'10px 12px', marginBottom:6}}>
                     <p style={{color:C.muted, fontSize:11, marginBottom:4}}>YOUR ACTION</p>
-                    <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{ev.action}</p>
+                    <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{ev.action || 'Action logged.'}</p>
                   </div>
                   {ev.outcome && (
                     <div style={{background:'#1a2e1a', borderRadius:10, padding:'10px 12px'}}>
@@ -4692,7 +4789,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
                   )}
                   {/* involved chars */}
                   <div style={{display:'flex', gap:6, marginTop:10}}>
-                    {ev.chars.map(cid => {
+                    {(ev.chars || []).map(cid => {
                       const c = allChars.find(x => x.id === cid);
                       return c ? <Avatar key={cid} char={c} size={24}/> : null;
                     })}
@@ -5144,25 +5241,37 @@ ${BANNED_PHRASES_RULE}` }] });
       .filter(c => c?.id && c.id !== 'player' && c.id !== '__gmz__')
       .map(c => ({ id: c.id, value: scoreSceneRelationshipForChar(c, messages, vibe) }))
       .filter(ch => ch.value !== 0);
-    if (!changes.length) return;
-    setChars(list => list.map(char => {
-      const change = changes.find(ch => ch.id === char.id);
-      if (!change) return char;
-      const current = Number(char.relationships?.player || 0);
-      return {
-        ...char,
-        relationships: {
-          ...(char.relationships || {}),
-          player: +clamp(current + change.value, -100, 100).toFixed(2),
-        },
-      };
-    }));
     const label = participants.map(c => c.name).join(', ');
+    const speakerName = (msg) => {
+      if (msg?.role === 'user') return player.name;
+      const found = participants.find(c => c.id === msg?.charId);
+      return found?.name || 'Scene';
+    };
+    const sceneMemory = (messages || []).slice(-6).map(m => {
+      const clean = cleanGeneratedText(m?.text || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+      return clean ? `${speakerName(m)}: ${clean}` : '';
+    }).filter(Boolean).join(' / ');
+    if (changes.length) {
+      setChars(list => list.map(char => {
+        const change = changes.find(ch => ch.id === char.id);
+        if (!change) return char;
+        const current = Number(char.relationships?.player || 0);
+        return {
+          ...char,
+          relationships: {
+            ...(char.relationships || {}),
+            player: +clamp(current + change.value, -100, 100).toFixed(2),
+          },
+        };
+      }));
+    }
     setEventLog(log => [{
       id: `scene-${Date.now()}`,
       type: 'scene',
       title: `Scene ended: ${label}`,
-      text: `${vibe?.label || 'Scene'} with ${label}. Relationship shifts were applied.`,
+      text: `${vibe?.label || 'Scene'} with ${label}. ${changes.length ? 'Relationship shifts were applied.' : 'No relationship shift, but the scene was saved.'}${sceneMemory ? ` Last beat: ${sceneMemory}` : ''}`,
+      relationshipApplied: true,
+      sceneMemory,
       scoreChanges: changes.map(ch => ({ avatar: ch.id, value: ch.value })),
       timestamp: Date.now(),
     }, ...log]);
@@ -5193,7 +5302,11 @@ ${BANNED_PHRASES_RULE}` }
     const mentionedHandles = new Set(
       Array.from(post.text.matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase())
     );
-    const mentionedChars = chars.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
+    const mentionedByName = mentionedCharactersInText(post.text, chars);
+    const mentionedChars = chars.filter(c =>
+      mentionedHandles.has((c.handle || '').toLowerCase()) ||
+      mentionedByName.some(m => m.id === c.id)
+    );
     const isHotOrMessy = /transfer|tryout|record|disciplinary|rumor|date|kiss|fight|foul|gmz|photo|sorry|explain|meet me|after dark/i.test(post.text);
     let candidates = mentionedChars;
     if (candidates.length === 0 && isHotOrMessy && Math.random() < 0.35) {
@@ -5203,12 +5316,13 @@ ${BANNED_PHRASES_RULE}` }
     }
     candidates.slice(0, 2).forEach((char, idx) => {
       const relationship = char.relationships?.player ?? 50;
-      const shouldDm = mentionedHandles.has((char.handle || '').toLowerCase())
+      const wasDirectlyMentioned = mentionedChars.some(c => c.id === char.id);
+      const shouldDm = wasDirectlyMentioned
         ? Math.random() < (relationship < 30 ? 0.72 : 0.52)
         : true;
       if (!shouldDm) return;
       setTimeout(() => {
-        triggerProactiveDM(char, `@${player.handle} posted publicly: "${post.text.slice(0,140)}"${mentionedHandles.has((char.handle || '').toLowerCase()) ? ` and tagged @${char.handle}` : ''}`);
+        triggerProactiveDM(char, `@${player.handle} posted publicly: "${post.text.slice(0,140)}"${wasDirectlyMentioned ? ` and mentioned ${char.name}` : ''}`);
       }, 9000 + idx * 7000 + Math.random()*8000);
     });
   }
@@ -5277,26 +5391,9 @@ ${BANNED_PHRASES_RULE}` }]
   }
 
   useEffect(() => {
-    if (!stateLoaded || !chars.length) return;
-    if (editChar || activeEvent || activeMatch || composing) return;
-    const timer = setTimeout(() => {
-      const now = Date.now();
-      const eligibleGroups = (groupChats || []).filter(group => {
-        if (!(group.members || []).includes('player')) return false;
-        if (activeGroupChat?.id === group.id) return false;
-        const aiCount = (group.members || []).filter(id => id !== 'player' && chars.some(c => c.id === id)).length;
-        if (!aiCount) return false;
-        if (group.lastAutoPingAt && now - group.lastAutoPingAt < 180000) return false;
-        const last = (group.messages || [])[Math.max(0, (group.messages || []).length - 1)];
-        const lastTs = Number(last?.ts || (typeof last?.id === 'number' ? last.id : 0));
-        return !lastTs || now - lastTs > 65000;
-      });
-      if (!eligibleGroups.length) return;
-      if (Math.random() > 0.62) return;
-      const group = eligibleGroups[Math.floor(Math.random() * eligibleGroups.length)];
-      triggerGroupChatPopIn(group, 'someone saw the recent campus feed and could not leave the chat dead');
-    }, 65000 + Math.random() * 90000);
-    return () => clearTimeout(timer);
+    // Auto-reviving quiet group chats made conversations repeat themselves and
+    // drift from the actual thread. Group chats now advance only after user input.
+    return undefined;
   }, [stateLoaded, groupChats, activeGroupChat, chars, feed, dms, editChar, activeEvent, activeMatch, composing]);
 
   // ── Auto-post system ──────────────────────────────────────────
@@ -5321,10 +5418,25 @@ ${BANNED_PHRASES_RULE}` }]
         const poster = [...chars, player].find(c => c.id === p.charId);
         return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
       }).join('\n');
+      const campusTopics = [
+        'a weird class moment',
+        'practice going badly or hilariously',
+        'someone attractive being distracting',
+        'dorm or common room gossip',
+        'food, coffee, butterbeer, or stolen snacks',
+        'a professor being unreasonable',
+        'a spell going wrong',
+        'library behavior',
+        'a party, dare, bet, or bad idea',
+        'a deleted post or suspicious like',
+        'weather, uniforms, bruises, or bad sleep',
+        'crushes, flirting, jealousy, or pretending not to stare',
+      ];
+      const campusTopic = campusTopics[Math.floor(Math.random() * campusTopics.length)];
 
-      // 35% chance: directed callout at another character (weighted toward rivals)
+      // Occasional directed callout. Most posts should be normal campus life.
       const others = chars.filter(c => c.id !== char.id);
-      const doCallout = Math.random() < 0.35 && others.length > 0;
+      const doCallout = Math.random() < 0.18 && others.length > 0;
       const target = doCallout ? (() => {
         // Weight toward characters with negative or low relationships
         const weights = others.map(o => {
@@ -5352,6 +5464,7 @@ Write ONE social media post that is specifically directed at or about @${target.
 - Stay in character (personality: ${char.personality})
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - 1-2 sentences, punchy. It can be teasing, flirty, funny, smug, himbo-stupid, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
+- Use the recent feed only for continuity. Do not parrot its current buzzwords or recycle the same argument unless this is clearly a direct continuation.
 - MUST tag @${target.handle} naturally in the text
 - NO hashtags, NO quotes around the post, just the post text
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
@@ -5370,8 +5483,11 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - 1-2 sentences max, punchy
 - Optionally tag 0-2 of the other handles if it's natural. Do NOT force it
+- Primary topic to use today: ${campusTopic}
+- This is a fresh standalone post, not a mandatory reply to the recent feed. Use recent posts only for continuity.
+- Do not parrot the current feed's buzzwords. Avoid repeating "structure", "discipline", "standards", "scoreboard", or "formation" unless the primary topic truly requires Quidditch.
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, parties, food, bets, bad sleep, gossip, someone acting weird, deleted posts, or stupid things people did.
-- Unless the character is Silas, do not default to discipline/standards/structure talk. Prefer social mess, jokes, teasing, flirtation, petty commentary, curiosity, or bad ideas.
+- Unless the character is Silas, strongly prefer social mess, jokes, teasing, flirtation, petty commentary, curiosity, ordinary school chaos, or bad ideas over captain-speech language.
 - NO hashtags, NO quotes around the post, JUST the post text
 - Make it feel real and casual, like they just typed it
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.

@@ -5683,15 +5683,21 @@ function App() {
     }).catch(() => setStateLoaded(true));
   }, []);
 
-  // Wrapped setters — update state and schedule a server save
-  function setChars(v)      { setCharsRaw(prev      => { const next = normalizeCharactersIdentity(typeof v==='function'?v(prev):v);                    serverSave({chars:next,player,feed,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
-  function setPlayer(v)     { setPlayerRaw(prev     => { const next = normalizeCharacterIdentity(typeof v==='function'?v(prev):v);                    serverSave({chars,player:next,feed,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
-  function setFeed(v)       { setFeedRaw(prev       => { const next = (typeof v==='function'?v(prev):v).slice(0,60);      serverSave({chars,player,feed:next,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
-  function setDms(v)        { setDmsRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms:next,groupChats,eventLog,day,socialPresence}); return next; }); }
-  function setGroupChats(v) { setGroupChatsRaw(prev => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats:next,eventLog,day,socialPresence}); return next; }); }
-  function setEventLog(v)   { setEventLogRaw(prev   => { const next = (typeof v==='function'?v(prev):v).slice(0,30);      serverSave({chars,player,feed,dms,groupChats,eventLog:next,day,socialPresence}); return next; }); }
-  function setDay(v)        { setDayRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats,eventLog,day:next,socialPresence}); return next; }); }
-  function setSocialPresence(v) { setSocialPresenceRaw(prev => { const next = typeof v==='function'?v(prev):v;             serverSave({chars,player,feed,dms,groupChats,eventLog,day,socialPresence:next}); return next; }); }
+  // Wrapped setters normalize and trim state only. Persistence runs from the
+  // assembled current state after React applies all updates.
+  function setChars(v)      { setCharsRaw(prev      => normalizeCharactersIdentity(typeof v==='function'?v(prev):v)); }
+  function setPlayer(v)     { setPlayerRaw(prev     => normalizeCharacterIdentity(typeof v==='function'?v(prev):v)); }
+  function setFeed(v)       { setFeedRaw(prev       => (typeof v==='function'?v(prev):v).slice(0,60)); }
+  function setDms(v)        { setDmsRaw(prev        => typeof v==='function'?v(prev):v); }
+  function setGroupChats(v) { setGroupChatsRaw(prev => typeof v==='function'?v(prev):v); }
+  function setEventLog(v)   { setEventLogRaw(prev   => (typeof v==='function'?v(prev):v).slice(0,30)); }
+  function setDay(v)        { setDayRaw(prev        => typeof v==='function'?v(prev):v); }
+  function setSocialPresence(v) { setSocialPresenceRaw(prev => typeof v==='function'?v(prev):v); }
+
+  useEffect(() => {
+    if (!stateLoaded) return;
+    serverSave({ chars, player, feed, dms, groupChats, eventLog, day, socialPresence });
+  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, socialPresence]);
 
   useEffect(() => {
     if (!stateLoaded) return;
@@ -5738,7 +5744,6 @@ function App() {
     const nextLog = [loggedEntry, ...eventLog].slice(0, 30);
     setCharsRaw(nextChars);
     setEventLogRaw(nextLog);
-    serverSave({chars:nextChars, player, feed, dms, groupChats, eventLog:nextLog, day, socialPresence});
   }
   const [activeGroupChat, setActiveGroupChat] = useState(null);
   const [tab, setTab] = useState('feed');

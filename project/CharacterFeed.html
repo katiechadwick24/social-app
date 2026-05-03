@@ -381,6 +381,7 @@ CANON AND FACT RULES:
 - Do not invent scoreboard results, game attendance, wins/losses, who showed up to matches, who missed practice, who dodged, who started a fight, or who made a mistake unless it appears in the visible thread or current event. Trash talk can be mean without inventing hard facts.
 - Trash talk is normal Quidditch culture, not a social crime. Characters can insult rival houses, rival teams, plays, captains, training, habits, and public mistakes. Do not make them act shocked that someone talked trash unless the line crosses a real personal boundary.
 - Preserve house and team logic. Treat house/team like pronouns: exact, sticky, and not guessable from vibes. If a character is on Gryffindor, Slytherin, Ravenclaw, or Hufflepuff, they should not talk about that house or team like outsiders. They can roast their own side, but it should sound like "we/us/our team/my captain/our mess", not "they/them/Gryffindor is boring" unless they are clearly quoting or distancing as a joke. Rival houses can and should use "they/them" and be openly smug. Do not write "Slytherin could never", "Gryffindor could never", etc. if someone from that house just did the thing in the visible thread.
+- Teammate loyalty matters. If an outsider attacks, mocks, tags, or pressures someone's teammate or housemate, that team usually closes ranks first. They can roast their own teammate because that is their mess, but the public default is "that's our idiot", "you don't get to say it", backing them, redirecting heat, or hitting the outsider harder. Exceptions need a visible reason: betrayal, serious conflict, captain correction, or an obvious joke.
 - Teams and houses are allowed to snipe at each other for fun. Treat rival-house trash talk as sport, flirting, boredom, or group entertainment unless it targets a real personal wound. Characters should not become defensive about taking shots at a rival team; they can enjoy it, add to it, or pivot to "our mess is funnier but theirs is easier."
 - House is not the same as Quidditch team. Ravenclaw students are not automatically Ravenclaw Quidditch players. Tamsin Cade is Ravenclaw, but she is not on a Quidditch team; she can critique Quidditch as a sharp observer, sister, or student, not as someone who needs to "show up" on the pitch.
 - When context is thin, stay broad, teasing, evasive, or ask a pointed question instead of filling the gap with invented lore.
@@ -446,8 +447,8 @@ function playerStance(char, player, relationshipOverride) {
   const playsQuidditch = isQuidditchPlayer(char);
   const teamLine = char.team || char.house || char.position
     ? playsQuidditch
-      ? `TEAM CONTINUITY: ${char.name} is on ${char.team || char.house}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic. They may roast their own side, but not like an outsider. If discussing a rival team/house, trash talk is allowed and expected.`
-      : `TEAM CONTINUITY: ${char.name} is in ${char.house || 'their house'} but is not on a Quidditch team${char.position ? ` (${char.position})` : ''}. They can comment on Quidditch as an observer, friend, sibling, gossip participant, or student, but not as someone personally playing or needing to show up on the pitch.`
+      ? `TEAM CONTINUITY: ${char.name} is on ${char.team || char.house}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic. They may roast their own side, but not like an outsider. If an outsider swings at a teammate, the usual instinct is to back the teammate, redirect heat, or make it clear only their own side gets to say that. If discussing a rival team/house, trash talk is allowed and expected.`
+      : `TEAM CONTINUITY: ${char.name} is in ${char.house || 'their house'} but is not on a Quidditch team${char.position ? ` (${char.position})` : ''}. They can comment on Quidditch as an observer, friend, sibling, gossip participant, or student, but not as someone personally playing or needing to show up on the pitch. House loyalty can still matter: if an outsider swings at their people, they usually close ranks unless there is a visible reason not to.`
     : '';
   return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} ${teamLine} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
 }
@@ -473,6 +474,24 @@ function backsHouseTeam(text = '', char) {
   const names = [house, team].filter(Boolean);
   if (!names.some(name => lower.includes(name))) return false;
   return /\b(we|our|us|right|exactly|back|backing|defend|illogical|talking back|not wrong|agree|said what|same team|my house|my team)\b/.test(lower);
+}
+
+function sameHouseOrTeam(a, b) {
+  if (!a || !b || a.id === b.id) return false;
+  const aHouse = (houseFor(a) || '').toLowerCase();
+  const bHouse = (houseFor(b) || '').toLowerCase();
+  const aTeam = (a.team || '').toLowerCase();
+  const bTeam = (b.team || '').toLowerCase();
+  return !!((aTeam && bTeam && aTeam === bTeam) || (aHouse && bHouse && aHouse === bHouse));
+}
+
+function mentionedCharactersInText(text = '', roster = []) {
+  const handles = new Set(Array.from(String(text || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase()));
+  return (roster || []).filter(c => handles.has((c.handle || '').toLowerCase()));
+}
+
+function teammateStakeInText(text = '', responder, roster = []) {
+  return mentionedCharactersInText(text, roster).some(m => sameHouseOrTeam(responder, m));
 }
 
 function cleanGeneratedText(text = '') {
@@ -678,18 +697,25 @@ function repairPromptLeakPosts(feed = [], chars = [], player) {
     const replyChar = all.find(c => c.id === post?.reply?.charId);
     const cleanedReply = post?.reply?.text && replyChar ? cleanSocialReplyText(post.reply.text, replyChar, player) : post?.reply?.text;
     const cleanedBots = Array.isArray(post?.botComments)
-      ? post.botComments.map(b => ({ ...b, text: cleanSocialReplyText(b.text || '', null, player, { bot: RECURRING_BOTS.find(rb => rb.id === b.bot) }) }))
+      ? post.botComments.map(b => ({ ...b, text: cleanSocialReplyText(b.text || '', null, player, { bot: RECURRING_BOTS.find(rb => rb.id === b.bot) }), nestedReply: false }))
       : post?.botComments;
+    const cleanedCharComments = Array.isArray(post?.charComments)
+      ? post.charComments.map(cc => {
+          const ccChar = all.find(c => c.id === cc.charId);
+          return { ...cc, text: ccChar ? cleanSocialReplyText(cc.text || '', ccChar, player) : cc.text, nestedReply: false };
+        })
+      : post?.charComments;
     if (looksLikePromptLeak(post?.text || '') || cleaned !== post?.text || cleanedReply !== post?.reply?.text) {
       return {
         ...post,
         text: cleaned,
         reply: post?.reply ? { ...post.reply, text: cleanedReply } : post?.reply,
         botComments: cleanedBots,
+        charComments: cleanedCharComments,
         repairedPromptLeak: looksLikePromptLeak(post?.text || '') || looksLikePromptLeak(post?.reply?.text || ''),
       };
     }
-    return { ...post, botComments: cleanedBots };
+    return { ...post, botComments: cleanedBots, charComments: cleanedCharComments };
   });
 }
 
@@ -1242,6 +1268,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const isKeresPost = post.charId === 'player' || mentionedHandles.has((player.handle || '').toLowerCase());
     const houseTeamDefenders = eligible.filter(c => isHouseTeamCallout(post.text, c));
     const defenderIds = new Set(houseTeamDefenders.map(c => c.id));
+    const teammateDefenders = eligible.filter(c =>
+      !directMentionIds.has(c.id) &&
+      teammateStakeInText(post.text, c, [player, ...chars])
+    );
+    const teammateDefenderIds = new Set(teammateDefenders.map(c => c.id));
 
     const charge = (c) => {
       const r = isKeresPost ? playerRelFor(c) : (c.relationships?.[post.charId] ?? c.relationships?.player);
@@ -1262,6 +1293,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       .map(c => {
         let w = charge(c) + Math.random()*30;
         if (defenderIds.has(c.id)) w += 55;
+        if (teammateDefenderIds.has(c.id)) w += 42;
         if (c.id === 'silas' && isKeresPost && !/slytherin|tryout|captain|strategy|quidditch|pitch|match|foul|chaser|seeker|keeper|beater/i.test(post.text || '')) w *= 0.28;
         if (c.id === 'silas' && authorId === 'havoc') w *= 0.35;
         if (c.id === 'callum' && authorId === 'havoc') w *= 0.72;
@@ -1274,6 +1306,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     let picked = [
       ...directlyMentioned,
       ...houseTeamDefenders,
+      ...teammateDefenders,
       ...(snarkyResponder && !directMentionIds.has(snarkyResponder.id) ? [snarkyResponder] : []),
       ...weighted.slice(0, Math.max(0, targetCount - directlyMentioned.length)).map(x => x.c),
     ].filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i).slice(0, targetCount);
@@ -1295,8 +1328,9 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         'genuinely dislikes the poster';
       const mentionNote = directMentionIds.has(c.id) ? ' DIRECTLY @MENTIONED in the post; they should usually answer the tag.' : '';
       const houseDefenseNote = isHouseTeamCallout(post.text, c) ? ' HOUSE/TEAM CALLOUT: the post insults or needles their house/team. They should answer with more bite, defend or undercut the insult, or hit back. Do not shrug, agree mildly, or say "I guess".' : '';
+      const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
-      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${stanceFor(c)}${mentionNote}${houseDefenseNote}${embarrassmentNote}`;
+      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${stanceFor(c)}${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -1746,17 +1780,17 @@ ${BANNED_PHRASES_RULE}`
     const sameHouseBacked = candidatePool.filter(c =>
       !tagged.some(t => t.id === c.id) &&
       !target.some(t => t.id === c.id) &&
-      (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c))
+      (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c) || teammateStakeInText(`${sourceText || post.text} ${playerText}`, c, [player, ...chars]))
     ).sort((a,b) => {
-      const directA = isHouseTeamCallout(sourceText || post.text, a) ? 1 : 0;
-      const directB = isHouseTeamCallout(sourceText || post.text, b) ? 1 : 0;
+      const directA = isHouseTeamCallout(sourceText || post.text, a) || teammateStakeInText(`${sourceText || post.text} ${playerText}`, a, [player, ...chars]) ? 1 : 0;
+      const directB = isHouseTeamCallout(sourceText || post.text, b) || teammateStakeInText(`${sourceText || post.text} ${playerText}`, b, [player, ...chars]) ? 1 : 0;
       return directB - directA;
     });
     const charged = [...candidatePool]
       .filter(c => c.id !== post.charId && !target.some(t => t.id === c.id) && !tagged.some(t => t.id === c.id) && !sameHouseBacked.some(t => t.id === c.id))
       .map(c => {
         let w = Math.abs((playerRelFor(c) ?? 50) - 50) + Math.random()*18;
-        if (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)) w += 45;
+        if (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c) || teammateStakeInText(`${sourceText || post.text} ${playerText}`, c, [player, ...chars])) w += 45;
         if (sourceAuthorId === 'havoc' && c.id === 'silas') w *= 0.22;
         if (sourceAuthorId === 'havoc' && c.id === 'callum' && !mentionedHandles.has('callumpike')) w *= 0.35;
         if (c.id === 'callum' && !mentionedHandles.has('callumpike') && !backsHouseTeam(playerText, c) && !isHouseTeamCallout(sourceText || post.text, c)) w *= 0.45;
@@ -1777,7 +1811,10 @@ ${BANNED_PHRASES_RULE}`
         const defenseNote = backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)
           ? ' HOUSE/TEAM STAKE: their house/team is being backed or insulted here. They should feel pulled back into the thread and answer with bite, agreement, or direct pushback instead of letting a random rival take over.'
           : '';
-        return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${stanceFor(c)}${defenseNote}`;
+        const teammateNote = teammateStakeInText(`${sourceText || post.text} ${playerText}`, c, [player, ...chars])
+          ? ' TEAMMATE STAKE: someone from their house/team is tagged, backed, or under pressure. In most cases they take their teammate side first, even if they roast them while doing it.'
+          : '';
+        return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${stanceFor(c)}${defenseNote}${teammateNote}`;
       }).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
@@ -1793,7 +1830,7 @@ ${player.name} (@${player.handle}) just commented: "${playerText}"
 ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
 Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting.
 
 Characters in order:
@@ -3847,7 +3884,7 @@ ${playerStance(member, player)}
 Recent campus feed:\n${recentFeed}
 Chat history:\n${historyStr}
 ${player.name} just said: "${input}"
-Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound.
+Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound. Teammate loyalty still matters: if someone outside the team swings at one of your people, the usual move is to back your teammate first, then roast them privately or as "our mess."
 Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Everyone listed as present can see this message. If you mean someone in the chat, talk to them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. Sometimes ignore the question and say something tangential. Be natural.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]
@@ -5221,7 +5258,7 @@ Recent group chat history:
 ${historyStr || '(new group chat)'}
 
 The chat went quiet. Pop back in naturally because of this context: ${context}
-Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound.
+Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound. Teammate loyalty still matters: if someone outside the team swings at one of your people, the usual move is to back your teammate first, then roast them privately or as "our mess."
 Write ONE short in-character group chat message. Everyone listed as present can see it. If you mean someone in the chat, address them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. It can revive the bit, @someone, ask a messy question, flirt, complain, gossip, or drag the conversation sideways. It should feel like a person came back after a lull, not like a formal announcement. 4-22 words. No quotes.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]

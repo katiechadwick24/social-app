@@ -141,6 +141,7 @@ function Avatar({ char, size = 42, onClick }) {
 // ─── Verified / Quidditch badge ──────────────────────────────────
 function isQuidditchPlayer(char) {
   if (!char) return false;
+  if (['tamsin', 'theo', 'elara', '__gmz__'].includes(char.id)) return false;
   const role = (char.position || char.bio || '').toLowerCase();
   if (/former|commentator|student|sister|alumna/.test(role)) return false;
   if (/(beater|chaser|keeper|seeker|captain|reserve)/.test(role)) return true;
@@ -292,6 +293,29 @@ function houseFor(char) {
   return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : '';
 }
 
+function teamFor(char) {
+  if (!isQuidditchPlayer(char)) return '';
+  const raw = char?.team || houseFor(char) || '';
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : '';
+}
+
+function identityFactsFor(char) {
+  if (!char) return '';
+  const house = houseFor(char) || 'unknown house';
+  const pronouns = pronounsFor(char);
+  if (isQuidditchPlayer(char)) {
+    const team = teamFor(char) || house;
+    const position = char.position || 'player';
+    return `${char.name} (@${char.handle}): pronouns ${pronouns}; house ${house}; ${team} Quidditch ${position}; insider language for ${team}: we/us/our`;
+  }
+  const role = char.position ? `; role ${char.position}` : '';
+  return `${char.name} (@${char.handle}): pronouns ${pronouns}; house ${house}; NOT on a Quidditch team${role}; can comment as an observer, not as a player`;
+}
+
+function identityPromptFor(char) {
+  return `Locked identity for this speaker: ${identityFactsFor(char)}. Treat house/team like pronouns. Do not make this speaker talk about their own house or team like outsiders. If they are not on a Quidditch team, do not write them as a player.`;
+}
+
 function pronounRoster(chars = []) {
   return chars
     .filter(Boolean)
@@ -302,18 +326,12 @@ function pronounRoster(chars = []) {
 function houseRoster(chars = []) {
   return chars
     .filter(Boolean)
-    .map(c => {
-      const house = houseFor(c) || 'unknown house';
-      const plays = isQuidditchPlayer(c);
-      const team = plays ? (c.team || house) : '';
-      const position = plays && c.position ? `, ${c.position}` : c.position ? `, non-player role: ${c.position}` : '';
-      return `${c.name} (@${c.handle}): house ${house}${team ? `, Quidditch team ${team}` : ', not on a Quidditch team'}${position}`;
-    })
+    .map(c => identityFactsFor(c))
     .join('; ');
 }
 
 function pronounRule(chars = []) {
-  return `IDENTITY RULE: Use these exact third-person pronouns and house/team facts. Do not infer from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. This controls third-person references and house logic; direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. If a character is mentioned by @handle, keep their pronouns and house/team consistent. A non-player can comment on Quidditch, but should not speak like they personally play, practice, show up for matches, or need to prove anything on the pitch. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
+  return `IDENTITY RULE: These facts are locked. Use the exact pronouns, house, team, and player/non-player status below. Do not infer identity from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. House/team logic works like pronouns: exact and sticky. If someone belongs to a house/team, they can roast it as their own mess, but should use insider language like we/us/our/my team/my house unless clearly joking or quoting. If someone is NOT on a Quidditch team, never imply they play, practice, show up on the pitch, need to prove themselves on the pitch, or have teammates in a Quidditch sense. Direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. If a character is mentioned by @handle or name, keep their pronouns and house/team consistent. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
 }
 
 function compressImageFile(file, { maxSize = 720, quality = 0.78 } = {}) {
@@ -439,16 +457,18 @@ function playerStance(char, player, relationshipOverride) {
     tamsin: 'Tamsin is composed and protective. She is skeptical of gravity around Rowan and judges patterns before people.',
     milo: 'Milo is flirty, chaotic, approval-hungry, and reckless. He reacts too fast and wants attention.',
     theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred. He should sound like someone making the thread funnier while pretending it is journalism.',
-    elara: 'Elara is proud, socially dangerous, and hard to pity. She reacts to being erased or underestimated, but she can be charismatic, funny, and lethal without monologuing.'
+    elara: 'Elara is proud, socially dangerous, and hard to pity. Havoc and Keres becoming visible gets her attention fast: she reacts with clipped pride, plausible deniability, dangerous humor, or a social jab. She never begs for attention or sounds wounded.'
   }[char.id] || '';
   const relationshipNuance = char.id === 'tamsin' && rel > 0
     ? 'Because Tamsin and Keres currently have positive trust, she can still be sharp, but she should not treat normal Slytherin-vs-Gryffindor trash talk as weird, betrayal, or overstepping. She respects directness and information exchange; skepticism should be precise, not random hostility.'
     : '';
   const playsQuidditch = isQuidditchPlayer(char);
-  const teamLine = char.team || char.house || char.position
+  const teamName = teamFor(char);
+  const houseName = houseFor(char) || char.house || 'their house';
+  const teamLine = teamName || houseName || char.position
     ? playsQuidditch
-      ? `TEAM CONTINUITY: ${char.name} is on ${char.team || char.house}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic. They may roast their own side, but not like an outsider. If an outsider swings at a teammate, the usual instinct is to back the teammate, redirect heat, or make it clear only their own side gets to say that. If discussing a rival team/house, trash talk is allowed and expected.`
-      : `TEAM CONTINUITY: ${char.name} is in ${char.house || 'their house'} but is not on a Quidditch team${char.position ? ` (${char.position})` : ''}. They can comment on Quidditch as an observer, friend, sibling, gossip participant, or student, but not as someone personally playing or needing to show up on the pitch. House loyalty can still matter: if an outsider swings at their people, they usually close ranks unless there is a visible reason not to.`
+      ? `TEAM CONTINUITY: ${char.name} is on ${teamName || houseName}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic and we/us/our. They may roast their own side, but not like an outsider. If an outsider swings at a teammate, the usual instinct is to back the teammate, redirect heat, or make it clear only their own side gets to say that. If discussing a rival team/house, trash talk is allowed and expected.`
+      : `TEAM CONTINUITY: ${char.name} is in ${houseName} but is not on a Quidditch team${char.position ? ` (${char.position})` : ''}. They can comment on Quidditch as an observer, friend, sibling, gossip participant, or student, but not as someone personally playing or needing to show up on the pitch. House loyalty can still matter: if an outsider swings at their people, they usually close ranks unless there is a visible reason not to.`
     : '';
   return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} ${teamLine} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune.`;
 }
@@ -458,7 +478,7 @@ function isHouseTeamCallout(text = '', char) {
   const lower = String(text || '').toLowerCase();
   const handle = (char.handle || '').toLowerCase();
   const house = (houseFor(char) || '').toLowerCase();
-  const team = (char.team || '').toLowerCase();
+  const team = (teamFor(char) || '').toLowerCase();
   const addressed = handle && lower.includes(`@${handle}`);
   const secondPersonTeam = addressed && /\b(your|you lot|you all|half your|your whole)\s+(team|house|side|lot)\b/.test(lower);
   const namedGroup = [house, team].filter(Boolean).some(name => lower.includes(name));
@@ -470,7 +490,7 @@ function backsHouseTeam(text = '', char) {
   if (!char) return false;
   const lower = String(text || '').toLowerCase();
   const house = (houseFor(char) || '').toLowerCase();
-  const team = (char.team || '').toLowerCase();
+  const team = (teamFor(char) || '').toLowerCase();
   const names = [house, team].filter(Boolean);
   if (!names.some(name => lower.includes(name))) return false;
   return /\b(we|our|us|right|exactly|back|backing|defend|illogical|talking back|not wrong|agree|said what|same team|my house|my team)\b/.test(lower);
@@ -480,8 +500,8 @@ function sameHouseOrTeam(a, b) {
   if (!a || !b || a.id === b.id) return false;
   const aHouse = (houseFor(a) || '').toLowerCase();
   const bHouse = (houseFor(b) || '').toLowerCase();
-  const aTeam = (a.team || '').toLowerCase();
-  const bTeam = (b.team || '').toLowerCase();
+  const aTeam = (teamFor(a) || '').toLowerCase();
+  const bTeam = (teamFor(b) || '').toLowerCase();
   return !!((aTeam && bTeam && aTeam === bTeam) || (aHouse && bHouse && aHouse === bHouse));
 }
 
@@ -559,7 +579,7 @@ function fallbackChatLine(char, player, group = false) {
       ? ['beautiful. no notes except probably several consequences.', 'that sentence has detention energy.', 'i am choosing to believe this is someone else’s problem.']
       : ['that is either a threat or flirting. annoying overlap.', 'sure. let us pretend this is normal.', 'i respect the commitment to making this worse.'],
     tamsin: group
-      ? ['that was almost a coherent plan. troubling development.', 'please continue. i enjoy watching standards collapse in real time.', 'some of you need supervision and it shows.']
+      ? ['that was almost a coherent plan. troubling development.', 'please continue. i enjoy watching the room lose its nerve.', 'some of you need supervision and it shows.']
       : ['clarify what you actually want.', 'that is more honest than most people manage.', 'i can work with direct. theatrics less so.'],
     milo: group
       ? ['wait are we doing bad ideas because i brought enthusiasm.', 'i understood none of that but i support the chaos.', 'this feels illegal. say more.']
@@ -573,22 +593,29 @@ function fallbackChatLine(char, player, group = false) {
 
 function cleanChatText(text = '', char = null, player = null, group = false) {
   const names = [char?.name, char?.handle, char?.handle ? `@${char.handle}` : ''].filter(Boolean).map(escapeRegExp);
-  const fullNameTag = char?.name && char?.handle
-    ? new RegExp(`^\\s*${escapeRegExp(char.name)}\\s*\\(\\s*@?${escapeRegExp(char.handle)}\\s*\\)\\s*:?\\s*`, 'i')
-    : /^$/;
   let clean = cleanGeneratedText(text)
     .replace(/[“”]/g, '"')
-    .replace(fullNameTag, '')
+    .replace(stripSpeakerLabelRegex(char), '')
     .replace(names.length ? new RegExp(`^\\s*(?:${names.join('|')})\\s*:\\s*`, 'i') : /^$/, '')
     .replace(/^\s*["']|["']\s*$/g, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean)) return fallbackChatLine(char, player, group);
+  if (!clean || looksLikePromptLeak(clean) || looksLikeIdentityConfusion(clean, char)) return fallbackChatLine(char, player, group);
   return clean;
+}
+
+function stripSpeakerLabelRegex(char) {
+  if (!char?.name && !char?.handle) return /^$/;
+  const name = char?.name ? escapeRegExp(char.name) : '';
+  const handle = char?.handle ? escapeRegExp(char.handle.replace(/^@/, '')) : '';
+  if (name && handle) {
+    return new RegExp(`^\\s*(?:${name}\\s*(?:\\(\\s*@?${handle}\\s*\\))?|@?${handle})\\s*:?\\s*`, 'i');
+  }
+  return new RegExp(`^\\s*(?:${name || `@?${handle}`})\\s*:?\\s*`, 'i');
 }
 
 function looksLikePromptLeak(text = '') {
   const normalized = String(text).replace(/[‘’]/g, "'").toLowerCase();
-  return /i need context|i don't have enough|i do not have enough|need more context|need to know what'?s happening|what'?s the most recent|let me check|looking at the recent feed|i'm ready|i understand|i know the rules|identity rule|pronouns and houses|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|here'?s/i.test(normalized);
+  return /i need context|i don't have enough|i do not have enough|need more context|need to know what'?s happening|what'?s the most recent|let me check|looking at the recent feed|i'm ready|i understand (?:the character|the rules|continuity|the identity|silas|callum|pronouns|house|team)|i know the rules|identity rule|identity:|target identity|original poster identity|pronouns and houses|pronouns locked|house logic|team logic|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|personality:|description:|relationship with @|current relationship with|i understand continuity|i understand the identity|i understand silas|i understand callum|college students are|here'?s/i.test(normalized);
 }
 
 function fallbackPostForChar(char, player) {
@@ -666,12 +693,31 @@ function isSelfNarration(text = '', char) {
   return new RegExp(`^(?:${escaped.join('|')})\\s+(?:is|'s|has|needs|wants|thinks|knows|would|will|going\\s+to)\\b`, 'i').test(String(text).trim());
 }
 
+function looksLikeIdentityConfusion(text = '', char) {
+  if (!char || !text) return false;
+  const lower = String(text).toLowerCase().replace(/[’]/g, "'");
+  const ownTerms = [teamFor(char), char.house].filter(Boolean).map(t => String(t).toLowerCase());
+  if (isQuidditchPlayer(char)) {
+    return ownTerms.some(term => {
+      const safe = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`\\b${safe}'s\\b`, 'i').test(lower)
+        || new RegExp(`\\b${safe}\\s+(?:is|are|was|were|keeps|needs|has|does|did|would|could|should)\\b`, 'i').test(lower);
+    });
+  }
+  return /\b(?:my|our)\s+(?:team|lineup|captain|keeper|chaser|beater|seeker|practice|match|pitch|formation)\b/i.test(lower)
+    || /\bwe\s+(?:played|play|practice|practised|trained|won|lost|showed up|show up|fly|flew)\b/i.test(lower)
+    || /\bus\s+(?:on|in)\s+the\s+(?:pitch|field|lineup)\b/i.test(lower)
+    || /\b(?:showing up|show up|showed up)\s+to\s+prove\b/i.test(lower)
+    || /\b(?:prove|proving)\s+(?:myself|ourselves|things)\s+(?:to|on|at)\b/i.test(lower)
+    || /\bon\s+(?:the\s+)?(?:pitch|broom|field|lineup)\b/i.test(lower);
+}
+
 function cleanSocialPostText(raw = '', char, player) {
-  const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw), char), char)
+  const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw).replace(stripSpeakerLabelRegex(char), ''), char), char)
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || isSelfNarration(clean, char) || clean.length > 280) {
+  if (!clean || looksLikePromptLeak(clean) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || clean.length > 280) {
     return fallbackPostForChar(char, player);
   }
   return clean;
@@ -689,11 +735,11 @@ function fallbackBotLine(bot = {}) {
 }
 
 function cleanSocialReplyText(raw = '', char, player, opts = {}) {
-  const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw), char), char)
+  const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw).replace(stripSpeakerLabelRegex(char), ''), char), char)
     .replace(/^reply:\s*/i, '')
     .replace(/^comment:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || (char && isSelfNarration(clean, char)) || clean.length > 360) {
+  if (!clean || looksLikePromptLeak(clean) || (char && isSelfNarration(clean, char)) || looksLikeIdentityConfusion(clean, char) || clean.length > 360) {
     return opts.bot ? fallbackBotLine(opts.bot) : fallbackChatLine(char, player, false);
   }
   return clean;
@@ -891,12 +937,12 @@ Havoc Fang is his best friend, which means shoulder shoves, stolen food, ugly la
 He is a Gryffindor reserve Chaser with quick hands, raw talent, and no useful respect for consequences. Coaches see potential. Captains see paperwork. Older students see a boy trying very hard to look like he already belongs at their table. Milo can make people laugh before they decide whether to be angry, which is useful right up until it becomes the reason everything gets worse.
 
 Under the charm is a dangerous hunger to be chosen before he is ready. Milo will volunteer for the dare, take the bait, flirt with the wrong person, and turn embarrassment into a performance before anyone can hurt him with it. He is not subtle, not secretly wise, and not built for quiet suffering. He is bright, reckless, funny, and one applause line away from learning a lesson the hard way.`, personality:'flirty, chaotic, impulsive, charming, loud, reckless, attention-hungry, funny under pressure, overconfident, approval-seeking', relationships:{player: 22, briar: -18, havoc: 32, rowan: 28, callum: -22, theo: 44} },
-  { id:'elara', name:'Elara March', handle:'elaramarch', pronouns:'she/her', house:'gryffindor', team:'Gryffindor', position:'Former Beater', bio:'Gryffindor alumna. Old flame, live wire.', followers:2100000, description:`Elara March is the kind of girl people remember standing too close to danger and looking bored by it. A former Gryffindor Beater, she left the pitch after an injury but never lost the habit of entering rooms like impact is still her first language. She is proud, sharp, physical, and far too socially fluent to be reduced to anyone's jealous ex.
+  { id:'elara', name:'Elara March', handle:'elaramarch', pronouns:'she/her', house:'gryffindor', team:'', position:'Former Beater', bio:'Gryffindor alumna. Old flame, live wire.', followers:2100000, description:`Elara March is the kind of girl people remember standing too close to danger and looking bored by it. A former Gryffindor Beater, she left the pitch after an injury but never lost the habit of entering rooms like impact is still her first language. She is proud, sharp, physical, and far too socially fluent to be reduced to anyone's jealous ex.
 
 She and Havoc Fang were never soft, never simple, and maybe never official enough to give people clean language for it. Still, everyone knew the shape of them: heat, history, insults that landed because they had earned the right, and a public rhythm that made sense until it did not. Elara liked being the girl who could stand in that fire. She liked being impossible to pity.
 
 Her real problem is not losing Havoc. It is being edited out of the story as if she was only a phase before the interesting part began. Elara has ambitions beyond old romance: dueling club influence, post-Hogwarts plans, favors owed by half the right people. But if someone treats her history like a footnote, she will remind them that old flames still know where everything burns.`, personality:'proud, sharp, physical, socially dangerous, ambitious, unsentimental, jealous with dignity, charismatic, reactive, hard to pity', relationships:{player: -6, havoc: -8, briar: 22, rowan: -16, theo: 18} },
-  { id:'theo', name:'Theo Bell', handle:'theobell', pronouns:'he/him', house:'gryffindor', team:'Gryffindor', position:'Unofficial Quidditch commentator', bio:'Gryffindor commentator. Posts first.', followers:1600000, description:`Theo Bell is Gryffindor's unofficial commentator, clip dealer, and weekly reason someone threatens to confiscate a phone. He runs match threads, rankings, polls, edits, and rumor-laced breakdowns with the confidence of a journalist and the ethics of a bored seventeen-year-old with good timing. He insists it is for morale. Nobody believes him, but everyone checks the posts.
+  { id:'theo', name:'Theo Bell', handle:'theobell', pronouns:'he/him', house:'gryffindor', team:'', position:'Unofficial Quidditch commentator', bio:'Gryffindor commentator. Posts first.', followers:1600000, description:`Theo Bell is Gryffindor's unofficial commentator, clip dealer, and weekly reason someone threatens to confiscate a phone. He runs match threads, rankings, polls, edits, and rumor-laced breakdowns with the confidence of a journalist and the ethics of a bored seventeen-year-old with good timing. He insists it is for morale. Nobody believes him, but everyone checks the posts.
 
 Theo is not on the starting Quidditch lineup, which somehow makes him more dangerous to the team. He turns practices into narratives, mistakes into clips, and private tension into public weather. Briar Rowe hates how useful his hype can be. Callum Pike hates being analyzed mid-failure. Havoc Fang pretends not to care until a caption is funny enough. Rowan Cade knows better than to give him a clean quote.
 
@@ -906,14 +952,37 @@ Theo is not cruel by default. He is worse: entertained, persuasive, and very goo
 On the pitch, Jude plays like effort is embarrassing but humiliation is funny. He is loose, mean, quick enough to punish arrogance, and much better than his attitude suggests. Silas Montague hates relying on him because Jude treats discipline like a personal rumor. Teammates like him when he is funny, resent him when he is right, and trust him most when he looks least interested.
 
 Jude's real currency is access: party corners, betting pools, contraband favors, who owes whom, and which secrets are not worth the price. He is not a loyal assistant or a solemn strategist. He is the person sitting near the disaster, making one comment that turns discomfort into damage. If everyone else insists on being dramatic, Jude is happy to provide captions.`, personality:'snarky, loose, under-motivated, dry, socially slippery, useful despite himself, irreverent, mean-funny, unbothered, quietly connected', relationships:{player: 14, silas: 16, havoc: -18, briar: -12, theo: 22} },
-  { id:'tamsin', name:'Tamsin Cade', handle:'tamsincade', pronouns:'she/her', house:'ravenclaw', team:'Ravenclaw', position:"Student / Rowan Cade's older sister", bio:'Ravenclaw sister. Polite until she is not.', followers:1300000, description:`Tamsin Cade is composed in the way that makes messy people check their posture. A Ravenclaw seventh year and Rowan Cade's older sister, she is academically sharp, socially polished, and deeply unimpressed by performances that mistake charm for self-knowledge. She loves Rowan with a precision that can feel a lot like prosecution.
+  { id:'tamsin', name:'Tamsin Cade', handle:'tamsincade', pronouns:'she/her', house:'ravenclaw', team:'', position:"Student / Rowan Cade's older sister", bio:'Ravenclaw sister. Polite until she is not.', followers:1300000, description:`Tamsin Cade is composed in the way that makes messy people check their posture. A Ravenclaw seventh year and Rowan Cade's older sister, she is academically sharp, socially polished, and deeply unimpressed by performances that mistake charm for self-knowledge. She loves Rowan with a precision that can feel a lot like prosecution.
 
-Tamsin is not part of the Gryffindor Quidditch team, but Quidditch keeps dragging her brother into public disasters, and she has opinions about every single one. Havoc Fang is familiar damage: annoying, loyal, unfortunately permanent. Briar Rowe earns her respect by having standards. Silas Montague is useful to argue with because he at least understands consequences. Everyone else is on probation.
+Tamsin is not part of any Quidditch team, but Quidditch keeps dragging her brother into public disasters, and she has opinions about every single one. Havoc Fang is familiar damage: annoying, loyal, unfortunately permanent. Briar Rowe earns her respect by having standards. Silas Montague is useful to argue with because he at least understands consequences. Everyone else is on probation.
 
 Her real fear is that Rowan will become useful to stronger personalities and call it belonging. She knows his jokes, his exits, his need to be wanted without asking directly. When someone new pulls him into their gravity, Tamsin does not see romance first. She sees risk, repetition, and another reason her brother might disappear behind a smile. She is polite until she is not, and by then the sentence has usually already found the bruise.`, personality:'composed, sharp, polished, protective, judgmental, academically dangerous, socially controlled, cutting, loyal, impossible to charm for long', relationships:{player: -8, rowan: 72, havoc: -8, briar: 38, silas: 20, milo: -26} },
 ];
 
-const DEFAULT_PLAYER = { id:'player', name:'Keres Valen', handle:'keresvalen', pronouns:'she/her', house:'slytherin', bio:'Slytherin Chaser trialist. Feral.', followers:1000000, description:'Keres Valen transfers in like a rumor someone dared to make real: sharp mouth, pretty aim, worse ideas after dark. She is trying out as a Chaser for the Slytherin Quidditch team, and the pitch is where the chaos tightens into something terrifyingly precise. Off the field she is loud, feral, shamelessly provocative, and allergic to sincerity unless it slips out by accident. On a broom, she is no contest: fast hands, vicious angles, and the kind of nerve that makes defenders look slow.\n\nHer last school left a reputation behind her, though no one agrees on the details. Brilliant Chaser. Behavioral problem. Top marks where nobody expected them. Someone who hit back too hard and smiled after. Keres lets the stories rot into worse versions because correcting people would mean caring, and she would rather joke about chewing electrical wires than admit anything touched her.\n\nShe does not cow easily, breaks rules she thinks are stupid, and if someone hits first, socially or physically, she hits harder with no remorse. Foul her on the field and she will foul back. Threaten her people and she throws punches first, asks questions later. She rubs most people wrong at first because the front is good: flirt like a dare, laugh like a weapon, never blink first. But under the bad attitude is a devoted student, a dangerous protector, and a girl most embarrassed by the rare moments she means exactly what she says.', personality:'feral, provocative, sharp-tongued, fearless, volatile, protective, shameless, competitive, defiant, witty, reckless, loyal, secretly studious, allergic to sincerity, viciously playful, rule-breaking, flirtatious, hard to embarrass, quick to retaliate, precise under pressure' };
+const DEFAULT_PLAYER = { id:'player', name:'Keres Valen', handle:'keresvalen', pronouns:'she/her', house:'slytherin', team:'Slytherin', position:'Chaser trialist', bio:'Slytherin Chaser trialist. Feral.', followers:1000000, description:'Keres Valen transfers in like a rumor someone dared to make real: sharp mouth, pretty aim, worse ideas after dark. She is trying out as a Chaser for the Slytherin Quidditch team, and the pitch is where the chaos tightens into something terrifyingly precise. Off the field she is loud, feral, shamelessly provocative, and allergic to sincerity unless it slips out by accident. On a broom, she is no contest: fast hands, vicious angles, and the kind of nerve that makes defenders look slow.\n\nHer last school left a reputation behind her, though no one agrees on the details. Brilliant Chaser. Behavioral problem. Top marks where nobody expected them. Someone who hit back too hard and smiled after. Keres lets the stories rot into worse versions because correcting people would mean caring, and she would rather joke about chewing electrical wires than admit anything touched her.\n\nShe does not cow easily, breaks rules she thinks are stupid, and if someone hits first, socially or physically, she hits harder with no remorse. Foul her on the field and she will foul back. Threaten her people and she throws punches first, asks questions later. She rubs most people wrong at first because the front is good: flirt like a dare, laugh like a weapon, never blink first. But under the bad attitude is a devoted student, a dangerous protector, and a girl most embarrassed by the rare moments she means exactly what she says.', personality:'feral, provocative, sharp-tongued, fearless, volatile, protective, shameless, competitive, defiant, witty, reckless, loyal, secretly studious, allergic to sincerity, viciously playful, rule-breaking, flirtatious, hard to embarrass, quick to retaliate, precise under pressure' };
+
+function normalizeCharacterIdentity(char) {
+  if (!char) return char;
+  if (char.id === 'player') {
+    return { ...char, pronouns:'she/her', house:'slytherin', team:'Slytherin', position:'Chaser trialist' };
+  }
+  if (char.id === 'tamsin') {
+    return { ...char, pronouns:'she/her', house:'ravenclaw', team:'', position:"Student / Rowan Cade's older sister" };
+  }
+  const defaultChar = DEFAULT_CHARS.find(c => c.id === char.id);
+  if (!defaultChar) return char;
+  return {
+    ...char,
+    pronouns: defaultChar.pronouns || char.pronouns,
+    house: defaultChar.house || char.house,
+    team: isQuidditchPlayer(defaultChar) ? (defaultChar.team || defaultChar.house || char.team) : '',
+    position: defaultChar.position || char.position,
+  };
+}
+
+function normalizeCharactersIdentity(chars = []) {
+  return (chars || []).map(normalizeCharacterIdentity);
+}
 const DEFAULT_DAY = 1;
 const SAVE_STATE_VERSION = 3;
 const DEFAULT_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
@@ -1014,8 +1083,8 @@ const MATCH_EVENT_TEMPLATES = [
 ];
 
 function generateMatchEvents(match, chars, player) {
-  const slyChar = chars.find(c => (c.bio+c.description||'').toLowerCase().includes('slytherin') && isQuidditchPlayer(c)) || player;
-  const gryfChar = chars.find(c => (c.bio+''+(c.description||'')).toLowerCase().includes('gryffindor') && isQuidditchPlayer(c));
+  const slyChar = chars.find(c => teamFor(c) === 'Slytherin') || (teamFor(player) === 'Slytherin' ? player : null);
+  const gryfChar = chars.find(c => teamFor(c) === 'Gryffindor') || (teamFor(player) === 'Gryffindor' ? player : null);
   const events = [];
   // Shuffle and pick 7 events, ending with snitch
   const pool = [...MATCH_EVENT_TEMPLATES.filter(e => e.type !== 'snitch')];
@@ -1280,6 +1349,16 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const directMentionIds = new Set(directlyMentioned.map(c => c.id));
     const authorId = author?.id || post.charId;
     const isKeresPost = post.charId === 'player' || characterMentionedInText(post.text || '', player);
+    const postText = post.text || '';
+    const elara = eligible.find(c => c.id === 'elara');
+    const havoc = chars.find(c => c.id === 'havoc');
+    const keresRumorText = /keres|@keresvalen|new transfer|transfer|bombshell|mega babe|pretty|hot|photo|record|disciplinary|tryout|chaser|gmz|rumou?r/i.test(postText);
+    const havocKeresPressure = !!elara && (
+      (authorId === 'havoc' && (characterMentionedInText(postText, player) || keresRumorText)) ||
+      (isKeresPost && havoc && (mentionedHandles.has((havoc.handle || '').toLowerCase()) || characterMentionedInText(postText, havoc) || /havoc/i.test(postText))) ||
+      ((post.charId === '__gmz__' || /gmz|rumou?r|photo|record|disciplinary|transfer|new girl|bombshell|pretty|hot/i.test(postText)) && keresRumorText)
+    );
+    const exPressureResponders = havocKeresPressure ? [elara] : [];
     const houseTeamDefenders = eligible.filter(c => isHouseTeamCallout(post.text, c));
     const defenderIds = new Set(houseTeamDefenders.map(c => c.id));
     const teammateDefenders = eligible.filter(c =>
@@ -1308,6 +1387,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         let w = charge(c) + Math.random()*30;
         if (defenderIds.has(c.id)) w += 55;
         if (teammateDefenderIds.has(c.id)) w += 42;
+        if (c.id === 'elara' && havocKeresPressure) w += 85;
         if (c.id === 'silas' && isKeresPost && !/slytherin|tryout|captain|strategy|quidditch|pitch|match|foul|chaser|seeker|keeper|beater/i.test(post.text || '')) w *= 0.28;
         if (c.id === 'silas' && authorId === 'havoc') w *= 0.35;
         if (c.id === 'callum' && authorId === 'havoc') w *= 0.72;
@@ -1317,9 +1397,10 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 
     // Pick 1-3 chars by default. Direct mentions jump the line, then other characters can chime in.
     const targetCount = Math.min(4, Math.max(embarrassmentContext ? 2 : 1, directlyMentioned.length + 1 + (Math.random() < 0.35 ? 1 : 0)));
-    const targetLimit = Math.min(5, Math.max(targetCount, directlyMentioned.length));
+    const targetLimit = Math.min(5, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + exPressureResponders.length));
     let picked = [
       ...directlyMentioned,
+      ...exPressureResponders,
       ...houseTeamDefenders,
       ...teammateDefenders,
       ...(snarkyResponder && !directMentionIds.has(snarkyResponder.id) ? [snarkyResponder] : []),
@@ -1345,7 +1426,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const houseDefenseNote = isHouseTeamCallout(post.text, c) ? ' HOUSE/TEAM CALLOUT: the post insults or needles their house/team. They should answer with more bite, defend or undercut the insult, or hit back. Do not shrug, agree mildly, or say "I guess".' : '';
       const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
-      return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.house || ''}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${stanceFor(c)}${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}`;
+      const elaraExNote = c.id === 'elara' && havocKeresPressure ? ' EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. Elara should usually react with pride and plausible deniability: a sharp subtweet, dangerous joke, social jab, or old-history pressure. She does not sound wounded, plead, or beg for attention.' : '';
+      return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${stanceFor(c)}${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${elaraExNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -1358,13 +1440,16 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const embarrassmentRule = embarrassmentContext
       ? `\nEMBARRASSMENT NOTE: Someone publicly fumbled, exposed themself, apologized badly, looked foolish, or handed the timeline an opening. At least one custom character should call it out, tease them, sharpen the moment, or make the social consequence visible. It can be funny, dry, protective, flirty, or cruel depending on the character, but do not let the embarrassing moment pass unnoticed.`
       : '';
+    const exPressureRule = havocKeresPressure
+      ? `\nEX PRESSURE NOTE: Elara March has public history with Havoc. If she replies, let it feel like a proud ex noticing the room has shifted: sharp, charismatic, jealous with dignity, socially dangerous, and never pleading.`
+      : '';
 
     (async () => {
       let charR1 = [];
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}\n\n${CHARACTER_TONE_RULE}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public: they should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}\n\n${CHARACTER_TONE_RULE}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public: they should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -1411,7 +1496,7 @@ ${transcript}
 
 ${pronounRule([author, player, ...chars])}
 
-You are writing replies from random anonymous student accounts joining the comment thread. They are part of the conversation, not a recap channel. They:
+Write replies from random anonymous student accounts joining the comment thread. They are part of the conversation, not a recap channel. They:
 - pick teams sometimes ("team @whoever", "@xxx ate this")
 - quote or repeat a line only occasionally
 - use casual slang lightly: lmfao, oop, bestie, the way, screaming
@@ -1425,6 +1510,7 @@ You are writing replies from random anonymous student accounts joining the comme
 - do not call people "she", "girl", "mother", "queen", etc. unless the pronoun roster supports it and that exact account would say it
 - most accounts should use @handles or names instead of gendered labels
 - do NOT narrate the thread as media criticism. Avoid "discourse", "reality tv", "production value", "documentary", "screenplay", "narrative", or "the way this thread..." style recaps.
+- do not introduce themselves, explain their account type, summarize these rules, or say they are ready
 
 Accounts (in order):
 ${botRoster}
@@ -1487,7 +1573,10 @@ ${CHARACTER_TONE_RULE}
 ${stanceFor(fight.replier)}
 ${stanceFor(fight.target)}
 
-You are ${fight.replier.name} (@${fight.replier.handle}; pronouns: ${pronounsFor(fight.replier)}). Your relationship with @${fight.target.handle} is charged (${fight.rel}/100). You see what they just said and you can't help yourself. You reply to THEM, not to the original post. Personality: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
+Write as ${fight.replier.name}, and output only the public reply text.
+${identityPromptFor(fight.replier)}
+Other person facts: ${identityFactsFor(fight.target)}.
+Your relationship with @${fight.target.handle} is charged (${fight.rel}/100). You see what they just said and you can't help yourself. You reply to THEM, not to the original post. Voice cues: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
 Write ONE reply (8-26 words). It can be a tease, joke, flirt, smug correction, playful shove, dry observation, or actual clapback only if the character would truly go there. It should clearly answer @${fight.target.handle}. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
 ${BANNED_PHRASES_RULE}
@@ -1546,7 +1635,7 @@ Return ONLY the reply text. No other text.`
                   const bot = pool.find(b => b.id === botTarget.bot);
                   const resBot = await window.claude.complete({
                     messages:[{ role:'user', content:
-                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${stanceFor(responder)}\n\nYou are ${responder.name} (@${responder.handle}). If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, or clarifying. No hashtags, no quotes.` }]
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
                   });
                   const botReply = cleanSocialReplyText(resBot, responder, player);
                   if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
@@ -1583,7 +1672,10 @@ ${CHARACTER_TONE_RULE}
 ${stanceFor(fight.target)}
 ${stanceFor(fight.replier)}
 
-You are ${fight.target.name} (@${fight.target.handle}; pronouns: ${pronounsFor(fight.target)}). Personality: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is charged (${fight.rel}/100).
+Write as ${fight.target.name}, and output only the reply text.
+${identityPromptFor(fight.target)}
+Other speaker facts: ${identityFactsFor(fight.replier)}.
+Voice cues: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is charged (${fight.rel}/100).
 
 Decide if you would answer or leave it on read. If silence is more in-character, return exactly: SILENCE
 Otherwise write ONE counter-reply (8-24 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, or sharp. Only twist the knife if that truly fits. No hashtags. No quotes around the reply.
@@ -1698,11 +1790,14 @@ Return ONLY SILENCE or the reply text.`
       try {
         const res = await window.claude.complete({
           messages: [{ role:'user', content:
-            `You are ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university. Your personality: ${bot.bio || bot.type}.
+            `Write as ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university. Voice cues: ${bot.bio || bot.type}.
 Original post: "${post.text}"
 Your comment: "${target.sourceText || ''}"
 ${player.name} just replied to your comment: "${text}"
-Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining.`
+Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining.
+${pronounRule([player, ...chars])}
+${BANNED_PHRASES_RULE}
+Return ONLY the reply text. Do not explain the task.`
           }]
         });
         setBotComments(prev => [...prev, {
@@ -1745,7 +1840,9 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `You are ${targetChar.name} (@${targetChar.handle}; pronouns: ${pronounsFor(targetChar)}). Personality: ${targetChar.personality}.
+            `Write as ${targetChar.name}, and output only the public reply text.
+${identityPromptFor(targetChar)}
+Voice cues: ${targetChar.personality}.
 ${pronounRule([targetChar, player, char])}
 ${CHARACTER_TONE_RULE}
 ${stanceFor(targetChar)}
@@ -1849,7 +1946,7 @@ ${BANNED_PHRASES_RULE}`
         const continuityNote = priorLines
           ? ` PREVIOUS LINES BY THIS CHARACTER IN THIS THREAD: ${priorLines.replace(/\n/g, ' ')} Keep their stance consistent; do not flip sides unless the flip is intentional and acknowledged.`
           : '';
-        return `${i+1}. ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) - ${c.personality}. ${stanceFor(c)}${defenseNote}${teammateNote}${continuityNote}`;
+        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. ${stanceFor(c)}${defenseNote}${teammateNote}${continuityNote}`;
       }).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
@@ -1992,7 +2089,9 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
               const priorCharLines = speakerThreadHistory(cChar.id, 5);
               const res = await window.claude.complete({
                 messages:[{ role:'user', content:
-                  `You are ${cChar.name} (@${cChar.handle}; pronouns: ${pronounsFor(cChar)}). Personality: ${cChar.personality}.
+                  `Write as ${cChar.name}, and output only the public reply text.
+${identityPromptFor(cChar)}
+Voice cues: ${cChar.personality}.
 ${pronounRule([cChar, player, char])}
 ${CHARACTER_TONE_RULE}
 ${stanceFor(cChar)}
@@ -2123,11 +2222,15 @@ ${BANNED_PHRASES_RULE}`
           try {
             const res = await window.claude.complete({
               messages: [{ role:'user', content:
-                `You are ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university. Your personality: ${bot.bio || bot.type}.
+                `Write as ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university.
+Voice cues: ${bot.bio || bot.type}.
 Original post: "${post.text}"
 Your comment: "${bc.text}"
 ${player.name} just replied to your comment: "${playerReply}"
-Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining.`
+${pronounRule([player, ...(chars || [])])}
+Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining. Do not introduce yourself, list rules, or mention prompts.
+${BANNED_PHRASES_RULE}
+Return ONLY the reply text.`
               }]
             });
             setBotComments(prev => {
@@ -2714,7 +2817,7 @@ function buildSystemPrompt(char, player, allChars, feed, dms) {
     .map(c => {
       const val = char.relationships?.[c.id];
       const feel = val === undefined ? 'neutral' : val > 60 ? 'close friends / very positive' : val > 20 ? 'friendly' : val > 0 ? 'acquaintances' : val > -30 ? 'tense / complicated' : 'enemies / strongly negative';
-      return `- ${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}): ${feel}${val !== undefined ? ` (${val > 0 ? '+':''}${val}%)` : ''}`;
+      return `- ${identityFactsFor(c)}: ${feel}${val !== undefined ? ` (${val > 0 ? '+':''}${val}%)` : ''}`;
     }).join('\n');
 
   // Past DM history summary (only if exists)
@@ -2725,17 +2828,17 @@ function buildSystemPrompt(char, player, allChars, feed, dms) {
     : '';
   const effectiveRel = effectivePlayerRelationship(char, [], dms).value;
 
-  return `You are ${char.name} (@${char.handle}), a real person with a social media presence.
+  return `Write as ${char.name} (@${char.handle}), a real person with a social media presence.
 
-PRONOUNS: ${pronounsFor(char)}
-PERSONALITY: ${char.personality}
-BIO: ${char.bio}
-FULL DESCRIPTION: ${char.description}
+${identityPromptFor(char)}
+Pronouns: ${pronounsFor(char)}
+Voice cues: ${char.personality}
+Profile context: ${char.bio}. ${char.description}
 
 ${pronounRule(allChars)}
 ${CHARACTER_TONE_RULE}
 ${playerStance(char, player, effectiveRel)}
-Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%.
+Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%. Keep that relationship level consistent without mentioning the number.
 
 YOUR RELATIONSHIPS WITH OTHERS:
 ${relLines || 'No known relationships yet.'}
@@ -2744,13 +2847,14 @@ WHAT'S BEEN HAPPENING ON THE FEED RECENTLY:
 ${recentPosts || 'Nothing yet.'}
 ${historyNote}
 
-You are now in a private DM with ${player.name} (@${player.handle}).
+This is a private DM with ${player.name} (@${player.handle}).
 
 RULES:
 - Stay completely in character. Never break the fourth wall or mention being an AI.
 - Output ONLY the DM message you would send. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 - Do not introduce yourself, list your traits, summarize continuity rules, or explain your relationship score.
 - Use the pronouns listed above exactly. Do not misgender anyone, including in gossip or third-person comments.
+- Treat house/team/player status like fixed identity. If you are talking about your own house or Quidditch team, use we/us/our. If you are not on a Quidditch team, do not speak as if you play.
 - Be brief: 1-3 sentences max unless pushed.
 - Reference the feed naturally if it's relevant — bring up posts, gossip, what others did.
 - Remember what ${player.name} has told you in this conversation.
@@ -3098,7 +3202,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
     setInviteLoading(true);
     setStep('invite');
     try {
-      const roster = selectedChars.map(c => `${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}): ${c.personality}. ${c.description?.slice(0,150)||c.bio}`).join('\n');
+      const roster = selectedChars.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description?.slice(0,150)||c.bio}`).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
           `${player.name} (@${player.handle}) is setting up a scene at ${setting.label} — "${setting.sub}" — vibe: ${vibe.label}.
@@ -3283,8 +3387,8 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, onClose, onE
   }, []);
 
   function buildScenePrompt(history) {
-    const roster = participants.map(c => `${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}): ${c.personality}. ${c.description?.slice(0,220)||c.bio}`).join('\n');
-    return `You are writing a live scene with these characters:
+    const roster = participants.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description?.slice(0,220)||c.bio}`).join('\n');
+    return `Write a live scene with these characters:
 ${roster}
 
 ${pronounRule([player, ...participants])}
@@ -3302,6 +3406,7 @@ RESPONSE FORMAT — follow this exactly:
 - Do not write stage-play beats like "Pauses." or long narrated reactions. Use one small physical action at most.
 - Stay completely in character for whoever is speaking. Let the group chemistry matter.
 - Use the pronouns listed above exactly. Do not misgender anyone.
+- Treat house/team/player status like fixed identity. If someone is not on a Quidditch team, do not write them as a player. If someone mentions their own house or team, they use we/us/our.
 - The vibe is ${vibe.label}. Honor it.
 - If the player writes [something in brackets], treat it as a physical action and react naturally.
 ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
@@ -3537,7 +3642,9 @@ function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats =
           .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
           .join('\n');
         const f = await window.claude.complete({
-          messages:[{ role:'user', content:`You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. Description: ${char.description?.slice(0,200)||''}.
+          messages:[{ role:'user', content:`Write as ${char.name}.
+${identityPromptFor(char)}
+Voice cues: ${char.personality}. Profile context: ${char.description?.slice(0,200)||''}.
 The player is ${player.name} (@${player.handle}) — ${player.bio}.
 ${pronounRule([char, player, ...allChars])}
 ${playerStance(char, player, rel)}
@@ -3547,7 +3654,7 @@ Recent campus posts:\n${recentContext}
 ${dmContext ? `\nRecent private DMs with ${player.name}:\n${dmContext}` : ''}
 ${logContext ? `\nRecent action/scene memory:\n${logContext}` : ''}
 
-In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. If DMs or scenes show trust, alliance, flirting, attraction, or honesty, reflect that instead of resetting to neutral. If context is thin, make a guarded in-character observation based on the relationship score. Never ask for more context. First person, in character. Use the pronouns listed above exactly.` }]
+In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. If DMs or scenes show trust, alliance, flirting, attraction, or honesty, reflect that instead of resetting to neutral. If context is thin, make a guarded in-character observation based on the relationship score. Never ask for more context. First person, in character. Use the pronouns listed above exactly. Return ONLY the sentence.` }]
         });
         setFeeling(cleanProfileFeelingText(f, char, rel));
       } catch(e) {
@@ -3570,14 +3677,15 @@ In 1 punchy sentence (under 20 words), describe your current feeling right now s
           .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
           .join('\n');
         const res = await window.claude.complete({
-          messages:[{ role:'user', content:`You are analyzing ${char.name}'s current emotional state toward ${player.name} based on their personality and recent campus activity.
+          messages:[{ role:'user', content:`Analyze ${char.name}'s current emotional state toward ${player.name} based on their personality and recent campus activity.
+${identityPromptFor(char)}
 ${pronounRule([char, player, ...allChars])}
 ${playerStance(char, player, rel)}
 ${BANNED_PHRASES_RULE}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
 
-${char.name} personality: ${char.personality}
-${char.name} description: ${char.description?.slice(0,200)||char.bio}
+Voice cues for ${char.name}: ${char.personality}
+Profile context for ${char.name}: ${char.description?.slice(0,200)||char.bio}
 Recent campus posts:\n${recentContext}
 ${dmContext ? `\nRecent private DMs with ${player.name}:\n${dmContext}` : ''}
 ${logContext ? `\nRecent action/scene memory:\n${logContext}` : ''}
@@ -3969,10 +4077,11 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, setGroupCh
       if (Math.random() < (isQuiet ? 0.4 : 0.15)) continue; // sometimes they don't respond
 
       try {
-        const otherMembers = members.filter(m => m.id !== member.id).map(m => `${m.name} (@${m.handle}; pronouns: ${pronounsFor(m)}): ${m.personality || m.bio}`).join('; ');
+        const otherMembers = members.filter(m => m.id !== member.id).map(m => `${identityFactsFor(m)}; ${m.personality || m.bio}`).join('; ');
         const reply = await window.claude.complete({ messages:[{ role:'user', content:
-          `You are ${member.name} (@${member.handle}; pronouns: ${pronounsFor(member)}) in a group chat called "${group.name}".
-Personality: ${member.personality}. ${member.description?.slice(0,200)}
+          `Write as ${member.name} in a group chat called "${group.name}".
+${identityPromptFor(member)}
+Voice cues: ${member.personality}. ${member.description?.slice(0,200)}
 Other people currently present in this chat: ${otherMembers}.
 ${pronounRule([member, player, ...members])}
 ${CHARACTER_TONE_RULE}
@@ -4234,7 +4343,7 @@ function EventModal({ event, chars, player, feed, onClose, onSubmit, onLog, onSo
     if (!input.trim() || loading) return;
     setLoading(true);
     try {
-      const charDescs = involved.map(c => `${c.name} (@${c.handle}; pronouns: ${pronounsFor(c)}) — personality: ${c.personality}. Description: ${c.description}`).join('\n');
+      const charDescs = involved.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description}`).join('\n');
       const recentFeedContext = feed ? [...feed].slice(0,8).map(p => {
         const poster = [...(chars||[]), player].find(c=>c.id===p.charId);
         return `@${poster?.handle||p.charId}: "${p.text}"`;
@@ -4242,7 +4351,7 @@ function EventModal({ event, chars, player, feed, onClose, onSubmit, onLog, onSo
       const response = await window.claude.complete({
         messages: [{
           role:'user',
-          content: `You are narrating a social media event like a dramatic story beat.
+          content: `Narrate a social media event like a dramatic story beat.
 
 CHARACTERS INVOLVED:
 ${charDescs}
@@ -4250,6 +4359,7 @@ ${charDescs}
 PLAYER: ${player.name} (@${player.handle}) — ${player.personality}
 
 ${pronounRule([player, ...involved])}
+Treat house/team/player status like fixed identity. Do not write non-players as Quidditch players. Do not invent game attendance, wins, dodging, fouls, or match results unless the event explicitly says so.
 
 RECENT FEED CONTEXT:
 ${recentFeedContext}
@@ -4257,7 +4367,7 @@ ${recentFeedContext}
 EVENT: "${currentEvent.scenario}"
 PLAYER'S ACTION: "${input}"
 
-Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles. Use the pronouns listed above exactly. Show consequences. Make it feel like something that would blow up on social media. Plain prose only — no headers, no bullet points, no markdown formatting.`
+Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles. Use the pronouns and identities listed above exactly. Show consequences. Make it feel like something that would blow up on social media. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.`
         }]
       });
       const cleaned = response
@@ -4924,14 +5034,20 @@ function App() {
   }
 
   function withStateVersion(state) {
-    return { ...state, stateVersion: SAVE_STATE_VERSION, savedAt: Date.now() };
+    return {
+      ...state,
+      chars: normalizeCharactersIdentity(state.chars || []),
+      player: normalizeCharacterIdentity(state.player || DEFAULT_PLAYER),
+      stateVersion: SAVE_STATE_VERSION,
+      savedAt: Date.now()
+    };
   }
 
   function applySavedState(saved) {
-    const savedChars = saved.chars || chars;
-    const savedPlayer = saved.player || player;
-    if (saved.chars)      setCharsRaw(saved.chars);
-    if (saved.player)     setPlayerRaw(saved.player);
+    const savedChars = normalizeCharactersIdentity(saved.chars || chars);
+    const savedPlayer = normalizeCharacterIdentity(saved.player || player);
+    if (saved.chars)      setCharsRaw(savedChars);
+    if (saved.player)     setPlayerRaw(savedPlayer);
     if (saved.feed)       setFeedRaw(repairPromptLeakPosts(saved.feed, savedChars, savedPlayer));
     if (saved.dms)        setDmsRaw(repairPromptLeakDms(saved.dms, savedChars, savedPlayer));
     if (saved.groupChats) setGroupChatsRaw(normalizeGroupChats(repairPromptLeakGroupChats(saved.groupChats, savedChars, savedPlayer)));
@@ -5004,10 +5120,10 @@ function App() {
   }
 
   function freshGameState({ preserveProfiles = false } = {}) {
-    const freshChars = preserveProfiles ? clearPlayerRelationships(cloneDefault(chars)) : cloneDefault(DEFAULT_CHARS);
+    const freshChars = normalizeCharactersIdentity(preserveProfiles ? clearPlayerRelationships(cloneDefault(chars)) : cloneDefault(DEFAULT_CHARS));
     return {
       chars: freshChars,
-      player: preserveProfiles ? cloneDefault(player) : cloneDefault(DEFAULT_PLAYER),
+      player: normalizeCharacterIdentity(preserveProfiles ? cloneDefault(player) : cloneDefault(DEFAULT_PLAYER)),
       feed: cloneDefault(DEFAULT_FEED),
       dms: {},
       groupChats: normalizeGroupChats(cloneDefault(DEFAULT_GROUP_CHATS)),
@@ -5044,8 +5160,8 @@ function App() {
   }, []);
 
   // Wrapped setters — update state and schedule a server save
-  function setChars(v)      { setCharsRaw(prev      => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars:next,player,feed,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
-  function setPlayer(v)     { setPlayerRaw(prev     => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player:next,feed,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
+  function setChars(v)      { setCharsRaw(prev      => { const next = normalizeCharactersIdentity(typeof v==='function'?v(prev):v);                    serverSave({chars:next,player,feed,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
+  function setPlayer(v)     { setPlayerRaw(prev     => { const next = normalizeCharacterIdentity(typeof v==='function'?v(prev):v);                    serverSave({chars,player:next,feed,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
   function setFeed(v)       { setFeedRaw(prev       => { const next = (typeof v==='function'?v(prev):v).slice(0,60);      serverSave({chars,player,feed:next,dms,groupChats,eventLog,day,socialPresence}); return next; }); }
   function setDms(v)        { setDmsRaw(prev        => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms:next,groupChats,eventLog,day,socialPresence}); return next; }); }
   function setGroupChats(v) { setGroupChatsRaw(prev => { const next = typeof v==='function'?v(prev):v;                    serverSave({chars,player,feed,dms,groupChats:next,eventLog,day,socialPresence}); return next; }); }
@@ -5156,8 +5272,11 @@ function App() {
 
     try {
       const raw = await window.claude.complete({ messages:[{ role:'user', content:
-        `You are ${char.name} (@${char.handle}), a ${char.personality} college student at Merlin's College of Magic.
-Description: ${char.description}
+        `Write as ${char.name} on a campus social app.
+${identityPromptFor(char)}
+Voice cues: ${char.personality}.
+Profile context: ${char.description}
+${pronounRule([char, player, ...chars])}
 ${CHARACTER_TONE_RULE}
 ${playerStance(char, player)}
 Other campus accounts: ${otherHandles}
@@ -5171,6 +5290,7 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
 - Optionally tag 0-2 handles if natural
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
 - NO hashtags, NO quotes around the post, JUST the post text
+- Do not introduce yourself, list identity facts, summarize rules, or mention prompts/context.
 ${BANNED_PHRASES_RULE}` }] });
       const cleanText = cleanSocialPostText(raw, char, player);
       setFeed(f => [{
@@ -5356,12 +5476,13 @@ ${BANNED_PHRASES_RULE}` }
       const sender = m.role === 'user' ? player : allChars.find(c => c.id === m.charId);
       return `${sender?.name || 'Someone'}: "${m.text}"`;
     }).join('\n');
-    const otherMembers = members.filter(m => m.id !== member.id).map(m => `${m.name} (@${m.handle}; pronouns: ${pronounsFor(m)}; house/team: ${houseFor(m) || 'unknown'}${m.position ? `, ${m.position}` : ''})`).join('; ');
+    const otherMembers = members.filter(m => m.id !== member.id).map(m => identityFactsFor(m)).join('; ');
 
     try {
       const reply = await window.claude.complete({ messages:[{ role:'user', content:
-        `You are ${member.name} (@${member.handle}; pronouns: ${pronounsFor(member)}) in a group chat called "${group.name}".
-Personality: ${member.personality}. ${member.description?.slice(0,220)}
+        `Write as ${member.name} in a group chat called "${group.name}".
+${identityPromptFor(member)}
+Voice cues: ${member.personality}. ${member.description?.slice(0,220)}
 Other people currently present in this chat: ${otherMembers}.
 ${pronounRule([member, player, ...members])}
 ${CHARACTER_TONE_RULE}
@@ -5418,6 +5539,13 @@ ${BANNED_PHRASES_RULE}` }]
         const poster = [...chars, player].find(c => c.id === p.charId);
         return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
       }).join('\n');
+      const recentFeedRaw = feed.slice(0,8).map(p => {
+        const poster = [...chars, player, GMZ_CHAR].find(c => c.id === p.charId);
+        return `@${poster?.handle || '?'} ${p.text || ''}`;
+      }).join('\n').toLowerCase();
+      const elaraHavocKeresHeat = char.id === 'elara' && (
+        /havoc|@havocfang/.test(recentFeedRaw) && /keres|@keresvalen|new transfer|transfer|photo|record|disciplinary|tryout|hot|pretty|bombshell|gmz|rumou?r/.test(recentFeedRaw)
+      );
       const campusTopics = [
         'a weird class moment',
         'practice going badly or hilariously',
@@ -5432,12 +5560,15 @@ ${BANNED_PHRASES_RULE}` }]
         'weather, uniforms, bruises, or bad sleep',
         'crushes, flirting, jealousy, or pretending not to stare',
       ];
-      const campusTopic = campusTopics[Math.floor(Math.random() * campusTopics.length)];
+      const campusTopic = elaraHavocKeresHeat
+        ? 'an ex-adjacent subtweet about public rumors, old history, and someone new getting attention'
+        : campusTopics[Math.floor(Math.random() * campusTopics.length)];
 
       // Occasional directed callout. Most posts should be normal campus life.
       const others = chars.filter(c => c.id !== char.id);
-      const doCallout = Math.random() < 0.18 && others.length > 0;
+      const doCallout = ((elaraHavocKeresHeat && others.some(o => o.id === 'havoc')) || Math.random() < 0.18) && others.length > 0;
       const target = doCallout ? (() => {
+        if (elaraHavocKeresHeat) return others.find(o => o.id === 'havoc') || others[0];
         // Weight toward characters with negative or low relationships
         const weights = others.map(o => {
           const rel = char.relationships?.[o.id] ?? 50;
@@ -5448,20 +5579,27 @@ ${BANNED_PHRASES_RULE}` }]
         for (let i=0; i<others.length; i++) { r-=weights[i]; if(r<=0) return others[i]; }
         return others[0];
       })() : null;
+      const elaraPressureNote = elaraHavocKeresHeat
+        ? `\nElara-specific pressure: recent public chatter links Havoc and Keres or puts Keres in the rumor spotlight. React like a proud ex with old history: sharp, socially dangerous, funny, jealous with dignity, and never pleading. She can subtweet, needle Havoc, or make it clear she noticed without asking for anything.`
+        : '';
 
       try {
         const prompt = doCallout && target
-          ? `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), a ${char.personality} college student at Merlin's College of Magic.
-Description: ${char.description}
+          ? `Write as ${char.name} on a campus social app.
+${identityPromptFor(char)}
+Other person facts: ${identityFactsFor(target)}.
+Voice cues: ${char.personality}.
+Profile context: ${char.description}
 ${pronounRule([char, target, player])}
 ${CHARACTER_TONE_RULE}
 ${playerStance(char, player)}
+${elaraPressureNote}
 Your relationship with @${target.handle} (${target.name}): ${char.relationships?.[target.id] < 30 ? 'rivals/bad blood' : char.relationships?.[target.id] < 60 ? 'complicated' : 'decent but complicated'}.
 
 Recent campus feed:\n${recentContext}
 
 Write ONE social media post that is specifically directed at or about @${target.handle}. Rules:
-- Stay in character (personality: ${char.personality})
+- Stay in character
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - 1-2 sentences, punchy. It can be teasing, flirty, funny, smug, himbo-stupid, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
 - Use the recent feed only for continuity. Do not parrot its current buzzwords or recycle the same argument unless this is clearly a direct continuation.
@@ -5469,17 +5607,20 @@ Write ONE social media post that is specifically directed at or about @${target.
 - NO hashtags, NO quotes around the post, just the post text
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
 ${BANNED_PHRASES_RULE}`
-          : `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), a ${char.personality} college student at Merlin's College of Magic (wizarding university, HP-inspired, college-aged).
-Description: ${char.description}
+          : `Write as ${char.name} on a campus social app.
+${identityPromptFor(char)}
+Voice cues: ${char.personality}.
+Profile context: ${char.description}
 ${pronounRule(promptPeople)}
 ${CHARACTER_TONE_RULE}
 ${playerStance(char, player)}
+${elaraPressureNote}
 Other people on campus: ${otherHandles}
 
 Recent campus feed posts:\n${recentContext}
 
 Write ONE authentic social media post from ${char.name}'s perspective. Rules:
-- Stay completely in character (personality: ${char.personality})
+- Stay completely in character
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - 1-2 sentences max, punchy
 - Optionally tag 0-2 of the other handles if it's natural. Do NOT force it
@@ -5527,7 +5668,10 @@ ${BANNED_PHRASES_RULE}`;
               try {
                 const replyRaw = await window.claude.complete({
                   messages:[{ role:'user', content:
-                    `You are ${replier.name} (@${replier.handle}; pronouns: ${pronounsFor(replier)}), personality: ${replier.personality}.
+                    `Write as ${replier.name} on a campus social app.
+${identityPromptFor(replier)}
+Original poster facts: ${identityFactsFor(char)}.
+Voice cues: ${replier.personality}.
 ${pronounRule([replier, char, player])}
 ${CHARACTER_TONE_RULE}
 ${playerStance(replier, player)}
@@ -5599,11 +5743,16 @@ ${BANNED_PHRASES_RULE}` }]
     const reactionChars = chars.filter(c => isQuidditchPlayer(c)).slice(0,2);
     for (const char of reactionChars) {
       try {
-        const won = ((char.bio+''+(char.description||'')).toLowerCase().includes('slytherin')) === slyWon;
+        const charTeam = teamFor(char);
+        const won = charTeam === 'Slytherin' ? slyWon : !slyWon;
+        const opponent = charTeam === currentMatch?.home ? currentMatch?.away : currentMatch?.home;
         const raw = await window.claude.complete({ messages:[{ role:'user', content:
-          `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}), personality: ${char.personality}. Your team just ${won ? 'won' : 'lost'} a Quidditch match against ${won ? 'Gryffindor' : 'Slytherin'} ${score.home}–${score.away}.
+          `Write as ${char.name} on a campus social app.
+${identityPromptFor(char)}
+Voice cues: ${char.personality}.
+Your team, ${charTeam}, just ${won ? 'won' : 'lost'} a Quidditch match against ${opponent || 'the rival side'} ${score.home}-${score.away}.
 ${pronounRule([char, player, ...chars])}
-Write ONE punchy social media post reaction. Use the pronouns listed above exactly. In character. No hashtags. 1 sentence. Do not explain your reasoning or mention prompts/context/rules.
+Write ONE punchy social media post reaction. Use insider language for your own team (we/us/our) and rival language for the opponent (they/them). In character. No hashtags. 1 sentence. Do not explain your reasoning or mention prompts/context/rules.
 ${BANNED_PHRASES_RULE}`
         }]});
         handleMatchPost(cleanSocialPostText(raw, char, player), char.id);
@@ -5627,10 +5776,11 @@ ${BANNED_PHRASES_RULE}`
     try {
       const raw = await window.claude.complete({
         messages:[{ role:'user', content:
-          `You are GMZ (@gmz), the most chaotic student gossip account at Merlin's College of Magic. You cover campus drama, Quidditch scandals, relationship gossip, and anything controversial. You write in breathless tabloid style.
+          `Write as GMZ (@gmz), the most chaotic student gossip account at Merlin's College of Magic. You cover campus drama, Quidditch scandals, relationship gossip, and anything controversial. You write in breathless tabloid style.
 
 Campus accounts: ${handles}
 ${pronounRule([GMZ_CHAR, player, ...chars])}
+House/team/player status is fixed. Do not write non-players as Quidditch players. Do not invent game attendance, wins, dodging, fouls, or match results unless the context explicitly says so.
 ${context ? `Breaking context: ${context}` : ''}
 Recent campus posts:\n${recentContext}
 
@@ -5666,10 +5816,11 @@ ${BANNED_PHRASES_RULE}` }]
     try {
       const raw = await window.claude.complete({
         messages:[{ role:'user', content:
-          `You are GMZ (@gmz), the most chaotic student gossip account at Merlin's College of Magic. You cover campus drama and you are not above DMing students directly to fish for quotes, dirt, or exclusive angles.
+          `Write as GMZ (@gmz), the most chaotic student gossip account at Merlin's College of Magic. You cover campus drama and you are not above DMing students directly to fish for quotes, dirt, or exclusive angles.
 
 You're DMing ${player.name} (@${player.handle}) right now. Context: ${context}
 ${pronounRule([GMZ_CHAR, player, ...chars])}
+House/team/player status is fixed. Do not write non-players as Quidditch players. Do not invent game attendance, wins, dodging, fouls, or match results unless the context explicitly says so.
 
 Write ONE short DM (1-2 sentences max). Pick ONE angle:
 - fishing for an exclusive quote ("our sources say... care to confirm?")
@@ -5691,8 +5842,12 @@ ${BANNED_PHRASES_RULE}` }]
   async function handleEventSubmit(eventOverride) {
     const ev = eventOverride || activeEvent;
     if (!ev) return;
-    const involved = chars.filter(c => ev.chars.includes(c.id));
+    let involved = chars.filter(c => ev.chars.includes(c.id));
     const isTransferHeat = /keres|transfer|new girl|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(ev.scenario || '');
+    if (isTransferHeat) {
+      const elara = chars.find(c => c.id === 'elara');
+      if (elara && !involved.some(c => c.id === 'elara')) involved = [...involved, elara];
+    }
     const fallbackReaction = (char) => {
       if (isTransferHeat) {
         if (char.id === 'silas') return 'a reputation is useful if she knows how to aim it. tryouts will be informative.';
@@ -5704,6 +5859,7 @@ ${BANNED_PHRASES_RULE}` }]
         if (char.id === 'milo') return 'wait are we all pretending the photo did not happen or';
         if (char.id === 'theo') return 'ranking the new transfer before tryouts would be irresponsible. unrelated thread loading.';
         if (char.id === 'tamsin') return 'interesting how quickly a record becomes fascinating when the person attached is photogenic.';
+        if (char.id === 'elara') return 'funny how quickly everyone discovers a type when the new girl photographs well.';
       }
       return 'watching everyone decide what this means before the facts arrive. efficient, if nothing else.';
     };
@@ -5727,13 +5883,16 @@ ${BANNED_PHRASES_RULE}` }]
       setTimeout(async () => {
         try {
           const raw = await window.claude.complete({ messages:[{ role:'user', content:
-            `You are ${char.name} (@${char.handle}; pronouns: ${pronounsFor(char)}). Personality: ${char.personality}. Description: ${(char.description||char.bio||'').slice(0,240)}
+            `Write as ${char.name} on a campus social app.
+${identityPromptFor(char)}
+Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,240)}
 ${pronounRule([char, player, ...involved])}
 ${CHARACTER_TONE_RULE}
 ${playerStance(char, player)}
 
 Campus event: "${ev.scenario}"
 ${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
+${isTransferHeat && char.id === 'elara' ? `Elara has history with Havoc. If the event makes Keres visible or desirable, Elara should notice with pride, plausible deniability, dangerous humor, or a sharp ex-adjacent jab. She does not sound wounded or beg for attention.` : ''}
 
 Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
 ${BANNED_PHRASES_RULE}`

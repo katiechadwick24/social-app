@@ -1142,13 +1142,55 @@ function effectivePlayerRelationship(char, eventLog = [], dms = {}, groupChats =
   };
 }
 
-function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = {}, char = null, player = null, allChars = [] } = {}) {
+function memoryVisibilityForEntry(entry) {
+  if (entry?.visibility) return entry.visibility;
+  if (entry?.type === 'scene' || entry?.sceneMemory) return 'private_scene';
+  if (entry?.type === 'dm') return 'private_dm';
+  return 'public';
+}
+
+function memoryParticipantIds(entry, player = null) {
+  const ids = new Set();
+  const add = (id) => { if (id) ids.add(id); };
+  (entry?.participants || entry?.participantIds || entry?.chars || []).forEach(add);
+  (entry?.scoreChanges || []).forEach(ch => add(ch?.avatar));
+  if (entry?.charId) add(entry.charId);
+  if (entry?.type === 'scene' || entry?.sceneMemory) add(player?.id || 'player');
+  return ids;
+}
+
+function canUseMemoryEntry(entry, char = null, player = null, { channel = 'public', audienceIds = [] } = {}) {
+  const visibility = memoryVisibilityForEntry(entry);
+  if (visibility === 'public') return true;
+  if (!char?.id) return false;
+
+  const participants = memoryParticipantIds(entry, player);
+  const speakerId = char.id === player?.id ? 'player' : char.id;
+  if (!participants.has(speakerId) && !(char.id === player?.id && participants.has('player'))) return false;
+
+  if (channel === 'private' || channel === 'dm' || channel === 'profile' || channel === 'scene') return true;
+  if (channel === 'group') {
+    const audience = (audienceIds || []).filter(Boolean);
+    return audience.length > 0 && audience.every(id => participants.has(id === player?.id ? 'player' : id));
+  }
+  return false;
+}
+
+function memoryScopeLabel(entry) {
+  const visibility = memoryVisibilityForEntry(entry);
+  if (visibility === 'private_scene') return 'Private scene';
+  if (visibility === 'private_dm') return 'Private DM';
+  return 'Public memory';
+}
+
+function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = {}, char = null, player = null, allChars = [], channel = 'public', audienceIds = [] } = {}) {
   const roster = [...(allChars || []), GMZ_CHAR].filter(Boolean);
   const byId = (id) => roster.find(c => c.id === id) || (id === 'player' ? player : null);
   const memory = [];
 
   (eventLog || []).slice(0, 8).forEach(entry => {
     if (!entry) return;
+    if (!canUseMemoryEntry(entry, char, player, { channel, audienceIds })) return;
     const isScene = entry.type === 'scene' || !!entry.sceneMemory;
     const title = isScene ? `Completed scene${entry.title ? `: ${entry.title}` : ''}` : (entry.title || entry.type || (entry.scenario ? 'Event' : 'Memory'));
     const text = entry.sceneMemory || entry.outcome || entry.action || entry.text || entry.scenario || '';
@@ -1159,7 +1201,7 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
       })
       .filter(Boolean)
       .join(', ');
-    const line = `${title}: ${String(text).replace(/\s+/g, ' ').slice(0, 260)}${changes ? ` (${changes})` : ''}`;
+    const line = `${memoryScopeLabel(entry)} - ${title}: ${String(text).replace(/\s+/g, ' ').slice(0, 260)}${changes ? ` (${changes})` : ''}`;
     if (line.trim()) memory.push(line);
   });
 
@@ -1188,7 +1230,7 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
   return memory.length
     ? `RECENT APP MEMORY:
 ${memory.slice(0, 10).map((line, i) => `${i + 1}. ${line}`).join('\n')}
-Use this as continuity. Completed scenes are already past-tense facts, not hypotheticals. Do not reset relationships, forget scenes/events, or invent details beyond it.`
+Use this as continuity only when it is visible to the current speaker and appropriate for this ${channel} context. Completed scenes shown here are already past-tense facts, not hypotheticals. Do not reset relationships, forget scenes/events, invent details beyond it, or leak private memories into public/unrelated dialogue.`
     : 'RECENT APP MEMORY: no saved events yet. Do not pretend there is established history.';
 }
 
@@ -1459,6 +1501,7 @@ function generateMatchEvents(match, chars, player) {
   return picked.map((tpl, i) => ({
     id: `ev-${i}`,
     type: tpl.type,
+    team: tpl.team,
     icon: tpl.icon,
     text: tpl.text(match.home, match.away, player),
   }));
@@ -2876,7 +2919,7 @@ function LiveMatchModal({ match, chars, player, onClose, onPostToFeed, onMatchEn
     if (!ev) return;
     // Update score
     if (ev.type === 'goal') {
-      const isHome = ev.text(match.home, match.away, player).includes(match.home + ' scores') || ev.text(match.home, match.away, player).startsWith(match.home);
+      const isHome = ev.team !== 'away';
       setScore(s => isHome ? {...s, home: s.home+10} : {...s, away: s.away+10});
     }
     if (ev.type === 'snitch') {
@@ -3280,7 +3323,7 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
       pastMsgs.slice(-10).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n')
     : '';
   const effectiveRel = effectivePlayerRelationship(char, eventLog, dms, groupChats).value;
-  const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars });
+  const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'dm' });
 
   return `Write as ${char.name} (@${char.handle}), a real person with a social media presence.
 
@@ -4102,7 +4145,7 @@ function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats =
         }).join('\n');
         const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
         const logContext = (eventLog || [])
-          .filter(e => e && e.type !== 'dm')
+          .filter(e => e && e.type !== 'dm' && canUseMemoryEntry(e, char, player, { channel:'profile' }))
           .slice(0,8)
           .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
           .join('\n');
@@ -4114,7 +4157,7 @@ The player is ${player.name} (@${player.handle}) — ${player.bio}.
 ${pronounRule([char, player, ...allChars])}
 ${communicationStyleFor(char, 'profile feeling')}
 ${playerStance(char, player, rel)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars })}
+${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'profile' })}
 ${BANNED_PHRASES_RULE}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
 Recent campus posts:\n${recentContext}
@@ -4139,7 +4182,7 @@ In 1 punchy sentence (under 20 words), describe your current feeling right now s
         }).join('\n');
         const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
         const logContext = (eventLog || [])
-          .filter(e => e && e.type !== 'dm')
+          .filter(e => e && e.type !== 'dm' && canUseMemoryEntry(e, char, player, { channel:'profile' }))
           .slice(0,8)
           .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
           .join('\n');
@@ -4149,7 +4192,7 @@ ${identityPromptFor(char)}
 ${pronounRule([char, player, ...allChars])}
 ${communicationStyleFor(char, 'profile analysis')}
 ${playerStance(char, player, rel)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars })}
+${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'profile' })}
 ${BANNED_PHRASES_RULE}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
 
@@ -4538,7 +4581,7 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
       const sender = m.role === 'user' ? player : allChars.find(c => c.id === m.charId);
       return `${sender?.name || 'Someone'}: "${m.text}"`;
     }).join('\n');
-    const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, player, allChars });
+    const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, player, allChars, channel:'group', audienceIds: group.members || [] });
 
     let updatedMsgs = [...newMsgs];
     for (const member of aiMembers) {
@@ -4557,7 +4600,7 @@ ${pronounRule([member, player, ...members])}
 ${CHARACTER_TONE_RULE}
 ${communicationStyleFor(member, 'group chat')}
 ${playerStance(member, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars })}
+${recentMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars, channel:'group', audienceIds: group.members || [] })}
 Recent campus feed:\n${recentFeed}
 Chat history:\n${historyStr}
 Wider memory available to everyone here:
@@ -4882,11 +4925,13 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
       onSocialPresenceGain && onSocialPresenceGain(socialGain);
       onLog && onLog({
         type: 'event',
+        visibility: 'public',
         eventType: evType,
         scenario: currentEvent.scenario,
         action: input,
         outcome: cleaned,
         chars: currentEvent.chars,
+        participants: ['player', ...(currentEvent.chars || [])],
         xp,
         scoreChanges,
         timestamp: Date.now(),
@@ -5871,6 +5916,8 @@ ${BANNED_PHRASES_RULE}` }] });
     setEventLog(log => [{
       id: `scene-${Date.now()}`,
       type: 'scene',
+      visibility: 'private_scene',
+      participants: ['player', ...participants.map(c => c.id).filter(Boolean)],
       title: `Scene ended: ${label}`,
       text: `${vibe?.label || 'Scene'} with ${label}. ${changes.length ? 'Relationship shifts were applied.' : 'No relationship shift, but the scene was saved.'}${sceneMemory ? ` Last beat: ${sceneMemory}` : ''}`,
       relationshipApplied: true,
@@ -5971,7 +6018,7 @@ ${pronounRule([member, player, ...members])}
 ${CHARACTER_TONE_RULE}
 ${communicationStyleFor(member, 'group chat pop-in')}
 ${playerStance(member, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars })}
+${recentMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars, channel:'group', audienceIds: group.members || [] })}
 Recent campus feed:
 ${recentFeed || '(quiet feed)'}
 ${phraseRepetitionGuard(feed, recentFeed)}

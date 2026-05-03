@@ -3453,12 +3453,23 @@ RULES:
 ${BANNED_PHRASES_RULE}`;
 }
 
-function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupChats = [], setDms, onBack }) {
+function gmzTipReceiptText() {
+  const receipts = [
+    'tip received. if this makes the feed, your name stays out of it.',
+    'received. source protected, chaos pending.',
+    'noted. gmz is reviewing this with extremely unserious professionalism.',
+    'tip logged. if anyone asks, this arrived by owl from nowhere.',
+  ];
+  return receipts[Math.floor(Math.random() * receipts.length)];
+}
+
+function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupChats = [], setDms, onBack, onGMZTipSubmit }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const msgs = dms[char.id] || [];
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const isGMZChat = char.id === GMZ_CHAR.id;
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollTop = 9999;
@@ -3472,6 +3483,17 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
     setDms(d => ({ ...d, [char.id]: newMsgs, [`${char.id}_seen`]: false }));
     setInput('');
     setLoading(true);
+    if (isGMZChat) {
+      setTimeout(() => {
+        const charMsg = { role:'char', text: gmzTipReceiptText(), id: Date.now()+1, tipReceipt: true };
+        setDms(d => ({ ...d, [char.id]: [...(d[char.id]||[]), charMsg], [`${char.id}_seen`]: false }));
+        setLoading(false);
+      }, 650);
+      if (onGMZTipSubmit) {
+        setTimeout(() => onGMZTipSubmit(outgoingText), 1600);
+      }
+      return;
+    }
     try {
       // Smart silence: reserved/quiet chars sometimes don't reply
       const quietPersonalities = ['reserved', 'quiet', 'deadpan', 'minimal'];
@@ -3524,7 +3546,7 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
             <div style={{fontSize:40, marginBottom:8}}><Avatar char={char} size={60} /></div>
             <p style={{marginTop:8}}><strong style={{color:C.text}}>{char.name}</strong></p>
             <p style={{marginTop:4, fontSize:13}}>{char.bio}</p>
-            <p style={{marginTop:12, fontSize:12}}>Start a conversation</p>
+            <p style={{marginTop:12, fontSize:12}}>{isGMZChat ? 'Submit an anonymous tip' : 'Start a conversation'}</p>
           </div>
         )}
         {msgs.map(m => (
@@ -3579,7 +3601,7 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
                 send();
               }
             }}
-            placeholder={`Message ${char.name.split(' ')[0]}...`}
+            placeholder={isGMZChat ? 'Submit a tip...' : `Message ${char.name.split(' ')[0]}...`}
             rows={1}
             style={{
               width:'100%',
@@ -6460,6 +6482,25 @@ ${BANNED_PHRASES_RULE}` }]
     } catch(e) {}
   }
 
+  function handleGMZTipSubmit(rawTip) {
+    const cleanTip = String(rawTip || '').trim();
+    if (!cleanTip) return;
+    setEventLog(log => [{
+      id: `gmz-tip-${Date.now()}`,
+      type: 'dm',
+      charId: '__gmz__',
+      text: `Anonymous GMZ tip submitted: ${cleanTip}`,
+      timestamp: Date.now(),
+    }, ...log]);
+    const tipContext = [
+      'Anonymous tip submitted through GMZ DMs.',
+      `Raw tip: "${cleanTip}"`,
+      `Tipster is anonymous. Do not reveal or imply ${player.name} (@${player.handle}) sent it.`,
+      'Turn this into public gossip using rumor language. Preserve uncertainty if details are not confirmed.'
+    ].join('\n');
+    triggerGMZPost(tipContext, { anonymousTip: true });
+  }
+
   async function handleEventSubmit(eventOverride) {
     const ev = eventOverride || activeEvent;
     if (!ev) return;
@@ -6572,7 +6613,7 @@ ${BANNED_PHRASES_RULE}`
   } else if (chatChar && tab === 'messages') {
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <ChatScreen char={chatChar} player={player} allChars={[...chars, player, GMZ_CHAR]} feed={feed} dms={dms} eventLog={eventLog} groupChats={groupChats} setDms={setDms} onBack={goBack} />
+        <ChatScreen char={chatChar} player={player} allChars={[...chars, player, GMZ_CHAR]} feed={feed} dms={dms} eventLog={eventLog} groupChats={groupChats} setDms={setDms} onBack={goBack} onGMZTipSubmit={handleGMZTipSubmit} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setChatChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );

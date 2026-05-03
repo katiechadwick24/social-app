@@ -1685,35 +1685,52 @@ function memoryScopeLabel(entry) {
   return 'Public memory';
 }
 
+function canIncludePrivateConversation(channel = 'public') {
+  return channel === 'private' || channel === 'dm' || channel === 'profile' || channel === 'scene';
+}
+
+function groupAudienceMatches(groupMembers = [], audienceIds = [], player = null) {
+  const normalize = (id) => id === player?.id ? 'player' : id;
+  const groupSet = new Set((groupMembers || []).filter(Boolean).map(normalize));
+  const audienceSet = new Set((audienceIds || []).filter(Boolean).map(normalize));
+  return audienceSet.size > 0 && groupSet.size === audienceSet.size && [...audienceSet].every(id => groupSet.has(id));
+}
+
 function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = {}, char = null, player = null, allChars = [], channel = 'public', audienceIds = [] } = {}) {
   const roster = [...(allChars || []), GMZ_CHAR].filter(Boolean);
   const byId = (id) => roster.find(c => c.id === id) || (id === 'player' ? player : null);
   const memory = [];
+  const allowPrivateConversation = canIncludePrivateConversation(channel);
 
-  (eventLog || []).slice(0, 8).forEach(entry => {
-    if (!entry) return;
-    if (!canUseMemoryEntry(entry, char, player, { channel, audienceIds })) return;
-    const isScene = entry.type === 'scene' || !!entry.sceneMemory;
-    const title = isScene ? `Completed scene${entry.title ? `: ${entry.title}` : ''}` : (entry.title || entry.type || (entry.scenario ? 'Event' : 'Memory'));
-    const text = entry.sceneMemory || entry.outcome || entry.action || entry.text || entry.scenario || '';
-    const changes = (entry.scoreChanges || [])
-      .map(ch => {
-        const c = byId(ch.avatar);
-        return c?.handle ? `@${c.handle} ${ch.value > 0 ? '+' : ''}${ch.value}` : '';
-      })
-      .filter(Boolean)
-      .join(', ');
-    const line = `${memoryScopeLabel(entry)} - ${title}: ${String(text).replace(/\s+/g, ' ').slice(0, 260)}${changes ? ` (${changes})` : ''}`;
-    if (line.trim()) memory.push(line);
-  });
+  (eventLog || [])
+    .filter(entry => entry && canUseMemoryEntry(entry, char, player, { channel, audienceIds }))
+    .slice(0, 8)
+    .forEach(entry => {
+      const isScene = entry.type === 'scene' || !!entry.sceneMemory;
+      const title = isScene ? `Completed scene${entry.title ? `: ${entry.title}` : ''}` : (entry.title || entry.type || (entry.scenario ? 'Event' : 'Memory'));
+      const text = entry.sceneMemory || entry.outcome || entry.action || entry.text || entry.scenario || '';
+      const changes = (entry.scoreChanges || [])
+        .map(ch => {
+          const c = byId(ch.avatar);
+          return c?.handle ? `@${c.handle} ${ch.value > 0 ? '+' : ''}${ch.value}` : '';
+        })
+        .filter(Boolean)
+        .join(', ');
+      const line = `${memoryScopeLabel(entry)} - ${title}: ${String(text).replace(/\s+/g, ' ').slice(0, 260)}${changes ? ` (${changes})` : ''}`;
+      if (line.trim()) memory.push(line);
+    });
 
-  if (char?.id && dms?.[char.id]?.length) {
+  if (allowPrivateConversation && char?.id && dms?.[char.id]?.length) {
     const recentDm = dms[char.id].slice(-5).map(m => `${m.role === 'user' ? player?.name || 'Player' : char.name}: "${String(m.text || '').slice(0, 120)}"`).join(' / ');
-    if (recentDm) memory.push(`Recent private history with @${player?.handle || 'player'}: ${recentDm}`);
+    if (recentDm) memory.push(`Private DM history with @${player?.handle || 'player'}: ${recentDm}`);
   }
 
   (groupChats || [])
-    .filter(group => char?.id && (group.members || []).includes(char.id) && (group.members || []).includes('player'))
+    .filter(group => {
+      const members = group.members || [];
+      if (channel === 'group') return groupAudienceMatches(members, audienceIds, player);
+      return allowPrivateConversation && char?.id && members.includes(char.id) && members.includes('player');
+    })
     .slice(0, 2)
     .forEach(group => {
       const recent = (group.messages || []).slice(-5).map(m => {
@@ -1729,10 +1746,16 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
   }).filter(Boolean);
   if (recentPosts.length) memory.push(`Recent visible feed: ${recentPosts.join(' / ')}`);
 
+  const privacyRule = channel === 'public'
+    ? 'Private DMs, private scenes, and group chats are intentionally omitted here. Do not imply knowledge of private context unless it appears in public feed memory.'
+    : channel === 'group'
+    ? 'Only use private scene memory if every person in this group could know it. Do not mention side DMs or other group chats here.'
+    : 'Do not reveal private memories outside the current private relationship/context.';
+
   return memory.length
     ? `RECENT APP MEMORY:
 ${memory.slice(0, 10).map((line, i) => `${i + 1}. ${line}`).join('\n')}
-Use this as continuity only when it is visible to the current speaker and appropriate for this ${channel} context. Completed scenes shown here are already past-tense facts, not hypotheticals. Do not reset relationships, forget scenes/events, invent details beyond it, or leak private memories into public/unrelated dialogue.`
+Use this as continuity only when it is visible to the current speaker and appropriate for this ${channel} context. ${privacyRule} Completed scenes shown here are already past-tense facts, not hypotheticals. Do not reset relationships, forget scenes/events, invent details beyond it, or leak private memories into public/unrelated dialogue.`
     : 'RECENT APP MEMORY: no saved events yet. Do not pretend there is established history.';
 }
 
@@ -1773,14 +1796,14 @@ function dmSituationRulesFor(char, player, latestUserText = '') {
 - Keep it short and text-like. Good shape: "best friends is a lot. teammates with terrible judgment, maybe." Bad shape: explaining that sharp people are worse to be around.`;
 }
 
-function dmNeedsReply(userText = '', char = null, eventLog = []) {
+function dmNeedsReply(userText = '', char = null, eventLog = [], player = null) {
   const text = String(userText || '').toLowerCase();
   const substantive = text.length > 80;
   const directQuestion = /\?|\b(?:why|what|how|has|did|do|are|is|should|can|will)\b/i.test(userText);
   const postScene = /\b(?:scene|debrief|made out|kissed|kiss|astrology tower|tower|hair|gmz|saw|posted|post|caught|havoc|tamsin|on read|left me on read|read huh)\b/i.test(userText);
   const recentSceneWithChar = (eventLog || []).slice(0, 5).some(entry =>
     (entry?.type === 'scene' || entry?.sceneMemory) &&
-    (!char?.id || (entry?.scoreChanges || []).some(ch => ch.avatar === char.id) || String(entry?.text || entry?.sceneMemory || '').toLowerCase().includes((char.name || '').toLowerCase().split(/\s+/)[0] || ''))
+    canUseMemoryEntry(entry, char, player, { channel:'dm' })
   );
   return substantive || directQuestion || postScene || recentSceneWithChar;
 }
@@ -3991,7 +4014,7 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
       const quietPersonalities = ['reserved', 'quiet', 'deadpan', 'minimal'];
       const isQuiet = quietPersonalities.some(q => (char.personality||'').toLowerCase().includes(q));
       const silenceChance = isQuiet ? 0.25 : 0.08;
-      const mustAnswer = dmNeedsReply(outgoingText, char, eventLog);
+      const mustAnswer = dmNeedsReply(outgoingText, char, eventLog, player);
       if (!mustAnswer && Math.random() < silenceChance && msgs.length > 0) {
         // Show "seen" indicator after a delay
         setTimeout(() => {

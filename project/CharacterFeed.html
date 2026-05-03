@@ -376,6 +376,7 @@ CANON AND FACT RULES:
 - If a character would not know something, they cannot state it as fact. They may speculate, ask, misread, subtweet, gossip, or say "rumor is", but keep uncertainty visible.
 - GMZ and gossip accounts can exaggerate public rumors, but they still cannot create hard canon. Frame unconfirmed claims as rumor, alleged sightings, sources, or timeline speculation.
 - Prefer reacting to visible app evidence: the post text, tags, replies, likes, clips, screenshots, current relationship notes, and recent messages.
+- Preserve visible thread chronology. The original post happened first, then replies happened in timestamp/order. Do not say Keres "started it", "swung first", "showed up swinging", or caused the fight if the visible thread shows another character attacked, tagged, or escalated before her. If Keres spells out the order of events, treat that as corrective context unless the responding character is deliberately lying or baiting, and make that intentional.
 - Do not accuse someone of dodging, not showing up, refusing to play, missing a game, ducking a challenge, or failing the team unless the visible post/thread explicitly says that happened. If you need pressure without facts, use "you keep changing the framing", "say what you mean", "that sounded cleaner in your head", or ask a pointed question.
 - Do not invent scoreboard results, game attendance, wins/losses, who showed up to matches, who missed practice, who dodged, who started a fight, or who made a mistake unless it appears in the visible thread or current event. Trash talk can be mean without inventing hard facts.
 - Trash talk is normal Quidditch culture, not a social crime. Characters can insult rival houses, rival teams, plays, captains, training, habits, and public mistakes. Do not make them act shocked that someone talked trash unless the line crosses a real personal boundary.
@@ -616,7 +617,8 @@ function cleanSelfNarration(text = '', char) {
     .replace(new RegExp(`^${nameGroup}\\s+thinks\\s+`, 'i'), "i think ")
     .replace(new RegExp(`^${nameGroup}\\s+knows\\s+`, 'i'), "i know ")
     .replace(new RegExp(`^${nameGroup}\\s+would\\s+`, 'i'), "i would ")
-    .replace(new RegExp(`^${nameGroup}\\s+will\\s+`, 'i'), "i will ");
+    .replace(new RegExp(`^${nameGroup}\\s+will\\s+`, 'i'), "i will ")
+    .replace(new RegExp(`\\b${nameGroup}\\s*['’]s\\s+`, 'gi'), 'my ');
 }
 
 function stripLeadingSelfMention(text = '', char) {
@@ -1601,6 +1603,19 @@ Return ONLY SILENCE or the reply text.`
     return items;
   }, [charComments, botComments]);
 
+  function chronologicalTranscript(limit = 12) {
+    return mergedReplies.slice(-limit).map((item, idx) => {
+      if (item.kind === 'char') {
+        const speaker = allChars.find(c => c.id === item.data.charId);
+        const target = item.data.replyTo ? ` replying to @${item.data.replyTo}` : '';
+        return `${idx + 1}. @${speaker?.handle || '?'}${target}: "${item.data.text}"`;
+      }
+      const speaker = getBotById(item.data.bot);
+      const target = item.data.replyTo ? ` replying to @${item.data.replyTo}` : '';
+      return `${idx + 1}. @${speaker?.handle || '?'}${target}: "${item.data.text}"`;
+    }).join('\n');
+  }
+
   async function submitPostReply() {
     const text = replyText.trim();
     if (!text) return;
@@ -1616,7 +1631,7 @@ Return ONLY SILENCE or the reply text.`
         isPlayer: true,
         timestamp: baseTs + 0.1,
         replyTo: bot.handle,
-        nestedReply: true,
+        nestedReply: false,
       };
       setBotComments(prev => [...prev, botPlayerEntry]);
       setReplyText('');
@@ -1638,7 +1653,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
           likes: Math.floor(Math.random()*3000),
           timestamp: baseTs + 0.2,
           replyTo: player.handle,
-          nestedReply: true,
+          nestedReply: false,
         }]);
         triggerCharacterFollowups({
           playerText: text,
@@ -1658,7 +1673,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
       likes: playerReplyLikes(target.kind !== 'post'),
       timestamp: target.kind === 'post' ? Date.now() : baseTs + 0.1,
       replyTo: target.handle || char?.handle,
-      nestedReply: target.kind !== 'post',
+      nestedReply: false,
     };
     setCharComments(prev => [...prev, playerEntry]);
     setReplyText('');
@@ -1667,14 +1682,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
 
     if (target.kind === 'char' && target.targetChar) {
       const targetChar = target.targetChar;
-      const currentTranscript = mergedReplies.slice(-8).map(item => {
-        if (item.kind === 'char') {
-          const speaker = allChars.find(c => c.id === item.data.charId);
-          return `@${speaker?.handle || '?'}: "${item.data.text}"`;
-        }
-        const speaker = getBotById(item.data.bot);
-        return `@${speaker?.handle || '?'}: "${item.data.text}"`;
-      }).join('\n');
+      const currentTranscript = chronologicalTranscript(12);
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
@@ -1690,7 +1698,7 @@ ${currentTranscript || '(no earlier replies shown)'}
 Your comment: "${target.sourceText || ''}"
 ${player.name} (@${player.handle}) replied to you: "${text}"
 
-Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a pointed question, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a pointed question, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
           }]
         });
@@ -1700,7 +1708,7 @@ ${BANNED_PHRASES_RULE}`
           likes: Math.floor(Math.random()*9000),
           timestamp: baseTs + 0.2,
           replyTo: player.handle,
-          nestedReply: true,
+          nestedReply: false,
         };
         setCharComments(prev => [...prev, reply]);
         triggerCharacterFollowups({
@@ -1729,14 +1737,7 @@ ${BANNED_PHRASES_RULE}`
     const mentionedHandles = new Set(
       Array.from((playerText || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase())
     );
-    const transcript = mergedReplies.slice(-8).map(item => {
-      if (item.kind === 'char') {
-        const speaker = allChars.find(c => c.id === item.data.charId);
-        return `@${speaker?.handle || '?'}: "${item.data.text}"`;
-      }
-      const speaker = getBotById(item.data.bot);
-      return `@${speaker?.handle || '?'}: "${item.data.text}"`;
-    }).join('\n');
+    const transcript = chronologicalTranscript(12);
     const excluded = new Set(excludeIds);
     const candidatePool = chars.filter(c => c.id !== player.id && !excluded.has(c.id));
     const tagged = candidatePool.filter(c => mentionedHandles.has((c.handle || '').toLowerCase()));
@@ -1793,6 +1794,7 @@ ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 
 Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits.
+Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting.
 
 Characters in order:
 ${roster}
@@ -1907,7 +1909,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
               likes: playerReplyLikes(true),
               timestamp: replyBaseTs + 0.1,
               replyTo: cChar.handle,
-              nestedReply: true,
+              nestedReply: false,
             };
             setCharComments(prev => {
               const next = [...prev];
@@ -1923,10 +1925,13 @@ ${CHARACTER_TONE_RULE}
 ${stanceFor(cChar)}
 
 Original post by @${char?.handle}: "${post.text}"
+Recent visible thread:
+${chronologicalTranscript(12) || '(no earlier replies shown)'}
+
 Your comment: "${cc.text}"
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
-Write ONE short response to ${player.name}. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, or be awkward instead of angry. 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, or be awkward instead of angry. 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
                 }]
               });
@@ -1936,7 +1941,7 @@ ${BANNED_PHRASES_RULE}`
                 likes: Math.floor(Math.random()*9000),
                 timestamp: replyBaseTs + 0.2,
                 replyTo: player.handle,
-                nestedReply: true,
+                nestedReply: false,
               };
               setCharComments(prev => {
                 const next = [...prev];
@@ -1959,7 +1964,7 @@ ${BANNED_PHRASES_RULE}`
 
           return (
             <div key={`char-${i}`} style={{borderBottom:`1px solid ${C.border}`, padding:'14px 16px'}}>
-              <div style={{display:'flex', gap:10, marginLeft: cc.nestedReply ? 30 : 0}}>
+              <div style={{display:'flex', gap:10, marginLeft: 0}}>
                 <Avatar char={cChar} size={38} onClick={() => onCharClick(cChar)}/>
                 <div style={{flex:1, minWidth:0}}>
                   <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:2, flexWrap:'wrap'}}>
@@ -2035,7 +2040,7 @@ ${BANNED_PHRASES_RULE}`
           setReplyingToBot(null);
           // Optimistically add player reply
           const replyBaseTs = Number(bc.timestamp || post.timestamp || Date.now());
-          const playerEntry = { bot: '__player__', text: playerReply, likes: playerReplyLikes(true), isPlayer: true, timestamp: replyBaseTs + 0.1, replyTo: bot.handle, nestedReply: true };
+          const playerEntry = { bot: '__player__', text: playerReply, likes: playerReplyLikes(true), isPlayer: true, timestamp: replyBaseTs + 0.1, replyTo: bot.handle, nestedReply: false };
           setBotComments(prev => {
             const next = [...prev];
             next.splice(i + 1, 0, playerEntry);
@@ -2054,7 +2059,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
             setBotComments(prev => {
               const next = [...prev];
               const insertAt = next.findIndex(c => c === playerEntry) + 1;
-              next.splice(insertAt, 0, { bot: bc.bot, text: cleanSocialReplyText(res, null, player, { bot }), likes: Math.floor(Math.random()*3000), timestamp: replyBaseTs + 0.2, replyTo: player.handle, nestedReply: true });
+              next.splice(insertAt, 0, { bot: bc.bot, text: cleanSocialReplyText(res, null, player, { bot }), likes: Math.floor(Math.random()*3000), timestamp: replyBaseTs + 0.2, replyTo: player.handle, nestedReply: false });
               return next;
             });
             triggerCharacterFollowups({
@@ -2072,7 +2077,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
         if (bc.isPlayer) {
           return (
             <div key={i} style={{borderBottom:`1px solid ${C.border}`, padding:'12px 16px', paddingLeft:64}}>
-              <div style={{display:'flex', gap:10, marginLeft: bc.nestedReply ? 24 : 0}}>
+              <div style={{display:'flex', gap:10, marginLeft: 0}}>
                 <Avatar char={player} size={32}/>
                 <div style={{flex:1}}>
                   <span style={{fontWeight:700, fontSize:13, color:C.text}}>{player.name}</span>
@@ -2086,7 +2091,7 @@ Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character
 
         return (
           <div key={i} style={{borderBottom:`1px solid ${C.border}`, padding:'14px 16px'}}>
-            <div style={{display:'flex', gap:10, marginLeft: bc.nestedReply ? 30 : 0}}>
+            <div style={{display:'flex', gap:10, marginLeft: 0}}>
               <BotAvatar bot={bot} size={38}/>
               <div style={{flex:1}}>
                 <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:4, flexWrap:'wrap'}}>

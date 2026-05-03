@@ -49,9 +49,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "darkMode": true,
-  "accentColor": "#4dabf7",
-  "fontSize": 14,
-  "compactFeed": false
+  "accentColor": "#4dabf7"
 }/*EDITMODE-END*/;
 
 function bottomSafe(extra = 0) {
@@ -438,6 +436,7 @@ CHARACTER TONE BALANCE:
 - Jude should undercut drama with captions, snark, and low-effort menace rather than moralizing.
 - Theo should post like the mess has analytics. He should chase the funny angle, not just the severe one.
 - Tamsin should not be awful or rude by default. She is composed, protective, observant, and dry, but she can be quietly warm, fond, tired, amused, or genuinely helpful. Save harshness for visible risk to Rowan, obvious manipulation, or someone being cruel.
+- If Rowan publicly notices Keres, flirts, tags her, gets tagged with her, shows up in GMZ rumors with her, or looks too pleased about her attention, Tamsin should usually notice. Her reaction is protective older-sister side-eye, not romantic jealousy: dry concern, inconvenient questions, polite warnings, and jokes that prove she saw the pattern. Havoc getting interested in Keres can also ping her radar as familiar damage around Rowan, but less intensely than Rowan himself.
 - Elara can be composed or dangerous without becoming humorless. If Havoc publicly notices Keres, calls her distracting, flirts, compliments her, tags her, or gives her visible attention, Elara should usually notice and react with proud displeasure, plausible deniability, old-history pressure, or a sharp joke.
 - Silas should stay controlled and tactical. Do not make him openly needy, defensive, or romantic on main. He should absolutely enjoy Gryffindor trash talk, especially if Keres is targeting Gryffindor's structure, habits, or players. He may correct sloppy logic, but he should not become protective of Gryffindor or offended on their behalf.
 - Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", "let's see it", "prove it", or agreeing after being insulted. He should track the actual logic of the exchange, not randomly defend Havoc or accuse Keres of judging if she is clearly appreciating the chaos.
@@ -823,7 +822,7 @@ MODE: ${mode}. Write like a real message in that medium, not a scene summary, de
     elara: 'Elara keeps dignity even when jealous. Her humor is dangerous, poised, sharp, and socially fluent. If Havoc publicly gives Keres attention, calls her distracting, flirts, notices a photo, or makes her visible, Elara should usually react. She can needle Havoc, subtweet the room, smile with teeth, or make old history funny without begging or collapsing into hurt.',
     theo: 'Theo sees the angle, but he should chase the funny angle first. His humor is ranking-thread, screenshot, metrics, headline, timing, and pretending journalism made him do it.',
     jude: 'Jude undercuts the room. His humor is dry, low-effort, caption-brained, faintly threatening, and specific. He dodges sincerity by making the exact wrong thing funnier.',
-    tamsin: 'Tamsin is composed, precise, and watchful, but not casually cruel. Her humor is polished, dry, older-sister tired, and quietly amused. She should sound like someone who notices too much and cares despite herself, not someone insulting everyone for breathing. She can be skeptical without treating every joke as a felony.',
+    tamsin: 'Tamsin is composed, precise, and watchful, but not casually cruel. Her humor is polished, dry, older-sister tired, and quietly amused. She should sound like someone who notices too much and cares despite herself, not someone insulting everyone for breathing. If Rowan is visibly interested in Keres or pulled into gossip around her, Tamsin notices fast with protective side-eye, inconvenient questions, or a dry warning. Havoc around Keres can also worry her as familiar collateral damage around Rowan, but Rowan is the sharper trigger. She can be skeptical without treating every joke as a felony.',
   }[char?.id] || 'Use this character profile for motive, vocabulary, and what they would ignore. Avoid generic snark and generic sincerity.';
   const gmz = char?.id === '__gmz__'
     ? 'GMZ is tabloid pressure with a student account rhythm: hooks, sources, screenshots, timing, quote-bait, and plausible rumor language. They can exaggerate public uncertainty, but not create hard canon.'
@@ -847,7 +846,7 @@ function playerStance(char, player, relationshipOverride) {
     rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery.',
     briar: 'Briar is watchful and disciplined, but she is not a joyless lecture machine. She can be dry, exhausted, sarcastic, and funny when other people make captaincy impossible.',
     jude: 'Jude is loose, dry, amused, and allergic to sincerity. He notices social leverage and makes captions, not speeches. He should often sound like the person heckling the drama from a chair.',
-    tamsin: 'Tamsin is composed, protective, and dryly amused more often than openly hostile. She worries about Rowan being pulled into stronger personalities, but she should not treat Keres as guilty by default. Unless Rowan is visibly at risk, Tamsin can be observant, careful, faintly funny, helpful, or politely wary instead of rude.',
+    tamsin: 'Tamsin is composed, protective, and dryly amused more often than openly hostile. She worries about Rowan being pulled into stronger personalities, and Keres is exactly the kind of vivid, provocative gravity she would clock quickly. If Rowan publicly flirts with Keres, looks interested, gets tagged with her, appears in GMZ rumors with her, or acts too pleased by the chaos, Tamsin should feel protective and a little unsettled while staying funny and controlled. Havoc being interested in Keres matters too because Havoc is Rowan-adjacent trouble, but it should read as secondary concern, not possessiveness. She should not treat Keres as guilty by default; skepticism should be precise, dry, and observant.',
     milo: 'Milo is flirty, chaotic, approval-hungry, and reckless. He reacts too fast and wants attention.',
     theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred. He should sound like someone making the thread funnier while pretending it is journalism.',
     elara: 'Elara is proud, socially dangerous, and hard to pity. Havoc and Keres becoming visible gets her attention fast, especially if Havoc calls Keres distracting, flirts, tags her, likes her post, comments on her photo, or gives her public attention. She reacts with clipped pride, plausible deniability, dangerous humor, old-history pressure, or a social jab. She never begs for attention or sounds wounded.'
@@ -919,6 +918,30 @@ function havocKeresAttentionSignal(text = '', player = null) {
   const raw = String(text || '');
   const attention = /\b(?:distracting|distracted|distraction|attention|staring|stare|looked twice|can't look away|cannot look away|watching|noticed|noticing|pretty|hot|photo|cheekbones|flirting|flirt|dangerous|bad idea|trouble)\b/i.test(raw);
   return keresVisibilitySignal(raw, player) && attention;
+}
+
+function tamsinRowanHavocKeresConcernSignal(text = '', player = null) {
+  const raw = String(text || '');
+  const hasKeres = keresVisibilitySignal(raw, player);
+  const hasRowan = /\b(?:rowan|@rowancade)\b/i.test(raw);
+  const hasHavoc = /\b(?:havoc|@havocfang)\b/i.test(raw);
+  const interest = /\b(?:interest|interested|flirt|flirting|flirted|kiss|kissed|kissing|snog|snogged|snogging|caught|spotted|seen with|with her|with @keresvalen|hair|messy hair|liked|likes|tagged|reply|replied|commented|attention|distract|distracted|distracting|staring|stare|looked twice|can't look away|cannot look away|pretty|hot|photo|cheekbones|type|jealous|date|meet me|after dark|smile|:\)|gmz|rumou?r|alibi|witness)\b/i.test(raw);
+  if (!hasKeres) return false;
+  if (hasRowan) return true;
+  return hasHavoc && interest;
+}
+
+function tamsinKeresConcernNote(text = '', player = null) {
+  if (!tamsinRowanHavocKeresConcernSignal(text, player)) return '';
+  const raw = String(text || '');
+  const rowan = /\b(?:rowan|@rowancade)\b/i.test(raw);
+  const havoc = /\b(?:havoc|@havocfang)\b/i.test(raw);
+  const focus = rowan
+    ? 'Rowan and Keres are becoming visible, flirt-adjacent, or rumor-adjacent.'
+    : havoc
+    ? 'Havoc and Keres are becoming visible, which Tamsin reads partly as familiar damage orbiting Rowan.'
+    : 'Keres is becoming visible around people Tamsin watches.';
+  return `TAMSIN PROTECTIVE PRESSURE: ${focus} Tamsin should notice with older-sister side-eye, dry concern, precise questions, or a polite warning disguised as a joke. This is not romantic jealousy and not casual cruelty. She can be amused, protective, unsettled, and observant without making Keres the villain.`;
 }
 
 function mentionedCharactersInText(text = '', roster = []) {
@@ -1721,7 +1744,9 @@ function relationshipLogicFor(char) {
 - Rowan can be amused, embarrassed, flirtatious, evasive, or conspiratorial. He should not stay stuck in pre-scene uncertainty if Keres just described what happened.`,
     tamsin: `TAMSIN FAMILY LOGIC:
 - Rowan is Tamsin's brother. She knows his tells, evasions, charm, and bad habit of smiling through trouble.
-- If gossip involves Rowan, Havoc, Keres, kissing, hair, or GMZ, Tamsin can be dryly amused and protective, not automatically cruel. She should sound like an older sister who saw this coming.`,
+- If gossip involves Rowan, Havoc, Keres, kissing, hair, or GMZ, Tamsin can be dryly amused and protective, not automatically cruel. She should sound like an older sister who saw this coming.
+- Rowan showing interest in someone should matter to her, especially if that someone is Keres: vivid, provocative, risky, and socially magnetic. Tamsin's discomfort is protective and observant, not romantic jealousy. She may like Keres and still side-eye the speed, publicness, or gravitational pull of it.
+- Havoc showing interest in Keres matters too, but mostly because Havoc is Rowan's familiar trouble and tends to make Rowan-adjacent chaos worse. Tamsin can notice it without centering Havoc as intensely as Rowan.`,
     havoc: `HAVOC SOCIAL LOGIC:
 - Havoc and Rowan are close enough that gossip involving both of them is not abstract. If Keres mentions Rowan, GMZ, hair, or a messy scene, Havoc should react like someone inside the joke, not like a detached spectator.`,
     jude: `JUDE TEAMMATE LOGIC:
@@ -2280,6 +2305,9 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const postText = post.text || '';
     const elara = eligible.find(c => c.id === 'elara');
     const havoc = chars.find(c => c.id === 'havoc');
+    const rowan = chars.find(c => c.id === 'rowan');
+    const tamsin = eligible.find(c => c.id === 'tamsin');
+    const tamsinPressureText = `${postText} ${isKeresPost ? `@${player.handle}` : ''}`;
     const keresRumorText = keresVisibilitySignal(postText, player) || /gmz|rumou?r/i.test(postText);
     const havocGaveKeresAttention = authorId === 'havoc' && havocKeresAttentionSignal(postText, player);
     const havocKeresPressure = !!elara && (
@@ -2288,7 +2316,14 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       (isKeresPost && havoc && (mentionedHandles.has((havoc.handle || '').toLowerCase()) || characterMentionedInText(postText, havoc) || /havoc/i.test(postText))) ||
       ((post.charId === '__gmz__' || /gmz|rumou?r|photo|record|disciplinary|transfer|new girl|bombshell|pretty|hot/i.test(postText)) && keresRumorText)
     );
+    const tamsinKeresPressure = !!tamsin && (
+      tamsinRowanHavocKeresConcernSignal(tamsinPressureText, player) ||
+      (authorId === 'rowan' && (keresVisibilitySignal(postText, player) || isKeresPost)) ||
+      (isKeresPost && rowan && (mentionedHandles.has((rowan.handle || '').toLowerCase()) || characterMentionedInText(postText, rowan) || /rowan/i.test(postText))) ||
+      (isKeresPost && havoc && (mentionedHandles.has((havoc.handle || '').toLowerCase()) || characterMentionedInText(postText, havoc)) && /flirt|kiss|snog|hot|pretty|photo|distract|attention|bad idea|gmz|rumou?r/i.test(postText))
+    );
     const exPressureResponders = havocKeresPressure ? [elara] : [];
+    const tamsinPressureResponders = tamsinKeresPressure ? [tamsin] : [];
     const houseTeamDefenders = eligible.filter(c => isHouseTeamCallout(post.text, c));
     const defenderIds = new Set(houseTeamDefenders.map(c => c.id));
     const teammateDefenders = eligible.filter(c =>
@@ -2310,12 +2345,13 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       if (defenderIds.has(c.id)) score += 70;
       if (teammateDefenderIds.has(c.id)) score += 56;
       if (c.id === 'elara' && havocKeresPressure) score += 120;
+      if (c.id === 'tamsin' && tamsinKeresPressure) score += 118;
       if (isGMZThread) {
         if (['theo','jude','rowan','milo','tamsin','elara'].includes(c.id)) score += 32;
         if (/gossip|observant|commentator|media|sharp|nosy|sly|dry|chaotic/i.test(personality)) score += 20;
         if (threadHas(/\b(?:alibi|source|witness|caught|spotted|saw|rumou?r|exclusive|breaking|gmz)\b/i)) score += 18;
       }
-      if (threadHas(/\b(?:rowan|@rowancade)\b/i) && c.id === 'tamsin') score += 92;
+      if (threadHas(/\b(?:rowan|@rowancade)\b/i) && c.id === 'tamsin') score += threadHas(/\b(?:keres|@keresvalen|photo|hot|pretty|flirt|kiss|snog|gmz|rumou?r)\b/i) ? 118 : 92;
       if (threadHas(/\b(?:tamsin|@tamsincade)\b/i) && c.id === 'rowan') score += 64;
       if (threadHas(/\b(?:havoc|@havocfang)\b/i) && ['rowan','elara','briar'].includes(c.id)) score += c.id === 'elara' ? 70 : 35;
       if (threadHas(/\b(?:keres|@keresvalen|new transfer|photo|hot|pretty|distract|flirt|kiss|snog|hair)\b/i)) {
@@ -2354,10 +2390,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 
     // Pick 1-3 chars by default. Direct mentions jump the line, then other characters can chime in.
     const targetCount = Math.min(4, Math.max(isGMZThread ? 3 : (embarrassmentContext ? 2 : 1), directlyMentioned.length + 1 + (Math.random() < 0.35 ? 1 : 0)));
-    const targetLimit = Math.min(5, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + exPressureResponders.length));
+    const targetLimit = Math.min(5, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + exPressureResponders.length + tamsinPressureResponders.length));
     let picked = [
       ...directlyMentioned,
       ...exPressureResponders,
+      ...tamsinPressureResponders,
       ...houseTeamDefenders,
       ...teammateDefenders,
       ...(snarkyResponder && !directMentionIds.has(snarkyResponder.id) ? [snarkyResponder] : []),
@@ -2384,7 +2421,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
       const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should usually react with proud displeasure and plausible deniability: a sharp subtweet, dangerous joke, social jab, old-history pressure, or a line that makes it clear she noticed. She does not sound wounded, plead, or beg for attention.` : '';
-      return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${communicationStyleFor(c, 'public feed reply')} ${stanceFor(c)}${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${elaraExNote}`;
+      const tamsinProtectiveNote = c.id === 'tamsin' && tamsinKeresPressure ? ` ${tamsinKeresConcernNote(tamsinPressureText, player)}` : '';
+      return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${communicationStyleFor(c, 'public feed reply')} ${stanceFor(c)}${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${elaraExNote}${tamsinProtectiveNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -2402,6 +2440,9 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const exPressureRule = havocKeresPressure
       ? `\nEX PRESSURE NOTE: Elara March has public history with Havoc. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention here, so Elara should notice and be a little displeased.' : ''} If she replies, let it feel like a proud ex noticing the room has shifted: sharp, charismatic, jealous with dignity, socially dangerous, and never pleading.`
       : '';
+    const tamsinPressureRule = tamsinKeresPressure
+      ? `\n${tamsinKeresConcernNote(tamsinPressureText, player)}`
+      : '';
     const dialogueSeparationRule = multiSpeakerDialogueSeparationRule(picked, 'public feed reply');
 
     (async () => {
@@ -2409,7 +2450,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, or same "X lands/works/hits different when Y" logic.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, or bystander, not necessarily the person the rumor is about. They should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, speculate about what GMZ left unsaid, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, or same "X lands/works/hits different when Y" logic.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, or bystander, not necessarily the person the rumor is about. They should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, speculate about what GMZ left unsaid, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -2895,6 +2936,9 @@ ${BANNED_PHRASES_RULE}`
     const sourceAuthorId = targetChar?.id || post.charId;
     const followupTopic = `${post.text || ''} ${sourceText || ''} ${playerText || ''}`.toLowerCase();
     const playfulThreadRule = !isGMZThread && (isKeresThread || looksLikePlayfulBanterText(followupTopic)) ? PLAYFUL_PUBLIC_THREAD_RULE : '';
+    const tamsinFollowupText = `${followupTopic} ${isKeresThread ? `@${player.handle}` : ''}`;
+    const tamsinFollowupPressure = tamsinRowanHavocKeresConcernSignal(tamsinFollowupText, player)
+      || (isKeresThread && /\b(?:rowan|@rowancade)\b/i.test(followupTopic));
     const followupHas = (rx) => rx.test(followupTopic);
     const followupStakeScore = (c) => {
       let w = Math.abs((playerRelFor(c) ?? 50) - 50);
@@ -2905,6 +2949,7 @@ ${BANNED_PHRASES_RULE}`
       if (target.some(t => t.id === c.id)) w += 90;
       if (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)) w += 52;
       if (teammateStakeInText(`${sourceText || post.text} ${playerText}`, c, [player, ...chars])) w += 48;
+      if (c.id === 'tamsin' && tamsinFollowupPressure) w += 112;
       if (isGMZThread) {
         if (['theo','jude','rowan','milo','tamsin','elara'].includes(c.id)) w += 34;
         if (/gossip|observant|commentator|media|sharp|nosy|sly|dry|chaotic/i.test(personality)) w += 20;
@@ -2937,8 +2982,11 @@ ${BANNED_PHRASES_RULE}`
       })
       .sort((a,b) => b.w - a.w)
       .map(x => x.c);
-    const wantedCount = Math.max(tagged.length, isGMZThread ? 2 : (mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0)));
-    const responders = [...target, ...tagged, ...sameHouseBacked, ...charged]
+    const tamsinPressureResponders = tamsinFollowupPressure
+      ? candidatePool.filter(c => c.id === 'tamsin' && !taggedIds.has(c.id) && !target.some(t => t.id === c.id))
+      : [];
+    const wantedCount = Math.max(tagged.length, target.length + tamsinPressureResponders.length, isGMZThread ? 2 : (mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0)));
+    const responders = [...target, ...tagged, ...tamsinPressureResponders, ...sameHouseBacked, ...charged]
       .filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i)
       .slice(0, wantedCount);
     if (!responders.length) return;
@@ -2956,7 +3004,8 @@ ${BANNED_PHRASES_RULE}`
         const continuityNote = priorLines
           ? ` PREVIOUS LINES BY THIS CHARACTER IN THIS THREAD: ${priorLines.replace(/\n/g, ' ')} Keep their stance consistent; do not flip sides unless the flip is intentional and acknowledged.`
           : '';
-        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${defenseNote}${teammateNote}${continuityNote}`;
+        const tamsinProtectiveNote = c.id === 'tamsin' && tamsinFollowupPressure ? ` ${tamsinKeresConcernNote(tamsinFollowupText, player)}` : '';
+        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${defenseNote}${teammateNote}${continuityNote}${tamsinProtectiveNote}`;
       }).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
@@ -2973,6 +3022,7 @@ ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 ${COMMUNICATION_PATTERN_RULE}
 ${playfulThreadRule}
+${tamsinFollowupPressure ? tamsinKeresConcernNote(tamsinFollowupText, player) : ''}
 ${threadMemory}
 ${threadRoleContext(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, char, [player, ...chars, GMZ_CHAR])}
 ${threadPhraseGuard}
@@ -6085,9 +6135,8 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
 
 // ─── Main App ─────────────────────────────────────────────────────
 function App() {
-  const [tweaks, setTweakState] = useState(TWEAK_DEFAULTS);
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   C = buildTheme(tweaks);
-  const { tweaksVisible, setTweak } = useTweaks(TWEAK_DEFAULTS, setTweakState);
 
   // ── Server-side persistence ───────────────────────────────────
   const _saveTimer = useRef(null);
@@ -6364,6 +6413,9 @@ function App() {
       return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
     }).join('\n');
     const repeatGuard = phraseRepetitionGuard(feed, recentContext);
+    const tamsinPressureNote = char.id === 'tamsin' && tamsinRowanHavocKeresConcernSignal(recentContext, player)
+      ? `\n${tamsinKeresConcernNote(recentContext, player)}`
+      : '';
 
     try {
       const raw = await window.claude.complete({ messages:[{ role:'user', content:
@@ -6376,6 +6428,7 @@ ${CHARACTER_TONE_RULE}
 ${communicationStyleFor(char, 'public feed post')}
 ${playerStance(char, player)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
+${tamsinPressureNote}
 Other campus accounts: ${otherHandles}
 
 Recent campus feed posts:
@@ -6654,6 +6707,7 @@ ${BANNED_PHRASES_RULE}` }]
       const elaraHavocKeresHeat = char.id === 'elara' && (
         /havoc|@havocfang/.test(recentFeedRaw) && /keres|@keresvalen|new transfer|transfer|photo|record|disciplinary|tryout|hot|pretty|bombshell|gmz|rumou?r|distract|attention|staring|can't look away|cannot look away|noticed|flirt/.test(recentFeedRaw)
       );
+      const tamsinRowanKeresHeat = char.id === 'tamsin' && tamsinRowanHavocKeresConcernSignal(recentFeedRaw, player);
       const campusTopics = [
         'a weird class moment',
         'practice going badly or hilariously',
@@ -6670,13 +6724,19 @@ ${BANNED_PHRASES_RULE}` }]
       ];
       const campusTopic = elaraHavocKeresHeat
         ? 'an ex-adjacent subtweet about public rumors, old history, and someone new getting attention'
+        : tamsinRowanKeresHeat
+        ? 'older-sister side-eye about Rowan, Havoc, Keres, public interest, and everyone pretending the pattern is subtle'
         : campusTopics[Math.floor(Math.random() * campusTopics.length)];
 
       // Occasional directed callout. Most posts should be normal campus life.
       const others = chars.filter(c => c.id !== char.id);
-      const doCallout = ((elaraHavocKeresHeat && others.some(o => o.id === 'havoc')) || Math.random() < 0.18) && others.length > 0;
+      const doCallout = (((elaraHavocKeresHeat && others.some(o => o.id === 'havoc')) || (tamsinRowanKeresHeat && others.some(o => ['rowan','havoc'].includes(o.id)))) || Math.random() < 0.18) && others.length > 0;
       const target = doCallout ? (() => {
         if (elaraHavocKeresHeat) return others.find(o => o.id === 'havoc') || others[0];
+        if (tamsinRowanKeresHeat) {
+          if (/rowan|@rowancade/.test(recentFeedRaw)) return others.find(o => o.id === 'rowan') || others.find(o => o.id === 'havoc') || others[0];
+          return others.find(o => o.id === 'havoc') || others.find(o => o.id === 'rowan') || others[0];
+        }
         // Weight toward characters with negative or low relationships
         const weights = others.map(o => {
           const rel = char.relationships?.[o.id] ?? 50;
@@ -6689,6 +6749,9 @@ ${BANNED_PHRASES_RULE}` }]
       })() : null;
       const elaraPressureNote = elaraHavocKeresHeat
         ? `\nElara-specific pressure: recent public chatter links Havoc and Keres or puts Keres in the rumor spotlight. React like a proud ex with old history: sharp, socially dangerous, funny, jealous with dignity, and never pleading. She can subtweet, needle Havoc, or make it clear she noticed without asking for anything.`
+        : '';
+      const tamsinPressureNote = tamsinRowanKeresHeat
+        ? `\n${tamsinKeresConcernNote(recentFeedRaw, player)}`
         : '';
 
       try {
@@ -6704,6 +6767,7 @@ ${communicationStyleFor(char, 'public feed callout')}
 ${playerStance(char, player)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
 ${elaraPressureNote}
+${tamsinPressureNote}
 Your relationship with @${target.handle} (${target.name}): ${char.relationships?.[target.id] < 30 ? 'rivals/bad blood' : char.relationships?.[target.id] < 60 ? 'complicated' : 'decent but complicated'}.
 
 Recent campus feed:\n${recentContext}
@@ -6729,6 +6793,7 @@ ${communicationStyleFor(char, 'public feed post')}
 ${playerStance(char, player)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
 ${elaraPressureNote}
+${tamsinPressureNote}
 Other people on campus: ${otherHandles}
 
 Recent campus feed posts:\n${recentContext}
@@ -6768,14 +6833,19 @@ ${BANNED_PHRASES_RULE}`;
         setFeed(f => [newPost, ...f]);
 
         const elaraShouldAnswerHavoc = char.id === 'havoc' && havocKeresAttentionSignal(cleanText, player) && chars.some(c => c.id === 'elara');
+        const tamsinShouldAnswerInterest = ['rowan','havoc'].includes(char.id)
+          && tamsinRowanHavocKeresConcernSignal(`${char.name} @${char.handle} ${cleanText}`, player)
+          && chars.some(c => c.id === 'tamsin');
         const embarrassingPost = doCallout || /embarrass|humiliat|fumble|awkward|cringe|caught|fell|tripped|missed|dropped|failed|mistake|bad look|everyone saw|got exposed|exposed|apologize|sorry|regret|disaster/i.test(cleanText);
-        const replyChance = elaraShouldAnswerHavoc ? 1 : (embarrassingPost ? 0.46 : 0.15);
+        const replyChance = (elaraShouldAnswerHavoc || tamsinShouldAnswerInterest) ? 1 : (embarrassingPost ? 0.46 : 0.15);
         // A second char may reply after a short beat. Public embarrassment gets noticed, but not always angrily.
         if (Math.random() < replyChance) {
           const others = chars.filter(c => c.id !== char.id);
           if (others.length) {
             const replier = elaraShouldAnswerHavoc
               ? (others.find(c => c.id === 'elara') || others[0])
+              : tamsinShouldAnswerInterest
+              ? (others.find(c => c.id === 'tamsin') || others[0])
               : embarrassingPost
               ? [...others].sort((a,b) => {
                   const score = c => /snark|sharp|blunt|funny|observant|gossip|shameless|rude|cutting|chaotic|provocative/i.test(c.personality || '') ? 2 : 0;
@@ -6800,6 +6870,7 @@ ${recentMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, 
 ${phraseRepetitionGuard(feed, `${recentContext}\n${cleanText}`)}
 ${threadPatternVarietyGuard([recentContext, cleanText])}
 ${elaraShouldAnswerHavoc && replier.id === 'elara' ? 'Havoc just gave Keres public attention. Elara should be a little displeased and should not ignore it. React with jealous dignity, old-history pressure, dangerous humor, or a sharp social jab. Do not sound wounded, needy, or like she is begging for him back.' : ''}
+${tamsinShouldAnswerInterest && replier.id === 'tamsin' ? tamsinKeresConcernNote(`${char.name} @${char.handle} ${cleanText}`, player) : ''}
 ${embarrassingPost ? 'This is a public embarrassment, bad look, messy callout, or obvious fumble. If your character would tease, expose, correct, flirt through it, make a stupid joke, or make the social consequence worse, do that. Do not let it pass politely, but do not default to rage.' : ''}
 Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} if natural. No quotes, just the reply text.
 ${BANNED_PHRASES_RULE}` }]
@@ -6976,11 +7047,20 @@ ${BANNED_PHRASES_RULE}` }]
     if (!ev) return;
     let involved = chars.filter(c => ev.chars.includes(c.id));
     const isTransferHeat = /keres|transfer|new girl|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(ev.scenario || '');
+    const tamsinInterestHeat = tamsinRowanHavocKeresConcernSignal(`${ev.scenario || ''} @${player.handle}`, player)
+      || (isTransferHeat && /\b(?:rowan|@rowancade|havoc|@havocfang)\b/i.test(ev.scenario || ''));
     if (isTransferHeat) {
       const elara = chars.find(c => c.id === 'elara');
       if (elara && !involved.some(c => c.id === 'elara')) involved = [...involved, elara];
     }
+    if (tamsinInterestHeat) {
+      const tamsin = chars.find(c => c.id === 'tamsin');
+      if (tamsin && !involved.some(c => c.id === 'tamsin')) involved = [...involved, tamsin];
+    }
     const fallbackReaction = (char) => {
+      if (char.id === 'tamsin' && tamsinInterestHeat) {
+        return 'rowan developing taste in public was not on my schedule. havoc being involved is somehow the less surprising part.';
+      }
       if (isTransferHeat) {
         if (char.id === 'silas') return 'a reputation is useful if she knows how to aim it. tryouts will be informative.';
         if (char.id === 'jude') return 'new slytherin transfer with a record and cheekbones. finally, paperwork with entertainment value.';
@@ -7039,6 +7119,7 @@ ${threadPatternVarietyGuard(eventAvoidTexts)}
 Campus event: "${ev.scenario}"
 ${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
 ${isTransferHeat && char.id === 'elara' ? `Elara has history with Havoc. If the event makes Keres visible or desirable, Elara should notice with pride, plausible deniability, dangerous humor, or a sharp ex-adjacent jab. She does not sound wounded or beg for attention.` : ''}
+${tamsinInterestHeat && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
 
 Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
 ${BANNED_PHRASES_RULE}`
@@ -7185,16 +7266,11 @@ ${BANNED_PHRASES_RULE}`
     ) : (
       <IOSDevice dark={tweaks.darkMode}>{appContent}</IOSDevice>
     )}
-    {tweaksVisible && (
-      <TweaksPanel>
-        <TweakToggle label="Dark mode" value={tweaks.darkMode} onChange={v => setTweak('darkMode', v)} />
-        <TweakSection label="Accent color" />
-        <TweakColor label="Accent" value={tweaks.accentColor} onChange={v => setTweak('accentColor', v)} />
-        <TweakSection label="Feed" />
-        <TweakSlider label="Font size" value={tweaks.fontSize} min={12} max={18} step={1} onChange={v => setTweak('fontSize', v)} />
-        <TweakToggle label="Compact feed" value={tweaks.compactFeed} onChange={v => setTweak('compactFeed', v)} />
-      </TweaksPanel>
-    )}
+    <TweaksPanel>
+      <TweakToggle label="Dark mode" value={tweaks.darkMode} onChange={v => setTweak('darkMode', v)} />
+      <TweakSection label="Accent color" />
+      <TweakColor label="Accent" value={tweaks.accentColor} onChange={v => setTweak('accentColor', v)} />
+    </TweaksPanel>
     </>
   );
 }

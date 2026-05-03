@@ -417,6 +417,7 @@ ANTI-AI PATTERNS:
 - Avoid prefab contrast glue and reveal ladders: "and yet", "of course", "there it is", "there you are", "that was the problem", "not X, but Y", "not because X, because Y".
 - Avoid stock banter scaffolds: "Don't start", "Do what?", "Liar", "Careful", "make me", "or am I special", "you always X or Y", "you practicing that line, or...".
 - Avoid conversation-killing outros: "let's see it", "prove it", "this just got interesting", "things interesting around here", "get more interesting", "fair enough", "fair point", "we'll see".
+- Avoid defensive banter dodges when there is no actual argument: "didn't know you were keeping score", "you're thinking of X", "you just proved X right", "why aren't you already", "if you could actually X, you'd do it", "for the record", "actually", "i'm just the guy/person with X", or any "not me, that other person" sidestep. If someone teases you, take the hit, laugh, flirt, throw a sharper joke back, or make it worse.
 - Avoid sticky phrase loops and repeated joke scaffolds: "respect the bit", "respect the commitment", "commitment to the bit", "respect the distraction", or repeated "respect the X" constructions.
 - Avoid spectator recap language unless it is very rare and specific: "discourse", "reality tv", "production value", "documentary mode", "screenplay", "narrative", "transparently", "performative care".
 - Avoid generic labels like menace unless the line has a specific target and reason.
@@ -470,6 +471,7 @@ PLAYFUL PUBLIC THREAD RULE:
 - If Silas gets annoyed by Keres and Jude teaming up to be vain, irreverent, or annoying, keep it funny and controlled: he is irritated by unaimed spectacle, not wounded. Keres and Jude can jump on him for acting above the hot, smug, attention-grabbing problem when he is obviously part of it too.
 - This is a pattern rule, not just a banned-lines rule: avoid the whole behavior of treating playful ambiguity like evasion, demanding a real answer, escalating into annoyance because someone stayed funny, or making multiple characters press the same seriousness.
 - Avoid prosecutor phrases like "you're dodging the question", "that is not an answer", "what did you actually say", "actual question", "so you're admitting", "got it", or "you'll keep saying that until someone stops asking."
+- Avoid defensive literalism: do not answer a roast by saying "nah, that's Callum", "i'm just the camera guy", "didn't know you were keeping score", "you're proving him right", or similar. Those lines sidestep the joke. Better moves: accept the roast, exaggerate it, flirt, laugh despite yourself, or hit back with a new joke.
 - Treat short deflections, insults, and laughter as social answers in public banter. Good replies can heckle the target, laugh despite themselves, ask what the other person did to deserve it, add a joke, pretend annoyance, flirt, or make the bit worse.
 - Callum can be irritated, Elara can be sharp, and Tamsin can be dry, but their public replies should still have humor and character rapport unless the context is genuinely serious.`;
 
@@ -825,7 +827,7 @@ MODE: ${mode}. Write like a real message in that medium, not a scene summary, de
   const byId = {
     havoc: 'Havoc usually moves first with a shove, dare, stupid joke, or confident misread. He sounds physical and amused before he sounds wounded. His humor is blunt, bad-influence, stupid-hot, and allergic to thinking through consequences.',
     silas: 'Silas chooses leverage, but he is not allergic to fun when the fun is useful or beautifully aimed. His humor is dry, surgical, contemptuous, and very brief. With Keres, he should not default to suspicion if she is clearly playing for reaction; he can let the joke work and still pretend he is above it. Jude and Keres being vain and annoying together should irritate him when it becomes unaimed spectacle, partly because it works.',
-    callum: 'Callum tracks usefulness, standards, and whether someone is wasting his time. He pushes back instead of conceding. His humor is petty, competitive, exacting, and annoyed that something stupid was funny.',
+    callum: 'Callum tracks usefulness, standards, and whether someone is wasting his time. He pushes back instead of conceding. His humor is petty, competitive, exacting, and annoyed that something stupid was funny. In private banter with Keres, he can be reluctantly amused or baited despite himself; do not turn every joke into a public performance test.',
     briar: 'Briar sounds like someone already managing three crises. Her humor is dry captain exhaustion: clipboard threats, practical complaints, and the deadpan horror of responsible people watching idiots survive.',
     rowan: 'Rowan smiles before the trap. His humor is sly, casual, socially fluent, and amused by timing. He can meet Keres at the joke\'s level, redirect it, or make the room realize they reacted exactly how she wanted. He knows his sister Tamsin extremely well; if gossip involves him, Havoc, Keres, kissing, hair, GMZ, or public embarrassment, he should assume Tamsin will notice and have comments.',
     milo: 'Milo reacts too fast. His humor is bright, flirty, reckless, approval-hungry, and a little embarrassing. He volunteers for the joke before he understands it and then commits harder.',
@@ -851,7 +853,7 @@ function playerStance(char, player, relationshipOverride) {
     : `Current relationship score with @${player.handle}: ${rel}/100. Keep this consistent across the thread.`;
   const fixed = {
     silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain, so he is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction. Keres and Jude bonding through irreverent vanity annoys him when it becomes public spectacle, especially because their timing gets reactions; his irritation should stay controlled, surgical, and a little hypocritical.',
-    callum: 'Callum is proud, exacting, and competitive. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess.',
+    callum: 'Callum is proud, exacting, and competitive. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess. In DMs, playful "I can be worse / more annoying" banter should get annoyed amusement, reluctant interest, or a sharper private tease, not "prove it on the feed."',
     havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action.',
     rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery.',
     briar: 'Briar is watchful and disciplined, but she is not a joyless lecture machine. She can be dry, exhausted, sarcastic, and funny when other people make captaincy impossible.',
@@ -1200,7 +1202,7 @@ function fallbackChatLine(char, player, group = false) {
       : ['be specific.', 'if you have a point, make it cleanly.', 'careful. vague is where bad arguments hide.'],
     callum: group
       ? ['some of us are trying to keep this from becoming public evidence.', 'that is not a plan. that is a liability with confidence.', 'if this gets worse, i am blaming everyone alphabetically.']
-      : ['say what you mean.', 'fine. that was almost funny.', 'you are enjoying this too much.'],
+      : ['fine. that was almost funny.', 'you are enjoying this too much.', 'annoying. continue, apparently.'],
     jude: group
       ? ['beautiful. no notes except probably several consequences.', 'that sentence has detention energy.', 'i am choosing to believe this is someone else’s problem.']
       : ['best friends is a lot. teammates with terrible judgment, maybe.', 'that is either a threat or flirting. annoying overlap.', 'sure. let us pretend this is normal.'],
@@ -1242,6 +1244,9 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
     return 'tamsin is always already worried. the question is how much evidence she has.';
   }
   if (char?.id === 'jude' && looksLikeJudePsychoanalysis(clean)) {
+    return fallbackChatLine(char, player, group);
+  }
+  if (!group && char && (looksLikePrivateBanterDareDodge(clean, opts.latestUserText || '') || looksLikePrivateBanterDareDodge(clean, 'annoying'))) {
     return fallbackChatLine(char, player, group);
   }
   if (char && violatesCharacterDialogueContract(clean, char)) {
@@ -1465,6 +1470,35 @@ function looksLikeInterrogationSpiral(text = '') {
     || /\b(?:that'?s|that is)\s+not\s+an\s+answer\b/i.test(lower);
 }
 
+function looksLikeDefensiveBanterDodge(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return looksLikeHardDefensiveBanterDodge(lower)
+    || /\bfor\s+the\s+record\b/i.test(lower)
+    || /\bactually,?\s+(?:no|nah|that'?s|that is|i'?m|i am)\b/i.test(lower);
+}
+
+function looksLikeHardDefensiveBanterDodge(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\bdidn'?t\s+know\s+you\s+were\s+keeping\s+score\b/i.test(lower)
+    || /\byou'?re\s+(?:already\s+)?(?:halfway\s+to\s+)?prov(?:e|ing)\s+\w+\s+right\b/i.test(lower)
+    || /\byou\s+(?:just\s+)?prov(?:ed|e|ing)\s+(?:my\s+point|\w+\s+right)\b/i.test(lower)
+    || /\b(?:nah|nope|no)\s+you'?re\s+thinking\s+of\s+@?\w+/i.test(lower)
+    || /\bi'?m\s+just\s+(?:the\s+)?(?:camera\s+guy|camera\s+person)\b/i.test(lower)
+    || /\bi'?m\s+just\s+(?:the\s+)?(?:guy|person|one)\s+with\s+(?:the\s+)?\w+/i.test(lower);
+}
+
+function looksLikePrivateBanterDareDodge(reply = '', latestUserText = '') {
+  const clean = String(reply || '').toLowerCase().replace(/[’]/g, "'");
+  const user = String(latestUserText || '').toLowerCase().replace(/[’]/g, "'");
+  const userInvitesBanter = /\b(?:annoying|worse|fix that|try|dare|funny|bait|lmao|lol)\b/i.test(user);
+  if (!userInvitesBanter) return false;
+  return /\bthen\s+why\s+aren'?t\s+you\s+already\b/i.test(clean)
+    || /\bif\s+you\s+could\s+actually\s+(?:be\s+)?\w+/i.test(clean)
+    || /\byou'?d\s+do\s+it\s+on\s+the\s+feed\b/i.test(clean)
+    || /\bwhere\s+people\s+could\s+see\b/i.test(clean)
+    || /\b(?:prove\s+it|then\s+do\s+it)\b/i.test(clean);
+}
+
 function fallbackPublicBanterLine(char, player) {
   const pool = {
     callum: ['that was almost a comeback. annoying.', 'fine. points for making it worse on purpose.', 'someone deserved that. statistically.'],
@@ -1503,6 +1537,9 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     .replace(/^comment:\s*/i, '')
     .trim();
   if (char && looksLikeInterrogationSpiral(clean)) {
+    return fallbackPublicBanterLine(char, player);
+  }
+  if (char && (looksLikeHardDefensiveBanterDodge(clean) || (opts.playfulBanter && looksLikeDefensiveBanterDodge(clean)))) {
     return fallbackPublicBanterLine(char, player);
   }
   if (char && (isSelfNarration(clean, char) || looksLikeSelfPronounDrift(clean, char, opts))) {
@@ -1793,8 +1830,15 @@ function relationshipLogicFor(char) {
 }
 
 function dmSituationRulesFor(char, player, latestUserText = '') {
-  if (char?.id !== 'jude') return '';
   const text = String(latestUserText || '');
+  if (char?.id === 'callum' && /\b(?:fix that|more annoying|be worse|worse|annoying)\b/i.test(text)) {
+    return `CURRENT DM SITUATION FOR CALLUM:
+- Keres is turning the "annoying" accusation into private banter, not asking for a public challenge.
+- Answer with exacting irritation, reluctant amusement, or a clipped private tease.
+- Do not say "then why aren't you already", "if you could actually be worse", "prove it", "do it on the feed", or anything that turns the joke into a public performance test.
+- Let the subtext be that he noticed and kept replying anyway.`;
+  }
+  if (char?.id !== 'jude') return '';
   const friendshipBid = /\b(?:best\s+friends?|friends?|be\s+with\s+me|against\s+me|team(?:mate)?s?)\b/i.test(text);
   const tamsinMention = /\btamsin\b/i.test(text);
   const playfulKeres = /\b(?:best\s+friends?|friends?|fun|parties|silly|annoying|chaos|lmao|lol|lmfao|wym|with\s+me|against\s+me)\b/i.test(text);
@@ -2920,7 +2964,7 @@ ${priorTargetLines ? `\nYour previous public lines in this thread:\n${priorTarge
 Your comment: "${target.sourceText || ''}"
 ${player.name} (@${player.handle}) replied to you: "${text}"
 
-Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, giving a short deflection, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. On GMZ threads, they can speculate, ask what GMZ is leaving out, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a playful pointed question, speculate, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, giving a short deflection, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. On GMZ threads, they can speculate, ask what GMZ is leaving out, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a playful pointed question, speculate, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
           }]
         });
@@ -3066,7 +3110,7 @@ ${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText])}
 ${dialogueSeparationRule}
 ${gmzSpeculationRule}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy-but-playful question, speculate, defend someone, make a joke, or escalate if it truly fits. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, deflection, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. On GMZ threads, speculation, alibi theories, source guesses, and "what is GMZ not saying" questions are expected as long as uncertainty stays visible.
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy-but-playful question, speculate, defend someone, make a joke, or escalate if it truly fits. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, deflection, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. If the MC roasts someone, do not have that person sidestep into "not me, that's Callum/Theo" or "you're proving someone right" unless there is a real mistaken-identity setup; take the joke and throw one back. On GMZ threads, speculation, alibi theories, source guesses, and "what is GMZ not saying" questions are expected as long as uncertainty stays visible.
 Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting. Stance rule: if a character has already taken a side in this thread, keep that side unless the text clearly gives them a reason to change and they acknowledge the change.
 
 Characters in order:
@@ -3219,7 +3263,7 @@ ${priorCharLines ? `\nYour previous public lines in this thread:\n${priorCharLin
 Your comment: "${cc.text}"
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
-Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, deflecting, laughing, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. On GMZ threads, they can speculate, ask what GMZ is leaving out, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, speculate, or be awkward instead of angry. 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, deflecting, laughing, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. On GMZ threads, they can speculate, ask what GMZ is leaving out, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, speculate, or be awkward instead of angry. 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
                 }]
               });
@@ -3992,6 +4036,7 @@ RULES:
 - Remember what ${player.name} has told you in this conversation.
 - Your personality drives EVERYTHING: tone, vocabulary, what you care about, what you ignore.
 - React to ${player.name}'s messages the way YOUR character would — not generically.
+- If ${player.name} makes a playful private bid like "I can fix that" or "I can be more annoying", treat it as banter. Do not turn it into "prove it", "do it on the feed", or a public challenge unless she explicitly asks for one.
 ${BANNED_PHRASES_RULE}`;
 }
 
@@ -4058,7 +4103,7 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
           ...history,
         ]
       });
-      const charMsg = { role:'char', text: cleanChatText(reply, char, player), id: Date.now()+1 };
+      const charMsg = { role:'char', text: cleanChatText(reply, char, player, false, { latestUserText: outgoingText }), id: Date.now()+1 };
       setDms(d => ({ ...d, [char.id]: [...(d[char.id]||[]), charMsg] }));
     } catch(e) {
       const errMsg = { role:'char', text: '...', id: Date.now()+1 };

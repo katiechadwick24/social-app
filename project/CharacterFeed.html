@@ -1609,7 +1609,7 @@ function repairPromptLeakPosts(feed = [], chars = [], player) {
     const cleanedCharComments = Array.isArray(post?.charComments)
       ? post.charComments.map(cc => {
           const ccChar = all.find(c => c.id === cc.charId);
-          return { ...cc, text: ccChar ? cleanSocialReplyText(cc.text || '', ccChar, player, { contextText: `${post?.text || ''} ${cc?.text || ''}`, roster: all, selfSubject: characterMentionedInText(`${post?.text || ''} ${cc?.text || ''}`, ccChar) || ccChar.id === post?.charId }) : cc.text, nestedReply: false };
+          return { ...cc, text: ccChar ? cleanSocialReplyText(cc.text || '', ccChar, player, { contextText: `${post?.text || ''} ${cc?.text || ''}`, roster: all, selfSubject: characterMentionedInText(`${post?.text || ''} ${cc?.text || ''}`, ccChar) || ccChar.id === post?.charId }) : cc.text, replyTo: cc.replyTo || author?.handle, nestedReply: false };
         })
       : post?.charComments;
     if (looksLikePromptLeak(post?.text || '') || cleaned !== post?.text || cleanedReply !== post?.reply?.text) {
@@ -2580,6 +2580,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
             text,
             likes: Math.floor(Math.random()*8000),
             timestamp: baseTs + 60000 + i*30000 + Math.floor(Math.random()*120000),
+            replyTo: author?.handle || char?.handle || player.handle,
           };
         }).filter(c => c.text);
       } catch(e) {}
@@ -2749,6 +2750,7 @@ Return ONLY the reply text. No other text.`
               text: cleanSocialReplyText(parsed2[i] || '', null, player, { bot: b }),
               likes: Math.floor(Math.random()*25000) + 3000,
               timestamp: baseTs + 600000 + i*30000,
+              replyTo: fight.replier.handle,
             })).filter(b => b.text);
             }
             const reactStart = botStartDelay + bots.length*600 + 2400;
@@ -2860,6 +2862,14 @@ Return ONLY SILENCE or the reply text.`
   }
 
   const renderText = (text) => renderLinkedText(text, allChars, onCharClick);
+
+  function visibleReplyText(text = '', replyTo = '') {
+    const handle = String(replyTo || '').replace(/^@/, '').trim();
+    const raw = String(text || '').trim();
+    if (!handle || !raw) return raw;
+    if (new RegExp(`(^|\\s)@${escapeRegExp(handle)}\\b`, 'i').test(raw)) return raw;
+    return `@${handle} ${raw}`;
+  }
 
   const getBotById = id => RECURRING_BOTS.find(b => b.id === id) || RECURRING_BOTS[0];
 
@@ -3109,8 +3119,13 @@ ${BANNED_PHRASES_RULE}`
 
     try {
       const dialogueSeparationRule = multiSpeakerDialogueSeparationRule(responders, 'public thread follow-up');
+      const defaultReplyHandle = replyToHandle || targetChar?.handle || char?.handle || player.handle;
       const roster = responders.map((c,i) => {
         const priorLines = speakerThreadHistory(c.id, 4);
+        const isDirectResponder = taggedIds.has(c.id) || target.some(t => t.id === c.id) || c.id === post.charId;
+        const replyRoleNote = isDirectResponder
+          ? ` DIRECT RESPONSE ROLE: this character was directly addressed, tagged, or owns the post being answered. They may answer @${player.handle} or the thread from their own stake.`
+          : ` THIRD-PARTY WEIGH-IN ROLE: this character is joining from the side. If they tag someone, tag @${defaultReplyHandle} or the comment they are weighing in on. Do not act like @${player.handle} was talking to them unless @${player.handle} directly tagged them.`;
         const defenseNote = backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)
           ? ' HOUSE/TEAM STAKE: their house/team is being backed or insulted here. They should feel pulled back into the thread and answer with bite, agreement, or direct pushback instead of letting a random rival take over.'
           : '';
@@ -3121,7 +3136,7 @@ ${BANNED_PHRASES_RULE}`
           ? ` PREVIOUS LINES BY THIS CHARACTER IN THIS THREAD: ${priorLines.replace(/\n/g, ' ')} Keep their stance consistent; do not flip sides unless the flip is intentional and acknowledged.`
           : '';
         const tamsinProtectiveNote = c.id === 'tamsin' && tamsinFollowupPressure ? ` ${tamsinKeresConcernNote(tamsinFollowupText, player)}` : '';
-        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${defenseNote}${teammateNote}${continuityNote}${tamsinProtectiveNote}`;
+        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${tamsinProtectiveNote}`;
       }).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
@@ -3146,7 +3161,7 @@ ${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText])}
 ${dialogueSeparationRule}
 ${gmzSpeculationRule}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy-but-playful question, speculate, defend someone, make a joke, or escalate if it truly fits. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, deflection, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. If the MC roasts someone, do not have that person sidestep into "not me, that's Callum/Theo" or "you're proving someone right" unless there is a real mistaken-identity setup; take the joke and throw one back. On GMZ threads, speculation, alibi theories, source guesses, and "what is GMZ not saying" questions are expected as long as uncertainty stays visible.
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy-but-playful question, speculate, defend someone, make a joke, or escalate if it truly fits. Third-party responders are weighing in on the thread, not receiving a private message from ${player.name}; they should not write as if she was talking to them unless she tagged them. If a third-party responder tags someone, the tag should point to the comment or speaker they are weighing in on, usually @${defaultReplyHandle}. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, deflection, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. If the MC roasts someone, do not have that person sidestep into "not me, that's Callum/Theo" or "you're proving someone right" unless there is a real mistaken-identity setup; take the joke and throw one back. On GMZ threads, speculation, alibi theories, source guesses, and "what is GMZ not saying" questions are expected as long as uncertainty stays visible.
 Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting. Stance rule: if a character has already taken a side in this thread, keep that side unless the text clearly gives them a reason to change and they acknowledge the change.
 
 Characters in order:
@@ -3167,7 +3182,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
           text,
           likes: Math.floor(Math.random()*12000),
           timestamp: baseTs + 90000 + i*45000 + Math.floor(Math.random()*45000),
-          replyTo: replyToHandle || targetChar?.handle || char?.handle || player.handle,
+          replyTo: defaultReplyHandle,
           nestedReply: false,
         };
       }).filter(r => r.text);
@@ -3342,7 +3357,7 @@ ${BANNED_PHRASES_RULE}`
                     <span style={{color:C.muted, fontSize:13}}>·</span>
                     <span style={{color:C.muted, fontSize:13}}>{timeAgo(cc.timestamp || post.timestamp)}</span>
                   </div>
-                  <p style={{color:C.text, fontSize:14, lineHeight:1.5, margin:0}}>{renderText(cc.text)}</p>
+                  <p style={{color:C.text, fontSize:14, lineHeight:1.5, margin:0}}>{renderText(visibleReplyText(cc.text, cc.replyTo))}</p>
                   <div style={{display:'flex', gap:24, marginTop:10, alignItems:'center'}}>
                     {cChar.id !== player.id && (
                       <button
@@ -3449,7 +3464,7 @@ Return ONLY the reply text.`
                 <div style={{flex:1}}>
                   <span style={{fontWeight:700, fontSize:13, color:C.text}}>{player.name}</span>
                   <span style={{color:C.muted, fontSize:12, marginLeft:6}}>@{player.handle}</span>
-                  <p style={{color:C.text, fontSize:13, lineHeight:1.5, marginTop:4}}>{renderText(bc.text)}</p>
+                  <p style={{color:C.text, fontSize:13, lineHeight:1.5, marginTop:4}}>{renderText(visibleReplyText(bc.text, bc.replyTo))}</p>
                 </div>
               </div>
             </div>
@@ -3465,7 +3480,7 @@ Return ONLY the reply text.`
                   <span style={{fontWeight:700, fontSize:14, color:C.text}}>{bot.name}</span>
                   <span style={{color:C.muted, fontSize:13}}>@{bot.handle}</span>
                 </div>
-                <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{renderText(bc.text)}</p>
+                <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{renderText(visibleReplyText(bc.text, bc.replyTo))}</p>
                 <div style={{display:'flex', gap:20, marginTop:10, alignItems:'center'}}>
                   <button
                     type="button"

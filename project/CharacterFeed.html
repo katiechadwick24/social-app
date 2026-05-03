@@ -313,7 +313,7 @@ function identityFactsFor(char) {
 }
 
 function identityPromptFor(char) {
-  return `Locked identity for this speaker: ${identityFactsFor(char)}. Treat house/team like pronouns. Do not make this speaker talk about their own house or team like outsiders. If they are not on a Quidditch team, do not write them as a player. When writing as this speaker, the speaker is "I/me/my/we/our", never their own name, handle, or third-person pronouns.`;
+  return `Locked identity for this speaker: ${identityFactsFor(char)}. Treat house/team like pronouns. Do not make this speaker talk about their own house or team like outsiders. If they are not on a Quidditch team, do not write them as a player. In social posts/replies, this speaker is "I/me/my/we/our", never their own name, handle, or third-person pronouns.`;
 }
 
 function pronounRoster(chars = []) {
@@ -331,7 +331,7 @@ function houseRoster(chars = []) {
 }
 
 function pronounRule(chars = []) {
-  return `IDENTITY RULE: These facts are locked. Use the exact pronouns, house, team, and player/non-player status below. Do not infer identity from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. House/team logic works like pronouns: exact and sticky. If someone belongs to a house/team, they can roast it as their own mess, but should use insider language like we/us/our/my team/my house unless clearly joking or quoting. If someone is NOT on a Quidditch team, never imply they play, practice, show up on the pitch, need to prove themselves on the pitch, or have teammates in a Quidditch sense. Direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. A speaker must not post about themself in third person: if Callum writes, use "i/my", not "Callum/he/his"; if Havoc writes, use "i/my", not "Havoc/he/his". If a character is mentioned by @handle or name, keep their pronouns and house/team consistent. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
+  return `IDENTITY RULE: These facts are locked. Use the exact pronouns, house, team, and player/non-player status below. Do not infer identity from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. House/team logic works like pronouns: exact and sticky. If someone belongs to a house/team, they can roast it as their own mess, but should use insider language like we/us/our/my team/my house unless clearly joking or quoting. If someone is NOT on a Quidditch team, never imply they play, practice, show up on the pitch, need to prove themselves on the pitch, or have teammates in a Quidditch sense. Direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. In social posts/replies, a speaker must not post about themself in third person: if Callum writes, use "i/my", not "Callum/he/his"; if Havoc writes, use "i/my", not "Havoc/he/his". If a character is mentioned by @handle or name, keep their pronouns and house/team consistent. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
 }
 
 function compressImageFile(file, { maxSize = 720, quality = 0.78 } = {}) {

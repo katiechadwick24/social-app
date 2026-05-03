@@ -1533,6 +1533,13 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
   const stanceFor = (c) => playerStance(c, player, playerRelFor(c));
   const threadMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, player, allChars });
   const threadPhraseGuard = phraseRepetitionGuard(feed, post?.text || '');
+  const isGMZThread = post?.charId === '__gmz__' || post?.isGMZ || /@?gmz|breaking:|sources confirm:|exclusive:|witnesses say:/i.test(post?.text || '');
+  const gmzSpeculationRule = isGMZThread
+    ? `GMZ THREAD SPECULATION:
+- This is a gossip thread. Characters and anonymous accounts SHOULD speculate, ask messy questions, make theories, side-eye timing, compare alibis, and float "wait, does this mean..." reads.
+- Speculation is allowed to be wrong, petty, funny, jealous, thirsty, or biased as long as it is framed as rumor, theory, suspicion, "allegedly", "if true", "sources", "witness math", or a question.
+- Do not flatten GMZ threads into cautious fact-checking. Keep hard canon separate from timeline gossip, but let people behave like a campus comment section.`
+    : '';
   const [liked, setLiked] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replyOpen, setReplyOpen] = useState(false);
@@ -1611,6 +1618,38 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       teammateStakeInText(post.text, c, [player, ...chars])
     );
     const teammateDefenderIds = new Set(teammateDefenders.map(c => c.id));
+    const topicText = `${post.text || ''} ${post.reply?.text || ''}`.toLowerCase();
+    const threadHas = (rx) => rx.test(topicText);
+    const responderRoleScore = (c) => {
+      let score = 0;
+      const personality = `${c.personality || ''} ${c.description || ''}`.toLowerCase();
+      const relToPoster = isKeresPost ? playerRelFor(c) : (c.relationships?.[post.charId] ?? 50);
+      const relHeat = Math.abs((relToPoster ?? 50) - 50);
+      score += relHeat * 0.55;
+      if (/chaotic|shameless|nosy|gossip|reactive|provocative|flirty|funny|opportunistic|commentator|media|reckless/i.test(personality)) score += 18;
+      if (/quiet|reserved|controlled|disciplined|composed/i.test(personality)) score -= 8;
+      if (directMentionIds.has(c.id)) score += 120;
+      if (defenderIds.has(c.id)) score += 70;
+      if (teammateDefenderIds.has(c.id)) score += 56;
+      if (c.id === 'elara' && havocKeresPressure) score += 120;
+      if (isGMZThread) {
+        if (['theo','jude','rowan','milo','tamsin','elara'].includes(c.id)) score += 32;
+        if (/gossip|observant|commentator|media|sharp|nosy|sly|dry|chaotic/i.test(personality)) score += 20;
+        if (threadHas(/\b(?:alibi|source|witness|caught|spotted|saw|rumou?r|exclusive|breaking|gmz)\b/i)) score += 18;
+      }
+      if (threadHas(/\b(?:rowan|@rowancade)\b/i) && c.id === 'tamsin') score += 92;
+      if (threadHas(/\b(?:tamsin|@tamsincade)\b/i) && c.id === 'rowan') score += 64;
+      if (threadHas(/\b(?:havoc|@havocfang)\b/i) && ['rowan','elara','briar'].includes(c.id)) score += c.id === 'elara' ? 70 : 35;
+      if (threadHas(/\b(?:keres|@keresvalen|new transfer|photo|hot|pretty|distract|flirt|kiss|snog|hair)\b/i)) {
+        if (['havoc','rowan','milo','elara','theo','jude','silas'].includes(c.id)) score += c.id === 'elara' ? 45 : 24;
+      }
+      if (threadHas(/\b(?:practice|pitch|quidditch|match|keeper|chaser|beater|seeker|catch|foul|score|team)\b/i) && (isQuidditchPlayer(c) || /commentator|captain/i.test(personality))) score += 24;
+      if (embarrassmentContext && /snark|sharp|blunt|funny|observant|gossip|shameless|cutting|chaotic|provocative|dry/i.test(personality)) score += 28;
+      if (c.id === 'silas' && isKeresPost && !threadHas(/\b(?:slytherin|tryout|captain|strategy|quidditch|pitch|match|foul|chaser|seeker|keeper|beater|gmz|source|rumou?r)\b/i)) score -= 42;
+      if (c.id === 'callum' && authorId === 'havoc' && !directMentionIds.has(c.id) && !defenderIds.has(c.id)) score -= 18;
+      if (c.id === 'silas' && authorId === 'havoc' && !directMentionIds.has(c.id)) score -= 30;
+      return score;
+    };
 
     const charge = (c) => {
       const r = isKeresPost ? playerRelFor(c) : (c.relationships?.[post.charId] ?? c.relationships?.player);
@@ -1629,19 +1668,14 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const weighted = eligible
       .filter(c => !directMentionIds.has(c.id))
       .map(c => {
-        let w = charge(c) + Math.random()*30;
-        if (defenderIds.has(c.id)) w += 55;
-        if (teammateDefenderIds.has(c.id)) w += 42;
-        if (c.id === 'elara' && havocKeresPressure) w += 85;
-        if (c.id === 'silas' && isKeresPost && !/slytherin|tryout|captain|strategy|quidditch|pitch|match|foul|chaser|seeker|keeper|beater/i.test(post.text || '')) w *= 0.28;
-        if (c.id === 'silas' && authorId === 'havoc') w *= 0.35;
-        if (c.id === 'callum' && authorId === 'havoc') w *= 0.72;
+        let w = 20 + responderRoleScore(c) + Math.random()*26;
+        if (speakerThreadHistory(c.id, 2)) w -= 18;
         return { c, w };
       });
     weighted.sort((a,b) => b.w - a.w);
 
     // Pick 1-3 chars by default. Direct mentions jump the line, then other characters can chime in.
-    const targetCount = Math.min(4, Math.max(embarrassmentContext ? 2 : 1, directlyMentioned.length + 1 + (Math.random() < 0.35 ? 1 : 0)));
+    const targetCount = Math.min(4, Math.max(isGMZThread ? 3 : (embarrassmentContext ? 2 : 1), directlyMentioned.length + 1 + (Math.random() < 0.35 ? 1 : 0)));
     const targetLimit = Math.min(5, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + exPressureResponders.length));
     let picked = [
       ...directlyMentioned,
@@ -1695,7 +1729,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${threadMemory}\n${roleContext}\n${threadPhraseGuard}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, or bystander, not necessarily the person the rumor is about. They should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${threadMemory}\n${roleContext}\n${threadPhraseGuard}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, or bystander, not necessarily the person the rumor is about. They should usually reply directly to the poster or the mention, using natural "you/I/me/my" language where it fits. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, speculate about what GMZ left unsaid, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -1728,7 +1762,9 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ].join('\n');
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
-      const botCount = Math.max(0, Math.min(2, (charR1.length >= 3 ? 1 : 0) + (Math.random() < 0.45 ? 1 : 0))); // 0-2, usually sparse
+      const botCount = isGMZThread
+        ? Math.min(2, Math.max(1, 1 + (Math.random() < 0.65 ? 1 : 0)))
+        : Math.max(0, Math.min(2, (charR1.length >= 3 ? 1 : 0) + (Math.random() < 0.45 ? 1 : 0))); // 0-2, usually sparse
       const botsPicked = [...pool].sort(() => Math.random()-0.5).slice(0, botCount);
       const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
 
@@ -1741,6 +1777,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 ${transcript}
 
 ${pronounRule([author, player, ...chars])}
+${gmzSpeculationRule}
 
 Write replies from random anonymous student accounts joining the comment thread. They are part of the conversation, not a recap channel. They:
 - pick teams sometimes ("team @whoever", "@xxx ate this")
@@ -1750,6 +1787,7 @@ Write replies from random anonymous student accounts joining the comment thread.
 - often reply directly to someone with @handle, ask a pointed question, flirt, heckle, correct, beg for details, or make a joke at someone in the thread
 - when the thread is about a hot/talented new transfer, most audience comments should be excited, impressed, thirsty, curious, or playfully chaotic, not bullying
 - interject with original opinions, questions, fan behavior, tactical reads, rumors, side-eye, admiration, or warnings
+- on GMZ threads, at least one account should speculate, question the alibi, infer a motive, or float a messy theory with uncertainty
 - fangirl/fanboy naturally when someone is hot, impressive, or messy
 - can call out specific @handles
 - keep it readable and not maximum-volume chaos. This is one or two people jumping in, not the whole campus at once.
@@ -1820,13 +1858,14 @@ ${stanceFor(fight.replier)}
 ${stanceFor(fight.target)}
 ${roleContext}
 ${threadPhraseGuard}
+${gmzSpeculationRule}
 
 Write as ${fight.replier.name}, and output only the public reply text.
 ${identityPromptFor(fight.replier)}
 Other person facts: ${identityFactsFor(fight.target)}.
 Your relationship with @${fight.target.handle} is charged (${fight.rel}/100). You see what they just said and you can't help yourself. You reply to THEM, not to the original post. Voice cues: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
-Write ONE reply (8-26 words). It can be a tease, joke, flirt, smug correction, playful shove, dry observation, or actual clapback only if the character would truly go there. It should clearly answer @${fight.target.handle}. Keep the thread roles straight if the exchange mentions rumors, alibis, witnesses, or tagged handles. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
+Write ONE reply (8-26 words). It can be a tease, joke, flirt, smug correction, playful shove, dry observation, rumor theory, alibi math, or actual clapback only if the character would truly go there. It should clearly answer @${fight.target.handle}. Keep the thread roles straight if the exchange mentions rumors, alibis, witnesses, or tagged handles. On GMZ threads, speculation is welcome if marked as rumor/theory/question. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
 ${BANNED_PHRASES_RULE}
 Return ONLY the reply text. No other text.`
             }]
@@ -1854,7 +1893,7 @@ Return ONLY the reply text. No other text.`
             if (reactBots.length > 0) {
             const res2 = await window.claude.complete({
               messages:[{ role:'user', content:
-                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${roleContext}\n${threadPhraseGuard}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy question, pick a side, flirt, heckle, beg for details, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${roleContext}\n${threadPhraseGuard}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy question, pick a side, flirt, heckle, beg for details, speculate about what GMZ left out, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
             });
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -1883,7 +1922,7 @@ Return ONLY the reply text. No other text.`
                   const bot = pool.find(b => b.id === botTarget.bot);
                   const resBot = await window.claude.complete({
                     messages:[{ role:'user', content:
-                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
                   });
                   const botReply = cleanSocialReplyText(resBot, responder, player);
                   if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
@@ -1921,6 +1960,7 @@ ${stanceFor(fight.target)}
 ${stanceFor(fight.replier)}
 ${roleContext}
 ${threadPhraseGuard}
+${gmzSpeculationRule}
 
 Write as ${fight.target.name}, and output only the reply text.
 ${identityPromptFor(fight.target)}
@@ -1928,7 +1968,7 @@ Other speaker facts: ${identityFactsFor(fight.replier)}.
 Voice cues: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is charged (${fight.rel}/100).
 
 Decide if you would answer or leave it on read. If silence is more in-character, return exactly: SILENCE
-Otherwise write ONE counter-reply (8-24 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, or sharp. Only twist the knife if that truly fits. Keep rumor/alibi/mentioned-handle roles straight. No hashtags. No quotes around the reply.
+Otherwise write ONE counter-reply (8-24 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, speculative, or sharp. Only twist the knife if that truly fits. Keep rumor/alibi/mentioned-handle roles straight. On GMZ threads, theories and alibi reads are normal as long as uncertainty stays visible. No hashtags. No quotes around the reply.
 ${BANNED_PHRASES_RULE}
 Return ONLY SILENCE or the reply text.`
                   }]
@@ -2097,6 +2137,7 @@ ${pronounRule([targetChar, player, char])}
 ${CHARACTER_TONE_RULE}
 ${stanceFor(targetChar)}
 ${threadRoleContext(post.text || '', char, [player, ...chars, GMZ_CHAR])}
+${gmzSpeculationRule}
 
 Original post by @${char?.handle}: "${post.text}"
 Recent visible thread:
@@ -2106,7 +2147,7 @@ ${priorTargetLines ? `\nYour previous public lines in this thread:\n${priorTarge
 Your comment: "${target.sourceText || ''}"
 ${player.name} (@${player.handle}) replied to you: "${text}"
 
-Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a pointed question, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. On GMZ threads, they can speculate, ask what GMZ is leaving out, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a pointed question, speculate, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
           }]
         });
@@ -2156,6 +2197,33 @@ ${BANNED_PHRASES_RULE}`
     const taggedIds = new Set(tagged.map(c => c.id));
     const target = targetChar && targetChar.id !== player.id && targetChar.id !== '__gmz__' ? [targetChar] : [];
     const sourceAuthorId = targetChar?.id || post.charId;
+    const followupTopic = `${post.text || ''} ${sourceText || ''} ${playerText || ''}`.toLowerCase();
+    const followupHas = (rx) => rx.test(followupTopic);
+    const followupStakeScore = (c) => {
+      let w = Math.abs((playerRelFor(c) ?? 50) - 50);
+      const personality = `${c.personality || ''} ${c.description || ''}`.toLowerCase();
+      if (/chaotic|shameless|nosy|gossip|reactive|provocative|flirty|funny|opportunistic|commentator|media|reckless/i.test(personality)) w += 16;
+      if (/quiet|reserved|controlled|disciplined|composed/i.test(personality)) w -= 6;
+      if (taggedIds.has(c.id)) w += 120;
+      if (target.some(t => t.id === c.id)) w += 90;
+      if (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)) w += 52;
+      if (teammateStakeInText(`${sourceText || post.text} ${playerText}`, c, [player, ...chars])) w += 48;
+      if (isGMZThread) {
+        if (['theo','jude','rowan','milo','tamsin','elara'].includes(c.id)) w += 34;
+        if (/gossip|observant|commentator|media|sharp|nosy|sly|dry|chaotic/i.test(personality)) w += 20;
+        if (followupHas(/\b(?:alibi|source|witness|caught|spotted|saw|rumou?r|exclusive|breaking|gmz|theory|allegedly)\b/i)) w += 18;
+      }
+      if (followupHas(/\b(?:rowan|@rowancade)\b/i) && c.id === 'tamsin') w += 88;
+      if (followupHas(/\b(?:tamsin|@tamsincade)\b/i) && c.id === 'rowan') w += 58;
+      if (followupHas(/\b(?:havoc|@havocfang)\b/i) && ['rowan','elara','briar'].includes(c.id)) w += c.id === 'elara' ? 70 : 34;
+      if (followupHas(/\b(?:keres|@keresvalen|new transfer|photo|hot|pretty|distract|flirt|kiss|snog|hair)\b/i) && ['havoc','rowan','milo','elara','theo','jude','silas'].includes(c.id)) w += c.id === 'elara' ? 42 : 22;
+      if (followupHas(/\b(?:practice|pitch|quidditch|match|keeper|chaser|beater|seeker|catch|foul|score|team)\b/i) && (isQuidditchPlayer(c) || /commentator|captain/i.test(personality))) w += 24;
+      if (speakerThreadHistory(c.id, 3) && !taggedIds.has(c.id) && !target.some(t => t.id === c.id)) w -= 22;
+      if (sourceAuthorId === 'havoc' && c.id === 'silas' && !taggedIds.has(c.id)) w -= 34;
+      if (sourceAuthorId === 'havoc' && c.id === 'callum' && !taggedIds.has(c.id) && !backsHouseTeam(playerText, c) && !isHouseTeamCallout(sourceText || post.text, c)) w -= 26;
+      if (mode === 'direct' && c.id === 'havoc' && !taggedIds.has('havoc') && !followupHas(/\b(?:havoc|@havocfang)\b/i)) w -= 30;
+      return w;
+    };
     const sameHouseBacked = candidatePool.filter(c =>
       !tagged.some(t => t.id === c.id) &&
       !target.some(t => t.id === c.id) &&
@@ -2163,23 +2231,16 @@ ${BANNED_PHRASES_RULE}`
     ).sort((a,b) => {
       const directA = isHouseTeamCallout(sourceText || post.text, a) || teammateStakeInText(`${sourceText || post.text} ${playerText}`, a, [player, ...chars]) ? 1 : 0;
       const directB = isHouseTeamCallout(sourceText || post.text, b) || teammateStakeInText(`${sourceText || post.text} ${playerText}`, b, [player, ...chars]) ? 1 : 0;
-      return directB - directA;
+      return (directB - directA) || followupStakeScore(b) - followupStakeScore(a);
     });
     const charged = [...candidatePool]
       .filter(c => c.id !== post.charId && !target.some(t => t.id === c.id) && !tagged.some(t => t.id === c.id) && !sameHouseBacked.some(t => t.id === c.id))
       .map(c => {
-        let w = Math.abs((playerRelFor(c) ?? 50) - 50) + Math.random()*18;
-        if (backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c) || teammateStakeInText(`${sourceText || post.text} ${playerText}`, c, [player, ...chars])) w += 45;
-        if (sourceAuthorId === 'havoc' && c.id === 'silas') w *= 0.22;
-        if (sourceAuthorId === 'havoc' && c.id === 'callum' && !taggedIds.has('callum')) w *= 0.35;
-        if (c.id === 'callum' && !taggedIds.has('callum') && !backsHouseTeam(playerText, c) && !isHouseTeamCallout(sourceText || post.text, c)) w *= 0.45;
-        if (c.id === 'silas' && !taggedIds.has('silas') && Math.random() < 0.45) w *= 0.3;
-        if (mode === 'direct' && c.id === 'havoc' && !taggedIds.has('havoc')) w *= 0.28;
-        return { c, w };
+        return { c, w: followupStakeScore(c) + Math.random()*18 };
       })
       .sort((a,b) => b.w - a.w)
       .map(x => x.c);
-    const wantedCount = Math.max(tagged.length, mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0));
+    const wantedCount = Math.max(tagged.length, isGMZThread ? 2 : (mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0)));
     const responders = [...target, ...tagged, ...sameHouseBacked, ...charged]
       .filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i)
       .slice(0, wantedCount);
@@ -2216,8 +2277,9 @@ ${COMMUNICATION_PATTERN_RULE}
 ${threadMemory}
 ${threadRoleContext(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, char, [player, ...chars, GMZ_CHAR])}
 ${threadPhraseGuard}
+${gmzSpeculationRule}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, defend someone, make a joke, or escalate if it truly fits. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle.
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy question, speculate, defend someone, make a joke, or escalate if it truly fits. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. On GMZ threads, speculation, alibi theories, source guesses, and "what is GMZ not saying" questions are expected as long as uncertainty stays visible.
 Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting. Stance rule: if a character has already taken a side in this thread, keep that side unless the text clearly gives them a reason to change and they acknowledge the change.
 
 Characters in order:
@@ -2351,6 +2413,7 @@ ${pronounRule([cChar, player, char])}
 ${CHARACTER_TONE_RULE}
 ${stanceFor(cChar)}
 ${threadRoleContext(post.text || '', char, [player, ...chars, GMZ_CHAR])}
+${gmzSpeculationRule}
 
 Original post by @${char?.handle}: "${post.text}"
 Recent visible thread:
@@ -2360,7 +2423,7 @@ ${priorCharLines ? `\nYour previous public lines in this thread:\n${priorCharLin
 Your comment: "${cc.text}"
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
-Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, or be awkward instead of angry. 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. On GMZ threads, they can speculate, ask what GMZ is leaving out, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, speculate, or be awkward instead of angry. 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
                 }]
               });

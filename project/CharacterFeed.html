@@ -2851,7 +2851,6 @@ function BottomNav({ tab, setTab, dmNotifs = {} }) {
 function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, tweaks = TWEAK_DEFAULTS }) {
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
-  const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
   const [liked, setLiked] = useState(false);
   const compact = !!tweaks.compactFeed;
   const fs = (base) => tweakFont(base, tweaks);
@@ -2868,9 +2867,6 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 
   const renderText = (text) => renderLinkedText(text, allChars, onCharClick);
   const safePostText = cleanSocialPostText(post.text, char, player);
-  const safeReplyText = replyChar && post.reply?.text
-    ? cleanSocialReplyText(post.reply.text, replyChar, player)
-    : post.reply?.text;
 
   return (
     <div style={{padding: compact ? '10px 14px' : '16px 16px', borderBottom:`1px solid ${C.border}`}}>
@@ -2907,21 +2903,6 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
           </div>
         </div>
       </div>
-      {replyChar && (
-        <div style={{marginLeft:compact ? 42 : 50, marginTop:compact ? 8 : 10, padding:compact ? '8px 10px' : '10px 12px', background:C.card2, borderRadius:12, borderLeft:`3px solid ${C.border}`}}>
-          <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:4}}>
-            <Avatar char={replyChar} size={compact ? 28 : 32} />
-            <span style={{fontWeight:700, fontSize:fs(13), color:C.text}}>{replyChar.name}</span>
-            <CharBadge char={replyChar} />
-            <span style={{color:C.muted, fontSize:fs(12)}}>@{replyChar.handle}</span>
-          </div>
-          <p style={{color:C.text, fontSize:fs(13), lineHeight:compact ? 1.35 : 1.5}}>{renderText(safeReplyText)}</p>
-          <div style={{display:'flex', alignItems:'center', gap:4, marginTop:6}}>
-            <svg viewBox="0 0 24 24" width="13" height="13" fill={liked ? '#e91e8c' : C.muted}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            <span style={{color:C.muted, fontSize:fs(12)}}>{fmt(post.likes * 62)}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

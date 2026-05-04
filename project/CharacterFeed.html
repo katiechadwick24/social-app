@@ -476,6 +476,16 @@ COMMUNICATION PATTERNS:
 - In a multi-speaker thread, every character needs a distinct social move and sentence shape. Do not let Theo, Jude, Havoc, or any other pile-on all restate the same joke with one swapped adjective.
 - If nothing specific is established, do not invent lore. Make the line broader, nosier, funnier, more evasive, or ask a question that invites the next beat.`;
 
+const SOCIAL_ECOSYSTEM_THREAD_RULE = `
+SOCIAL ECOSYSTEM THREAD RULE:
+- Public threads should feel like a campus comment section, not a roster roll call. Named characters can matter, but anonymous/student accounts should carry a lot of the texture.
+- Do not aim every reply at the original poster. Some replies should answer another commenter, tag a different handle, ask for receipts, complain about class, make a practical joke, misread lightly, pick a side, or talk about the campus reaction.
+- Keres does not need worship. Let the room include fans, haters, bored classmates, thirsty lurkers, rivals, skeptics, and people using the drama to procrastinate.
+- Prefer concrete social details over cryptic verdicts: tests, dorms, practice, GMZ, screenshots, professors, hallway noise, group chats, potions smoke, who is watching, who is pretending not to watch.
+- Avoid vague abstract pileups like "the vibe", "the bit", "the mess", "the chaos", "performance art", "main character energy", or "the narrative" unless the line also names the specific visible thing that triggered it.
+- A good thread has mixed temperatures: one dry joke, one practical complaint, one rumor question, one flirty or impressed line, one hater read, one named-character reply if they have a real stake.
+- Keep replies casual and human. People can be funny without sounding prophetic.`;
+
 const PLAYFUL_PUBLIC_THREAD_RULE = `
 PLAYFUL PUBLIC THREAD RULE:
 - If the visible exchange is joke-driven, flirt-driven, or built around Keres being provocative for a reaction, do not turn replies into interrogation.
@@ -1603,13 +1613,21 @@ function cleanSocialPostText(raw = '', char, player, opts = {}) {
 
 function fallbackBotLine(bot = {}) {
   const pool = [
-    'wait say less and explain worse',
-    'i need everyone involved to make this messier',
-    'this is exactly why i keep refreshing',
-    'someone tag me when this becomes evidence',
-    'no because that actually changes the vibe',
+    'i have homework and somehow this is louder',
+    'someone post the screenshot or stop whispering',
+    'my group chat is already fighting about this',
+    'who saw it happen because the hallway version makes no sense',
+    'this is why nobody studies in the common room',
   ];
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function looksLikeCrypticVomit(text = '', context = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  if (!lower.trim()) return false;
+  const abstractHits = (lower.match(/\b(?:vibe|bit|mess|chaos|energy|aura|narrative|performance art|main character|the room|loud choice|choice\.?\s*loud|efficient|timing|interesting|wild|iconic)\b/g) || []).length;
+  const concrete = /\b(?:test|class|homework|dorm|common room|hallway|professor|practice|pitch|broom|quidditch|match|team|captain|potions|runes|gmz|screenshot|receipts?|source|witness|group chat|gryffindor|slytherin|ravenclaw|hufflepuff)\b/i.test(lower);
+  return abstractHits >= 2 && !concrete;
 }
 
 function looksLikePlayfulBanterText(text = '') {
@@ -1854,7 +1872,7 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   if (char && violatesCharacterDialogueContract(clean, char)) {
     return fallbackDialogueContractLine(char, player, opts.avoidTexts || []);
   }
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || hasDialoguePatternCollision(clean, opts.avoidTexts || []) || looksLikeIdentityConfusion(clean, char) || clean.length > 360) {
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeCrypticVomit(clean, opts.contextText || '') || hasDialoguePatternCollision(clean, opts.avoidTexts || []) || looksLikeIdentityConfusion(clean, char) || clean.length > 360) {
     if (opts.bot) return fallbackBotLine(opts.bot);
     if (char && opts.playfulBanter) {
       const playfulFallback = fallbackPublicBanterLine(char, player);
@@ -2189,6 +2207,12 @@ const RECURRING_BOTS = [
   { id:'crylittlerunt', name:'cry little runt', handle:'crylittlerunt', type:'hater', bg:'#1a0000', fg:'#ff6060', initials:'cl', vibe:'unapologetic hater, brutal short comments, not gendered unless a handle makes it obvious' },
   { id:'nikitasburner', name:'nikita\'s burner', handle:'nikitasburner', type:'chaos', bg:'#2a002a', fg:'#ff66cc', initials:'nb', vibe:'obvious finsta, talks about main account drama, "anyway as i was saying"' },
   { id:'lowkeylurking', name:'lowkey lurking', handle:'lowkeylurking', type:'lurker', bg:'#0f0f1a', fg:'#888aaa', initials:'ll', vibe:'comments rarely but cuts deep, observational, sees through everyone' },
+  { id:'spellboundscribbler', name:'SpellboundScribbler', handle:'SpellboundScribbler', type:'commenter', bg:'#3a0f16', fg:'#ff7a8a', initials:'ss', vibe:'student commentator, funny but grounded, asks what actually happened and uses normal punctuation' },
+  { id:'quafflequeen85', name:'QuaffleQueen85', handle:'QuaffleQueen85', type:'sports fan', bg:'#2d0f22', fg:'#ff90cf', initials:'qq', vibe:'quidditch fan account, dramatic but specific, talks like someone watching practice clips too closely' },
+  { id:'potionspartner', name:'potionspartner', handle:'potionspartner', type:'classmate', bg:'#201d30', fg:'#cfc4ff', initials:'pp', vibe:'tired classmate, complains about tests, homework, smoke, and drama interrupting studying' },
+  { id:'slytherinsmirk', name:'SlytherinSmirk', handle:'SlytherinSmirk', type:'house stan', bg:'#0d2b1b', fg:'#65d68a', initials:'ss', vibe:'slytherin-leaning stan, smug but not poetic, enjoys rival house discomfort' },
+  { id:'gobstonesguru', name:'GobstonesGuru', handle:'GobstonesGuru', type:'casual', bg:'#2d2719', fg:'#d8b468', initials:'gg', vibe:'casual campus account, makes practical jokes and compares everything to dorm gossip' },
+  { id:'witchweekly', name:'witchweekly', handle:'witchweekly', type:'gossip', bg:'#211c24', fg:'#d5a6ff', initials:'ww', vibe:'polished gossip-reader, asks for receipts, screenshots, and who saw what' },
 ];
 
 function BotAvatar({ bot, size=36 }) {
@@ -2701,6 +2725,13 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
+const THREAD_STYLE_VERSION = 2;
+
+function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
+  return (post.charComments || []).some(cc => cc?.charId === player?.id)
+    || (post.botComments || []).some(bc => bc?.isPlayer);
+}
+
 function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPostUpdate, dms = {}, groupChats = [], eventLog = [] }) {
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
@@ -2726,8 +2757,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState(null);
   const replyInputRef = useRef(null);
-  const [botComments, setBotComments] = useState(post.botComments || []);
-  const [charComments, setCharComments] = useState(post.charComments || []);
+  const shouldRefreshGeneratedThread = !!post.threadGenerated
+    && post.threadStyleVersion !== THREAD_STYLE_VERSION
+    && !hasPlayerAuthoredThreadReply(post, player);
+  const [botComments, setBotComments] = useState(shouldRefreshGeneratedThread ? [] : (post.botComments || []));
+  const [charComments, setCharComments] = useState(shouldRefreshGeneratedThread ? [] : (post.charComments || []));
   const [likedBots, setLikedBots] = useState({});
   const [likedCharComments, setLikedCharComments] = useState({});
   const [replyingToBot, setReplyingToBot] = useState(null); // bot comment index
@@ -2747,6 +2781,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       charComments,
       comments: Math.max(post.comments || 0, visibleCommentCount),
       threadGenerated: botComments.length > 0 || charComments.length > 0 || post.threadGenerated,
+      threadStyleVersion: botComments.length > 0 || charComments.length > 0 ? THREAD_STYLE_VERSION : post.threadStyleVersion,
       threadUpdatedAt: Date.now(),
     });
   }, [botComments, charComments]);
@@ -2880,10 +2915,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       });
     weighted.sort((a,b) => b.w - a.w);
 
-    // Pick 1-3 chars by default. Direct mentions jump the line, then other characters can chime in.
-    const targetBase = isPlayerPost ? 3 : (isGMZThread ? 3 : (embarrassmentContext ? 2 : 1));
-    const targetCount = Math.min(isPlayerPost ? 5 : 4, Math.max(targetBase, directlyMentioned.length + 1 + (Math.random() < (isPlayerPost ? 0.75 : 0.35) ? 1 : 0)));
-    const targetLimit = Math.min(isPlayerPost ? 6 : 5, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
+    // Pick a smaller main-cast set so the thread can breathe as a campus comment section.
+    const broadSocialThread = isKeresPost || isGMZThread || (post.likes || 0) > 50000 || /keres|gmz|rumou?r|photo|practice|quidditch|potions|house feud|screenshot/i.test(postText);
+    const targetBase = isPlayerPost ? 2 : (isGMZThread ? 2 : (embarrassmentContext ? 2 : 1));
+    const targetCount = Math.min(isPlayerPost ? 3 : 3, Math.max(targetBase, directlyMentioned.length + (broadSocialThread && Math.random() < 0.35 ? 1 : 0)));
+    const targetLimit = Math.min(isPlayerPost ? 4 : 4, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
     let picked = [
       ...directlyMentioned,
       ...keresSparkResponders,
@@ -2946,7 +2982,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ? `\nALLY BALANCE NOTE: This thread involves ${player.name}. Do not let every custom character pile onto her. At least one reply should be on her side, amused by her, correcting the room, backing her as Slytherin, or making the pile-on funnier instead of meaner.${keresAllyResponder ? ` @${keresAllyResponder.handle} is the natural ally in this responder set.` : ''}`
       : '';
     const keresPostBiteRule = isPlayerPost
-      ? `\nKERES POST BITE NOTE: This is Keres posting on main. Give the post real bite: 3-5 custom-character replies should feel like campus reaction, not polite acknowledgments. Havoc and Rowan are frequent spark responders to her posts; if included, they should not be bland. If Havoc answers a Keres no, refusal, or distraction joke, flirt or escalate instead of recapping her move. Callum is not her friend and should never sound warmly supportive.`
+      ? `\nKERES POST BITE NOTE: This is Keres posting on main. Give the post real bite, but do not summon the whole roster. Use 1-3 custom-character replies with actual stake, then let audience accounts make the campus feel alive. Havoc and Rowan are frequent spark responders to her posts; if included, they should not be bland. If Havoc answers a Keres no, refusal, or distraction joke, flirt or escalate instead of recapping her move. Callum is not her friend and should never sound warmly supportive.`
       : '';
     const dialogueSeparationRule = multiSpeakerDialogueSeparationRule(picked, 'public feed reply');
 
@@ -2955,7 +2991,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, speculate about what GMZ left unsaid, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -2996,8 +3032,10 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
       const botCount = isGMZThread
-        ? Math.min(2, Math.max(1, 1 + (Math.random() < 0.65 ? 1 : 0)))
-        : Math.max(0, Math.min(2, (charR1.length >= 3 ? 1 : 0) + (Math.random() < 0.45 ? 1 : 0))); // 0-2, usually sparse
+        ? 3 + (Math.random() < 0.45 ? 1 : 0)
+        : broadSocialThread
+        ? 3 + (Math.random() < 0.55 ? 1 : 0)
+        : 2 + (Math.random() < 0.35 ? 1 : 0);
       const botsPicked = [...pool].sort(() => Math.random()-0.5).slice(0, botCount);
       const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
 
@@ -3010,6 +3048,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 ${transcript}
 
 ${pronounRule([author, player, ...chars])}
+${SOCIAL_ECOSYSTEM_THREAD_RULE}
 ${playfulThreadRule}
 ${gmzSpeculationRule}
 
@@ -3024,7 +3063,7 @@ Write replies from random anonymous student accounts joining the comment thread.
 - on GMZ threads, at least one account should speculate, question the alibi, infer a motive, or float a messy theory with uncertainty
 - fangirl/fanboy naturally when someone is hot, impressive, or messy
 - can call out specific @handles
-- keep it readable and not maximum-volume chaos. This is one or two people jumping in, not the whole campus at once.
+- keep it readable and not maximum-volume chaos. This is a small slice of the campus, with different motives and levels of investment.
 - do not call people "she", "girl", "mother", "queen", etc. unless the pronoun roster supports it and that exact account would say it
 - most accounts should use @handles or names instead of gendered labels
 - do NOT narrate the thread as media criticism. Avoid "discourse", "reality tv", "production value", "documentary", "screenplay", "narrative", or "the way this thread..." style recaps.
@@ -3044,12 +3083,12 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           bot: b.id,
           text: cleanSocialReplyText(parsed[i] || '', null, player, { bot: b }),
           likes: Math.floor(Math.random()*15000),
-          timestamp: baseTs + 240000 + i*45000 + Math.floor(Math.random()*180000),
+          timestamp: baseTs + 45000 + i*55000 + Math.floor(Math.random()*150000),
         })).filter(b => b.text);
       } catch(e) {}
 
       if (cancelled) return;
-      const botStartDelay = 2200 + charR1.length*(1100 + 350); // after chars finish, with breathing room
+      const botStartDelay = 700 + Math.min(charR1.length, 2)*650;
       for (let i = 0; i < bots.length; i++) {
         setTimeout(() => {
           if (cancelled) return;
@@ -3387,6 +3426,7 @@ ${identityPromptFor(targetChar)}
 Voice cues: ${targetChar.personality}.
 ${pronounRule([targetChar, player, char])}
 ${CHARACTER_TONE_RULE}
+${SOCIAL_ECOSYSTEM_THREAD_RULE}
 ${communicationStyleFor(targetChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(targetChar)}
@@ -3561,6 +3601,7 @@ ${player.name} (@${player.handle}) just commented: "${playerText}"
 ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 ${COMMUNICATION_PATTERN_RULE}
+${SOCIAL_ECOSYSTEM_THREAD_RULE}
 ${playfulThreadRule}
 ${allyFollowupRule}
 ${keresFollowupBiteRule}
@@ -3712,6 +3753,7 @@ ${identityPromptFor(cChar)}
 Voice cues: ${cChar.personality}.
 ${pronounRule([cChar, player, char])}
 ${CHARACTER_TONE_RULE}
+${SOCIAL_ECOSYSTEM_THREAD_RULE}
 ${communicationStyleFor(cChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(cChar)}

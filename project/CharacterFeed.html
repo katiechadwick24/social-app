@@ -2503,6 +2503,18 @@ function rollEventXp(range = [80, 180]) {
   return Math.floor(Math.random() * (high - low)) + low;
 }
 
+function createCustomEventDraft() {
+  return {
+    id: `custom-draft-${Date.now()}`,
+    type: 'gossip',
+    scenario: '',
+    chars: [],
+    xp: [80, 200],
+    custom: true,
+    draft: true,
+  };
+}
+
 function parseJsonArrayFromText(text = '') {
   const withoutFence = String(text || '')
     .trim()
@@ -4173,7 +4185,6 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
   const [pullStart, setPullStart] = useState(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const currentEvent = EVENT_POOL[day % EVENT_POOL.length];
 
   function beginPull(e) {
     if (e.currentTarget.scrollTop <= 0) setPullStart(e.touches[0].clientY);
@@ -4254,12 +4265,12 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
 
       {/* Feed actions */}
       <div style={{display:'flex', justifyContent:'center', gap:12, padding:'10px 16px 12px', background:C.bg, borderTop:`1px solid ${C.border}`, flexShrink:0}}>
-        <button onClick={() => onEvent(currentEvent)} style={{
+        <button onClick={() => onEvent()} style={{
           background:'linear-gradient(135deg, #4dabf7, #2280d2)', color:'#fff', border:'none',
           borderRadius:28, padding:'13px 28px', fontSize:16, fontWeight:700, cursor:'pointer',
           display:'flex', alignItems:'center', gap:8, boxShadow:'0 3px 14px rgba(77,171,247,0.28)',
         }}>
-          📣 Event <span style={{fontSize:13, fontWeight:500, opacity:0.9}}>up to +{currentEvent.xp[1]} xp</span>
+          📣 Custom Event
         </button>
         <button onClick={onCompose} style={{
           background:C.blue, color:'#fff', border:'none',
@@ -5986,36 +5997,23 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
   const [input, setInput] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [currentEvent, setCurrentEvent] = useState(event);
-  const [xp, setXp] = useState(() => rollEventXp(event?.xp));
-  const [customOpen, setCustomOpen] = useState(false);
-  const [customScenario, setCustomScenario] = useState('');
-  const [customType, setCustomType] = useState('gossip');
-  const [customChars, setCustomChars] = useState([]);
+  const draftEvent = !event?.scenario || event?.draft;
+  const [currentEvent, setCurrentEvent] = useState(draftEvent ? null : event);
+  const [xp, setXp] = useState(() => rollEventXp(event?.xp || [80, 200]));
+  const [customOpen, setCustomOpen] = useState(true);
+  const [customScenario, setCustomScenario] = useState(draftEvent ? '' : (event?.scenario || ''));
+  const [customType, setCustomType] = useState(event?.type || 'gossip');
+  const [customChars, setCustomChars] = useState(Array.isArray(event?.chars) ? event.chars : []);
   const [submittedEvent, setSubmittedEvent] = useState(null);
-  const [generatedEvents, setGeneratedEvents] = useState([]);
-  const [pulseLoading, setPulseLoading] = useState(false);
-  const [pulseError, setPulseError] = useState('');
-  const eventSelectionRef = useRef(event?.id);
-  const resultVisibleRef = useRef(false);
   const currentEventCharIds = Array.isArray(currentEvent?.chars) ? currentEvent.chars : [];
   const involved = chars.filter(c => currentEventCharIds.includes(c.id));
 
   useEffect(() => {
-    resultVisibleRef.current = !!result;
-  }, [result]);
-
-  useEffect(() => {
-    setXp(rollEventXp(currentEvent?.xp));
+    setXp(rollEventXp(currentEvent?.xp || [80, 200]));
   }, [currentEvent?.id]);
-
-  useEffect(() => {
-    generateCampusPulse({ auto: true });
-  }, []);
 
   function selectEvent(nextEvent) {
     if (!nextEvent) return;
-    eventSelectionRef.current = nextEvent.id;
     setCurrentEvent(nextEvent);
     setInput('');
     setResult(null);
@@ -6023,99 +6021,23 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
     setCustomOpen(false);
   }
 
-  async function generateCampusPulse({ auto = false } = {}) {
-    if (pulseLoading) return;
-    const selectionAtStart = eventSelectionRef.current;
-    setPulseLoading(true);
-    setPulseError('');
-    try {
-      const allChars = [...chars, player, GMZ_CHAR].filter(Boolean);
-      const roster = chars.map(c =>
-        `${c.id}: ${identityFactsFor(c)}. Voice cues: ${c.personality}. ${String(c.description || c.bio || '').slice(0, 180)}`
-      ).join('\n');
-      const recentEvents = (eventLog || [])
-        .filter(e => e?.scenario || e?.outcome || e?.action)
-        .slice(0, 8)
-        .map(e => `- ${e.scenario || e.title || 'Event'}${e.outcome ? ` Outcome: ${e.outcome}` : ''}`)
-        .join('\n');
-      const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, player, allChars, channel:'public' });
-      const recentFeed = (feed || []).slice(0, 8).map(p => {
-        const poster = allChars.find(c => c.id === p.charId);
-        return poster?.handle ? `@${poster.handle}: "${String(p.text || '').slice(0, 160)}"` : '';
-      }).filter(Boolean).join('\n');
-      const raw = await window.claude.complete({ messages:[{ role:'user', content:
-        `Generate fresh in-universe campus events for a fictional wizarding university social app.
-
-This is NOT real-world news. Do not mention real politicians, celebrities, brands, countries, tragedies, current events, or the outside internet. The event must come from Merlin's College social life: GMZ gossip, Quidditch practice, house rivalry, prefect/professor trouble, common-room politics, screenshots, anonymous tips, lineup rumors, parties, curfew, clubs, school logistics, old posts resurfacing, or teammate/friend/ex fallout.
-
-PLAYER:
-${identityFactsFor(player)}. @${player.handle} is the playable main character. Events can involve or tag her, but do not center every event on her. Often she is reacting to a mess that started without her.
-
-ROSTER IDS TO USE IN "chars":
-${roster}
-
-${pronounRule([player, ...chars])}
-${CHARACTER_TONE_RULE}
-${appMemory}
-
-RECENT VISIBLE FEED:
-${recentFeed || 'No recent visible feed.'}
-
-RECENT EVENTS TO AVOID REPEATING:
-${recentEvents || 'No recent event log yet.'}
-
-Create 3 different event candidates. Each should be a live social spark with an obvious opening for the player to respond, exploit, ignore, or make worse. Keep the roles clear: if a character is included in the rumor, they are inside it, not narrating from outside. Avoid "both of you" if one of the involved characters would be speaking from inside the event later. Use @handles in the scenario when clarity helps.
-
-Allowed types: scandal, gossip, tag, opportunity.
-Return ONLY a JSON array of 3 objects:
-[
-  {"type":"gossip","scenario":"A 25-55 word campus event written in natural feed/event-card style.","chars":["exactCharacterId"],"xp":[80,170]}
-]
-
-Rules:
-- "chars" must use exact roster ids, never handles, never "player".
-- Use 1-3 involved characters per event.
-- At least one event should not be directly about @${player.handle}.
-- Do not invent @${player.handle} liking, unliking, deleting, rewriting, screenshotting, or reposting something. If an app-action rumor is useful, make it clearly about another named character or keep the source anonymous without implying Keres did it.
-- No death, serious injury, sexual coercion, real-world news, or apocalypse stakes.
-- Do not explain the JSON.`
-      }]});
-      const parsed = parseJsonArrayFromText(raw);
-      const normalized = parsed
-        .map((item, idx) => normalizeCampusEvent(item, idx, chars))
-        .filter(Boolean)
-        .slice(0, 3);
-      if (!normalized.length) throw new Error('No usable events generated');
-      setGeneratedEvents(normalized);
-      if (!resultVisibleRef.current && (!auto || eventSelectionRef.current === selectionAtStart)) selectEvent(normalized[0]);
-    } catch(e) {
-      setPulseError('Could not generate fresh campus pulse. Built-in events are still available.');
-    }
-    setPulseLoading(false);
-  }
-
-  function reroll() {
-    const source = generatedEvents.length ? generatedEvents : EVENT_POOL;
-    const others = source.filter(e => e.id !== currentEvent.id);
-    const pool = others.length ? others : EVENT_POOL.filter(e => e.id !== currentEvent.id);
-    selectEvent(pool[Math.floor(Math.random() * pool.length)]);
-  }
-
   function applyCustomEvent() {
     if (!customScenario.trim()) return;
-    const fallbackChars = chars.slice(0, Math.min(3, chars.length)).map(c => c.id);
+    const inferredChars = mentionedCharactersInText(customScenario, chars).map(c => c.id);
+    const selectedChars = (customChars.length ? customChars : inferredChars).slice(0, 3);
     selectEvent({
       id: `custom-${Date.now()}`,
       type: customType,
       scenario: customScenario.trim(),
-      chars: customChars.length ? customChars : fallbackChars,
+      chars: selectedChars,
       xp: [80, 200],
       custom: true,
+      canon: true,
     });
   }
 
   async function handleSubmit() {
-    if (!input.trim() || loading) return;
+    if (!currentEvent?.scenario || !input.trim() || loading) return;
     setLoading(true);
     try {
       const charDescs = involved.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description}`).join('\n');
@@ -6157,6 +6079,8 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
         ...currentEvent,
         playerAction: input,
         outcome: cleaned,
+        custom: true,
+        canon: true,
         submittedAt: Date.now(),
       });
       // Generate score changes
@@ -6190,6 +6114,8 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
         outcome: cleaned,
         chars: currentEventCharIds,
         participants: ['player', ...currentEventCharIds],
+        custom: true,
+        canon: true,
         xp,
         scoreChanges,
         timestamp: Date.now(),
@@ -6211,26 +6137,15 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
         <button onClick={onClose} style={{background:'none', border:'none', color:C.blue, width:34, height:34, cursor:'pointer', fontSize:24, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>‹</button>
         <div style={{flex:1, minWidth:0}}>
           <div style={{color:C.text, fontSize:18, fontWeight:800, lineHeight:1.1}}>Event</div>
-          <div style={{color:C.muted, fontSize:12, marginTop:2}}>Campus Pulse</div>
+          <div style={{color:C.muted, fontSize:12, marginTop:2}}>Custom canon event</div>
         </div>
-        <button onClick={() => generateCampusPulse()} disabled={pulseLoading || loading} style={{
-          background: pulseLoading ? C.card2 : C.blue,
-          color: pulseLoading ? C.muted : '#fff',
-          border:'none',
-          borderRadius:18,
-          padding:'8px 13px',
-          fontSize:13,
-          fontWeight:800,
-          cursor:pulseLoading || loading ? 'default' : 'pointer',
-          flexShrink:0,
-        }}>{pulseLoading ? 'Scanning...' : 'Fresh'}</button>
       </div>
 
       <div style={{flex:1, overflowY:'auto', padding:'16px 16px 20px'}}>
         {!result ? (
           <>
             {/* Type badge + involved chars */}
-            <div style={{background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:16, marginBottom:14}}>
+            {currentEvent?.scenario && <div style={{background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:16, marginBottom:14}}>
               <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:12}}>
               {(() => { const t = EVENT_TYPES[currentEvent.type] || EVENT_TYPES.gossip; return (
                 <div style={{display:'flex', alignItems:'center', gap:5, background:`${t.color}18`, border:`1px solid ${t.color}44`, borderRadius:20, padding:'4px 10px'}}>
@@ -6243,13 +6158,12 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
               </div>
               </div>
               <p style={{color:C.text, fontSize:16, lineHeight:1.62, fontWeight:550}}>{currentEvent.scenario}</p>
-            </div>
+            </div>}
 
-            {/* XP + reroll row */}
+            {/* XP + custom row */}
             <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:16}}>
-              <button onClick={reroll} style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, cursor:'pointer', flexShrink:0}} title="Reroll">🎲</button>
-              <button onClick={() => setCustomOpen(o => !o)} style={{background: customOpen || currentEvent.custom ? `${C.blue}18` : C.card2, color: customOpen || currentEvent.custom ? C.blue : C.text, border:`1px solid ${customOpen || currentEvent.custom ? C.blue : C.border}`, borderRadius:10, padding:'0 12px', minHeight:36, fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0}}>
-                Custom
+              <button onClick={() => setCustomOpen(o => !o)} style={{background: customOpen || currentEvent?.custom ? `${C.blue}18` : C.card2, color: customOpen || currentEvent?.custom ? C.blue : C.text, border:`1px solid ${customOpen || currentEvent?.custom ? C.blue : C.border}`, borderRadius:10, padding:'0 12px', minHeight:36, fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0}}>
+                {customOpen ? 'Hide Custom' : currentEvent?.scenario ? 'Edit Custom' : 'Custom'}
               </button>
               <div style={{flex:1, background:C.card2, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
                 <span style={{color:C.muted, fontSize:12}}>XP reward</span>
@@ -6257,47 +6171,7 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
               </div>
             </div>
 
-            {(generatedEvents.length > 0 || pulseLoading || pulseError) && (
-              <div style={{marginBottom:16}}>
-                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
-                  <span style={{color:C.muted, fontSize:12, fontWeight:800, letterSpacing:'0.04em'}}>CAMPUS PULSE</span>
-                  {pulseError && <span style={{color:C.orange, fontSize:11, textAlign:'right', maxWidth:210}}>{pulseError}</span>}
-                </div>
-                {pulseLoading && generatedEvents.length === 0 ? (
-                  <div style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:14, padding:'13px 14px', color:C.muted, fontSize:13}}>Scanning campus...</div>
-                ) : (
-                  <div style={{display:'flex', flexDirection:'column', gap:8}}>
-                    {generatedEvents.map(ev => {
-                      const active = ev.id === currentEvent.id;
-                      const t = EVENT_TYPES[ev.type] || EVENT_TYPES.gossip;
-                      const evChars = (ev.chars || []).map(id => chars.find(c => c.id === id)).filter(Boolean);
-                      return (
-                        <button key={ev.id} onClick={() => selectEvent(ev)} style={{
-                          width:'100%',
-                          textAlign:'left',
-                          background: active ? `${t.color}12` : C.card2,
-                          border:`1px solid ${active ? t.color : C.border}`,
-                          borderRadius:14,
-                          padding:'11px 12px',
-                          cursor:'pointer',
-                        }}>
-                          <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
-                            <span style={{fontSize:13}}>{t.emoji}</span>
-                            <span style={{color:active ? t.color : C.muted, fontSize:11, fontWeight:800, letterSpacing:'0.04em'}}>{t.label.toUpperCase()}</span>
-                            <div style={{display:'flex', marginLeft:'auto'}}>
-                              {evChars.map((c,i) => <div key={c.id} style={{marginLeft:i>0?-7:0}}><Avatar char={c} size={22}/></div>)}
-                            </div>
-                          </div>
-                          <p style={{color:C.text, fontSize:13, lineHeight:1.45}}>{ev.scenario}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {customOpen && (
+            {(customOpen || !currentEvent?.scenario) && (
               <div style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:14, padding:12, marginBottom:16}}>
                 <label style={{color:C.muted, fontSize:12, marginBottom:6, display:'block'}}>CUSTOM EVENT</label>
                 <textarea
@@ -6334,21 +6208,23 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
                 <button onClick={applyCustomEvent} disabled={!customScenario.trim()} style={{
                   width:'100%', background: customScenario.trim() ? C.blue : C.bg, color: customScenario.trim() ? '#fff' : C.muted,
                   border:'none', borderRadius:12, padding:'11px', fontSize:14, fontWeight:800, cursor:customScenario.trim() ? 'pointer' : 'default',
-                }}>Use Custom Event</button>
+                }}>{currentEvent?.scenario ? 'Update Custom Event' : 'Use Custom Event'}</button>
               </div>
             )}
 
-            {/* Input */}
-            <textarea value={input} onChange={e => setInput(e.target.value)}
-              placeholder="What do you do?"
-              style={{width:'100%', background:C.card2, border:`1px solid ${input.trim() ? C.blue+'66' : C.border}`, borderRadius:14, padding:'12px 14px', color:C.text, fontSize:14, outline:'none', resize:'none', minHeight:100, marginBottom:14, transition:'border-color 0.2s'}}
-            />
+            {currentEvent?.scenario && <>
+              {/* Input */}
+              <textarea value={input} onChange={e => setInput(e.target.value)}
+                placeholder="What do you do?"
+                style={{width:'100%', background:C.card2, border:`1px solid ${input.trim() ? C.blue+'66' : C.border}`, borderRadius:14, padding:'12px 14px', color:C.text, fontSize:14, outline:'none', resize:'none', minHeight:100, marginBottom:14, transition:'border-color 0.2s'}}
+              />
 
-            <button onClick={handleSubmit} disabled={!input.trim() || loading} style={{
-              width:'100%', background: input.trim() ? C.text : C.card2, color: input.trim() ? C.bg : C.muted,
-              border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700,
-              cursor: input.trim() ? 'pointer' : 'default', transition:'background 0.2s, color 0.2s',
-            }}>{loading ? 'Playing out…' : 'Submit'}</button>
+              <button onClick={handleSubmit} disabled={!input.trim() || loading} style={{
+                width:'100%', background: input.trim() ? C.text : C.card2, color: input.trim() ? C.bg : C.muted,
+                border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700,
+                cursor: input.trim() ? 'pointer' : 'default', transition:'background 0.2s, color 0.2s',
+              }}>{loading ? 'Playing out…' : 'Submit'}</button>
+            </>}
           </>
         ) : (
           <div>
@@ -6608,7 +6484,6 @@ function NotificationsScreen({ chars, player, feed, onOpenThread, onCharClick })
 // ─── Activity Screen ──────────────────────────────────────────────
 function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenChat, onOpenThread, section, setSection }) {
   const allChars = [...chars, player];
-  const currentEvent = EVENT_POOL[Math.floor(Date.now()/1000) % EVENT_POOL.length];
   const activeSection = section || 'posts';
   const setActiveSection = setSection || (() => {});
 
@@ -6647,7 +6522,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
       <div style={{padding:'16px 16px 0', borderBottom:`1px solid ${C.border}`, position:'sticky', top:0, background:C.bg, zIndex:5}}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
           <h1 style={{color:C.text, fontSize:22, fontWeight:700}}>Activity</h1>
-          <button onClick={() => onEvent(currentEvent)} style={{
+          <button onClick={() => onEvent()} style={{
             background:C.blue, color:'#fff', border:'none', borderRadius:20,
             padding:'7px 16px', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6,
           }}>📣 Event</button>
@@ -6705,7 +6580,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
             <div style={{padding:'40px 16px', textAlign:'center'}}>
               <div style={{fontSize:36, marginBottom:12}}>📣</div>
               <p style={{color:C.muted, fontSize:14}}>No events yet.</p>
-              <button onClick={() => onEvent(currentEvent)} style={{marginTop:12, background:C.blue, color:'#fff', border:'none', borderRadius:20, padding:'10px 24px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
+              <button onClick={() => onEvent()} style={{marginTop:12, background:C.blue, color:'#fff', border:'none', borderRadius:20, padding:'10px 24px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
                 Trigger your first event
               </button>
             </div>
@@ -7667,7 +7542,7 @@ ${BANNED_PHRASES_RULE}`
   }
 
   function handleEvent(ev) {
-    setActiveEvent(ev);
+    setActiveEvent(ev || createCustomEventDraft());
   }
 
   async function triggerGMZPost(context, { anonymousTip = false } = {}) {
@@ -7831,26 +7706,29 @@ ${BANNED_PHRASES_RULE}`
     });
 
     setActiveEvent(null);
-    // Proactive DM: 40% chance a reactive char slides in
-    const reactiveChars = chars.filter(c => !['reserved','quiet'].some(q => (c.personality||'').includes(q)));
+    // Proactive DM: only characters explicitly attached to the custom event can slide in.
+    const reactiveChars = involved.filter(c => !['reserved','quiet'].some(q => (c.personality||'').includes(q)));
     if (reactiveChars.length && Math.random() < 0.4) {
       const pick = reactiveChars[Math.floor(Math.random()*reactiveChars.length)];
       setTimeout(() => triggerProactiveDM(pick, `the event: ${ev.scenario.slice(0,60)}`), 3000);
     }
-    // GMZ always turns submitted event info into anonymous gossip. The tipster/source stays hidden.
-    const involvedHandles = evCharIds.map(id => {
-      const found = [...chars, player].find(c => c.id === id);
-      return found?.handle ? `@${found.handle}` : id;
-    }).join(', ');
-    const gmzTip = [
-      `Anonymous raw tip about a ${ev.type || 'gossip'} event.`,
-      `Public setup: "${ev.scenario || ''}"`,
-      ev.playerAction ? `Submitted action/details: "${ev.playerAction}"` : '',
-      ev.outcome ? `What happened next: "${ev.outcome}"` : '',
-      involvedHandles ? `People involved or named in the tip: ${involvedHandles}.` : '',
-      'Turn this into public gossip. Do not reveal who submitted the tip.'
-    ].filter(Boolean).join('\n');
-    setTimeout(() => triggerGMZPost(gmzTip, { anonymousTip: true }), 3500 + Math.random()*4500);
+    // GMZ only posts when the custom event explicitly names the gossip account.
+    const shouldTriggerGMZ = /\b(?:gmz|@gmz|gossip account|anonymous tip)\b/i.test(`${ev.scenario || ''} ${ev.outcome || ''}`);
+    if (shouldTriggerGMZ) {
+      const involvedHandles = evCharIds.map(id => {
+        const found = [...chars, player].find(c => c.id === id);
+        return found?.handle ? `@${found.handle}` : id;
+      }).join(', ');
+      const gmzTip = [
+        `Anonymous raw tip about a ${ev.type || 'gossip'} event.`,
+        `Public setup: "${ev.scenario || ''}"`,
+        ev.playerAction ? `Submitted action/details: "${ev.playerAction}"` : '',
+        ev.outcome ? `What happened next: "${ev.outcome}"` : '',
+        involvedHandles ? `People involved or named in the tip: ${involvedHandles}.` : '',
+        'Turn this into public gossip. Do not reveal who submitted the tip.'
+      ].filter(Boolean).join('\n');
+      setTimeout(() => triggerGMZPost(gmzTip, { anonymousTip: true }), 3500 + Math.random()*4500);
+    }
   }
 
   // Show loading screen until save file is read

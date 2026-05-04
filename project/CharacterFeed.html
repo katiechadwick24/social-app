@@ -402,7 +402,7 @@ SOCIAL APP FORMAT:
 - Feed posts should feel typed into an app: casual, specific, current, and a little incomplete. No author narration, no explaining the whole context.
 - Replies should react to the live post, tag, embarrassment, rumor, or relationship pressure. Do not turn replies into polished speeches.
 - DMs can be more private, but still message-like: brief, evasive, direct, teasing, checking in, fishing, or pressing. No novel paragraphs unless the user pushes for depth.
-- Group chats should overlap socially. People can ignore the exact question, answer the wrong part, pile on, deflect, or make it worse. Everyone listed in the group chat is present and can read the message. Do not talk about a present member like they are absent; address them with @handle, "you", or "captain" if that fits.
+- Group chats should overlap socially, but direct address still matters. If someone names a person or asks them a question, that person answers the literal premise first; others can pile on after. People may answer the wrong part, deflect, or make it worse only when the latest message is not a direct question to them. Everyone listed in the group chat is present and can read the message. Do not talk about a present member like they are absent; address them with @handle, "you", or "captain" if that fits.
 - Quidditch is a public pressure system, not the whole world. Let posts also pull from classes, dorms, exes, siblings, parties, rumors, punishments, professors, injuries, money, reputation, and who was seen with whom.
 - Use handles, screenshots, clips, likes, deleted posts, subtweets, quote-post energy, comment threads, edits, and GMZ gossip as story mechanics only when they are visible evidence or framed as uncertain rumor. Do not invent Keres liking, unliking, deleting, rewriting, screenshotting, or reposting something unless the user, current event, or visible app state explicitly says she did.
 - Make public vs private matter. A line on the feed should carry reputation risk; a DM can dodge, soften, threaten, flirt, or ask for the version nobody posted.
@@ -1447,6 +1447,127 @@ function fallbackChatLine(char, player, group = false, avoidTexts = []) {
   return pool[start];
 }
 
+function directlyAddressedMembers(text = '', members = [], player = null) {
+  const raw = String(text || '');
+  return (members || []).filter(member => {
+    if (!member || member.id === player?.id) return false;
+    const handle = member.handle ? escapeRegExp(member.handle.replace(/^@/, '')) : '';
+    const first = member.name ? escapeRegExp(member.name.split(/\s+/)[0]) : '';
+    const full = member.name ? escapeRegExp(member.name) : '';
+    return !!(
+      (handle && new RegExp(`@${handle}\\b`, 'i').test(raw)) ||
+      (full && new RegExp(`(?:^|[\\s,])${full}(?:[\\s?.!,]|$)`, 'i').test(raw)) ||
+      (first && first.length >= 3 && new RegExp(`(?:^|[\\s,])${first}(?:[\\s?.!,]|$)`, 'i').test(raw))
+    );
+  });
+}
+
+function groupMemberTeamLine(member, player) {
+  const label = member?.id === player?.id ? 'Keres' : (member?.name?.split(' ')[0] || member?.handle || 'Member');
+  const team = teamFor(member) || houseFor(member) || 'no team';
+  return `${label}: ${team}`;
+}
+
+function groupConversationGroundingLine(latestText = '', member = null, members = [], player = null) {
+  const lines = [];
+  const directTargets = directlyAddressedMembers(latestText, members, player);
+  const targetHandles = directTargets.map(c => `@${c.handle}`).join(', ');
+  if (directTargets.some(c => c.id === member?.id)) {
+    lines.push(`DIRECT TURN: ${player?.name || 'The player'} directly addressed you in the latest message. Answer the literal question or premise first, then add your joke, dodge, or jab.`);
+  } else if (directTargets.length) {
+    lines.push(`DIRECT TURN: The latest message is addressed to ${targetHandles}. Do not answer as them or steal their answer. If you speak, react after their answer from your own angle.`);
+  }
+  const lower = String(latestText || '').toLowerCase().replace(/[’]/g, "'");
+  const teamContext = /\b(?:we|us|our)\b/i.test(lower)
+    && /\b(?:slytherin|gryff|gryffindor|match|quidditch|team|pitch|score|doing\s+fine|we'?re\s+fine|we\s+are\s+fine|doing\s+just\s+fine)\b/i.test(lower);
+  if (teamContext) {
+    const playerSide = teamFor(player) || houseFor(player) || 'Keres';
+    const memberSide = teamFor(member) || houseFor(member) || 'their own side';
+    lines.push(`TEAM PRONOUNS: In this match/team context, when ${player?.name || 'Keres'} says "we/us/our", she means her side (${playerSide}). If your side is ${memberSide}, answer as that side's opponent or rival. Do not rewrite her "we" into your team.`);
+  }
+  if (/\b(?:slytherin|gryff|gryffindor|match|quidditch|team|pitch|score)\b/i.test(lower)) {
+    lines.push(`MATCH BANTER MAP: ${[player, ...(members || []).filter(m => m?.id !== player?.id)].filter(Boolean).map(m => groupMemberTeamLine(m, player)).join('; ')}. Keep it fun-competitive and a little mean, not incoherent or genuinely cruel.`);
+  }
+  return lines.length ? `CONVERSATION GROUNDING:\n${lines.join('\n')}` : '';
+}
+
+function directResponseRoutingLine(latestText = '', members = [], player = null) {
+  const directTargets = directlyAddressedMembers(latestText, members, player);
+  if (!directTargets.length) return '';
+  return `DIRECT RESPONSE ROUTING: The latest message directly names ${directTargets.map(c => `@${c.handle}`).join(', ')}. The first response should come from ${directTargets[0].handle ? `@${directTargets[0].handle}` : directTargets[0].name}. Other speakers may pile on only after that answer.`;
+}
+
+function orderedGroupResponders(aiMembers = [], latestText = '', members = [], player = null) {
+  const directTargets = directlyAddressedMembers(latestText, members, player).filter(t => aiMembers.some(m => m.id === t.id));
+  if (!directTargets.length) return aiMembers;
+  const directIds = new Set(directTargets.map(t => t.id));
+  return [...directTargets, ...aiMembers.filter(m => !directIds.has(m.id))];
+}
+
+function fallbackGroupTeamBanterLine(char, player, opts = {}) {
+  const playerSide = (teamFor(player) || houseFor(player) || 'your side').toLowerCase();
+  const charSide = (teamFor(char) || houseFor(char) || 'my side').toLowerCase();
+  const pool = {
+    havoc: [
+      `${playerSide} doing fine is cute. ${charSide} still hits harder.`,
+      `fine is adorable. ask me again after ${charSide} makes it ugly.`,
+      'keep calling it fine. i like confidence before impact.',
+    ],
+    rowan: [
+      'i object to everyone sounding this confident before warmups.',
+      'fine is a dangerous word before either team gets hit.',
+      'my objection is mostly to saying this much before the match.',
+    ],
+    callum: [
+      'fine is not a scoreline. prove it on the pitch.',
+      'confidence is useful after execution, not before it.',
+      'doing fine is not the same as winning cleanly.',
+    ],
+    briar: [
+      'fine becomes useful when someone can defend it under pressure.',
+      'save the confidence for the scoreboard.',
+      'both teams can talk after someone holds formation.',
+    ],
+  }[char?.id] || [
+    'fine is a brave thing to say before match day.',
+    'save that confidence for the scoreboard.',
+    'that is match-day confidence talking. dangerous habit.',
+  ];
+  const start = Math.floor(Math.random() * pool.length);
+  for (let i = 0; i < pool.length; i++) {
+    const candidate = pool[(start + i) % pool.length];
+    if (!fallbackWasUsed(char?.id, candidate) && !hasDialoguePatternCollision(candidate, opts.avoidTexts || [])) {
+      trackFallback(char?.id, candidate);
+      return candidate;
+    }
+  }
+  trackFallback(char?.id, pool[start]);
+  return pool[start];
+}
+
+function fallbackGroupQuestionLine(char, player, opts = {}) {
+  const latest = String(opts.latestUserText || '').toLowerCase();
+  const pool = /\bobjection\b/i.test(latest) ? {
+    rowan: ['my objection is mostly to saying this much before the match.', 'i object to everyone sounding this confident before warmups.', 'the objection is that both teams are talking like the scoreboard already agreed.'],
+    havoc: ['rowan objects as a hobby. i respect the consistency.', 'his objection is that i said the fun part out loud.', 'rowan objects when the bad idea has witnesses. professional of him.'],
+  }[char?.id] : null;
+  const options = pool || {
+    havoc: ['say it cleaner and i might even answer the right part.', 'i heard you. i am choosing the funnier answer.', 'fine. actual answer first, then bad idea.'],
+    rowan: ['ask it cleanly and i will even pretend not to enjoy answering.', 'actual answer? dangerous habit.', 'i heard the question. unfortunately.'],
+    callum: ['ask a clean question, get a clean answer.', 'that answer needed better aim.', 'fine. direct question, direct answer.'],
+  }[char?.id] || ['fair question. inconveniently.', 'fine. actual answer first.', 'that is the useful version of the question.'];
+  const start = Math.floor(Math.random() * options.length);
+  for (let i = 0; i < options.length; i++) {
+    const candidate = options[(start + i) % options.length];
+    if (!fallbackWasUsed(char?.id, candidate) && !hasDialoguePatternCollision(candidate, opts.avoidTexts || [])) {
+      trackFallback(char?.id, candidate);
+      return candidate;
+    }
+  }
+  trackFallback(char?.id, options[start]);
+  return options[start];
+}
+
 function looksLikeJudePsychoanalysis(text = '') {
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
   return /\btamsin\b/i.test(lower)
@@ -1489,7 +1610,13 @@ function looksLikeReactionBlameSpiral(text = '') {
 }
 
 function fallbackUnsupportedBlameLine(char, player, group = false, avoidTexts = []) {
-  const pool = {
+  const groupPool = {
+    havoc: ['wrong target, same mess. still funny.', 'fine. vague chaos, then. worse for everyone.', 'then say what you meant before rowan starts translating.'],
+    rowan: ['then the accusation needs better aim.', 'vague is where bad arguments hide. tragic for everyone.', 'then ask the actual question and stop feeding havoc material.'],
+    callum: ['then say that cleanly.', 'wrong target, same circus.', 'if the evidence is bad, stop giving it oxygen.'],
+    briar: ['then everyone can stop making bad evidence louder.', 'if that was not the point, say the point.', 'useful correction. annoying that it was needed.'],
+  };
+  const pool = group && groupPool[char?.id] ? groupPool[char.id] : {
     silas: ['then rowan left it vague. gossip loves bad evidence.', 'if there is no evidence, stop feeding the rumor.', 'the accusation was sloppy. i hate sloppy.'],
     jude: ['then everyone is yelling at a shadow. productive little circus.', 'annoying. not your paperwork, then.', 'if they guessed wrong, that is almost funnier.'],
     rowan: ['then mystery person stays mysterious. tragic for my caption.', 'i saw motion, not a confession.', 'then everyone else did the heavy lifting. convenient.'],
@@ -1515,6 +1642,25 @@ function fallbackUnsupportedBlameLine(char, player, group = false, avoidTexts = 
   return pool[start];
 }
 
+function looksLikeTeamPronounFlip(text = '', latestUserText = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  const user = String(latestUserText || '').toLowerCase().replace(/[’]/g, "'");
+  const userTeamClaim = /\b(?:we|us|our)\b/i.test(user)
+    && /\b(?:fine|match|team|slytherin|gryff|gryffindor|quidditch|score|pitch|practice)\b/i.test(user);
+  if (!userTeamClaim) return false;
+  return /\bwe'?re\s+doing\s+better\s+than\s+fine\b/i.test(lower)
+    || /\byou'?re\s+just\s+mad\b/i.test(lower)
+    || /\bmad\s+(?:it'?s|that'?s|this\s+is)\s+working\b/i.test(lower);
+}
+
+function looksLikeGroupDirectQuestionDodge(text = '', opts = {}) {
+  if (!opts.directlyAddressed) return false;
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  const user = String(opts.latestUserText || '').toLowerCase().replace(/[’]/g, "'");
+  if (!/[?]|\b(?:what|why|how|which|who)\b/i.test(user)) return false;
+  return /\b(?:ask\s+me\s+when|actually\s+curious|just\s+watching|you'?re\s+just|you\s+only\s+asked|performing|sell\s+it|mad\s+it'?s\s+working)\b/i.test(lower);
+}
+
 function cleanChatText(text = '', char = null, player = null, group = false, opts = {}) {
   if (group && typeof group === 'object') {
     opts = group;
@@ -1530,6 +1676,12 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
     .trim();
   if (char?.id === 'rowan' && /\bshould i be worried\b/i.test(clean)) {
     return 'tamsin is always already worried. the question is how much evidence she has.';
+  }
+  if (group && char && looksLikeTeamPronounFlip(clean, opts.latestUserText || '')) {
+    return fallbackGroupTeamBanterLine(char, player, opts);
+  }
+  if (group && char && looksLikeGroupDirectQuestionDodge(clean, opts)) {
+    return fallbackGroupQuestionLine(char, player, opts);
   }
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
     return fallbackUnsupportedBlameLine(char, player, group, opts.avoidTexts || []);
@@ -2217,6 +2369,247 @@ function groupRelationshipAddsByChar(groupChats = {}) {
     });
     return acc;
   }, {});
+}
+
+const FEED_RELATIONSHIP_TRACKER_VERSION = 1;
+
+function normalizeRelationshipId(id, player = {}) {
+  if (!id) return '';
+  return id === player?.id ? 'player' : id;
+}
+
+function isFeedRelationshipId(id, player = {}) {
+  const normalized = normalizeRelationshipId(id, player);
+  return !!normalized && normalized !== '__gmz__';
+}
+
+function charByHandle(handle = '', roster = []) {
+  const clean = String(handle || '').replace(/^@/, '').toLowerCase();
+  if (!clean) return null;
+  return (roster || []).find(c => (c?.handle || '').toLowerCase() === clean) || null;
+}
+
+function feedRelationshipTargets({ actorId, text = '', replyTo = '', post = {}, roster = [], player = null, includePostOwner = true } = {}) {
+  const actor = normalizeRelationshipId(actorId, player);
+  if (!isFeedRelationshipId(actor, player)) return [];
+  const targets = new Set();
+  const add = (id) => {
+    const normalized = normalizeRelationshipId(id, player);
+    if (isFeedRelationshipId(normalized, player) && normalized !== actor) targets.add(normalized);
+  };
+  if (replyTo) add(charByHandle(replyTo, roster)?.id);
+  mentionedCharactersInText(text, roster).forEach(c => add(c.id));
+  if (/\b(?:leave\s+(?:her|him|them|@?\w+)\s+alone|defend(?:ing|ed)?|backing|backed|not\s+wrong|you'?re\s+right|you\s+are\s+right|agree|on\s+your\s+side|stand(?:ing)?\s+up\s+for)\b/i.test(text)) {
+    mentionedCharactersInText(post?.text || '', roster).forEach(c => add(c.id));
+  }
+  if (includePostOwner) add(post?.charId);
+  return [...targets];
+}
+
+function scoreFeedRelationshipText(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  if (!lower.trim()) return null;
+  const flirt = /\b(?:hot|pretty|beautiful|gorgeous|cute|cheekbones|staring|looked\s+twice|can'?t\s+look\s+away|cannot\s+look\s+away|distract(?:ed|ing|ion)?|flirt(?:ing|ed)?|kiss(?:ing|ed)?|date|fine|type|trouble|dangerous)\b/i.test(lower);
+  const support = /\b(?:got\s+your\s+back|i'?ve\s+got\s+you|backing|backed|defend(?:ing|ed)?|protect(?:ing|ed)?|stand(?:ing)?\s+up\s+for|leave\s+(?:her|him|them|@?\w+)\s+alone|not\s+wrong|you'?re\s+right|you\s+are\s+right|agree|on\s+your\s+side|team\s+@?\w+|my\s+team|our\s+team|our\s+mess|with\s+you|fair\s+point|good\s+point)\b/i.test(lower);
+  const warm = /\b(?:thank|thanks|respect|proud|appreciate|impressed|good|useful|funny|laughed|saved|solid|clean\s+shot|nice\s+one)\b/i.test(lower);
+  const playful = /\b(?:lmao|lmfao|lol|roast|ate|bold|unhinged|insane|fascinated|obsessed|beautifully\s+unhelpful|terrible\s+answer|excellent\s+timing)\b/i.test(lower);
+  const hardConflict = /\b(?:hate|despise|can'?t\s+stand|cannot\s+stand|pathetic|shut\s+up|go\s+away|back\s+off|idiot|stupid|useless|trash|liability)\b/i.test(lower);
+  const conflict = /\b(?:wrong|try\s+again|made\s+it\s+worse|made\s+this\s+worse|worse|mess|fumble|bad\s+look|problem|mistake|clean\s+up|fix\s+this|not\s+helping|terrible|awful|unhelpful|explain\s+yourself|embarrassing)\b/i.test(lower);
+  let value = 0;
+  let label = 'public interaction';
+  if (support) { value += 0.7; label = 'public support'; }
+  if (flirt) { value += 0.8; label = 'public flirting'; }
+  if (warm) { value += 0.35; label = label === 'public interaction' ? 'public warmth' : label; }
+  if (playful) { value += 0.2; label = label === 'public interaction' ? 'public banter' : label; }
+  if (hardConflict) { value -= 0.9; label = 'public conflict'; }
+  else if (conflict) { value -= 0.45; label = label === 'public interaction' ? 'public friction' : label; }
+  if (support && conflict && value < 0.35) value = 0.35;
+  if (flirt && conflict && value < 0.25) value = 0.25;
+  value = +clamp(value, -1.15, 1.25).toFixed(2);
+  if (Math.abs(value) < 0.15) return null;
+  return { value, label };
+}
+
+function aggregateFeedRelationshipChanges(changes = []) {
+  const grouped = new Map();
+  changes.forEach(ch => {
+    if (!ch || !ch.actorId || !ch.targetId || typeof ch.value !== 'number') return;
+    const key = `${ch.actorId}->${ch.targetId}`;
+    const current = grouped.get(key) || { ...ch, value: 0, count: 0, samples: [] };
+    current.value += ch.value;
+    current.count += 1;
+    if (ch.sample && current.samples.length < 2) current.samples.push(ch.sample);
+    grouped.set(key, current);
+  });
+  return [...grouped.values()]
+    .map(ch => ({ ...ch, value: +clamp(ch.value, -3, 3).toFixed(2) }))
+    .filter(ch => Math.abs(ch.value) >= 0.15);
+}
+
+function scanFeedRelationshipInteractions(feed = [], chars = [], player = {}, trackedKeys = new Set()) {
+  const roster = [...(chars || []), player].filter(Boolean);
+  const rawChanges = [];
+  const trackedNow = [];
+  let changedFeed = false;
+
+  const nextFeed = (feed || []).map(post => {
+    let nextPost = post;
+    const postId = post?.id || post?.timestamp || Math.random();
+    const addInteraction = ({ key, actorId, text, replyTo = '', targets = [], mark }) => {
+      if (trackedKeys.has(key)) {
+        mark();
+        return;
+      }
+      trackedNow.push(key);
+      const tone = scoreFeedRelationshipText(text);
+      mark();
+      if (!tone) return;
+      targets.forEach(targetId => {
+        rawChanges.push({
+          key,
+          actorId: normalizeRelationshipId(actorId, player),
+          targetId: normalizeRelationshipId(targetId, player),
+          value: tone.value,
+          label: tone.label,
+          replyTo,
+          sample: String(text || '').replace(/\s+/g, ' ').trim().slice(0, 110),
+        });
+      });
+    };
+
+    const mainKey = `feedrel:${FEED_RELATIONSHIP_TRACKER_VERSION}:${postId}:post`;
+    const mainTargets = feedRelationshipTargets({ actorId: post?.charId, text: post?.text || '', post, roster, player, includePostOwner: false });
+    if (!post?.feedRelationshipTrackedVersion && mainTargets.length) {
+      addInteraction({
+        key: mainKey,
+        actorId: post.charId,
+        text: post.text || '',
+        targets: mainTargets,
+        mark: () => {
+          if (nextPost === post) nextPost = { ...post };
+          nextPost.feedRelationshipTrackedVersion = FEED_RELATIONSHIP_TRACKER_VERSION;
+          changedFeed = true;
+        },
+      });
+    }
+
+    if (post?.reply && !post.reply.relationshipTrackedVersion) {
+      const replyTargets = feedRelationshipTargets({ actorId: post.reply.charId, text: post.reply.text || '', post, roster, player, includePostOwner: true });
+      if (replyTargets.length) {
+        addInteraction({
+          key: `feedrel:${FEED_RELATIONSHIP_TRACKER_VERSION}:${postId}:reply`,
+          actorId: post.reply.charId,
+          text: post.reply.text || '',
+          targets: replyTargets,
+          mark: () => {
+            if (nextPost === post) nextPost = { ...post };
+            nextPost.reply = { ...post.reply, relationshipTrackedVersion: FEED_RELATIONSHIP_TRACKER_VERSION };
+            changedFeed = true;
+          },
+        });
+      }
+    }
+
+    if (Array.isArray(post?.charComments)) {
+      let commentsChanged = false;
+      const nextComments = post.charComments.map((cc, idx) => {
+        if (cc?.relationshipTrackedVersion) return cc;
+        const targets = feedRelationshipTargets({ actorId: cc?.charId, text: cc?.text || '', replyTo: cc?.replyTo || '', post, roster, player, includePostOwner: true });
+        if (!targets.length) return cc;
+        let nextComment = cc;
+        addInteraction({
+          key: `feedrel:${FEED_RELATIONSHIP_TRACKER_VERSION}:${postId}:char:${idx}:${cc?.timestamp || ''}`,
+          actorId: cc.charId,
+          text: cc.text || '',
+          replyTo: cc.replyTo || '',
+          targets,
+          mark: () => {
+            nextComment = { ...cc, relationshipTrackedVersion: FEED_RELATIONSHIP_TRACKER_VERSION };
+            commentsChanged = true;
+            changedFeed = true;
+          },
+        });
+        return nextComment;
+      });
+      if (commentsChanged) {
+        if (nextPost === post) nextPost = { ...post };
+        nextPost.charComments = nextComments;
+      }
+    }
+
+    return nextPost;
+  });
+
+  return { feed: nextFeed, changedFeed, changes: aggregateFeedRelationshipChanges(rawChanges), trackedKeys: trackedNow };
+}
+
+function relationshipBaseForKey(char = {}, relKey = '') {
+  const rels = char.relationships || {};
+  if (Object.prototype.hasOwnProperty.call(rels, relKey)) {
+    const saved = Number(rels[relKey]);
+    return Number.isFinite(saved) ? saved : 0;
+  }
+  return relKey === 'player' ? defaultPlayerRelationshipFor(char) : 50;
+}
+
+function applyFeedRelationshipChanges(list = [], changes = [], player = {}) {
+  if (!changes.length) return list;
+  return (list || []).map(char => {
+    let relationships = char.relationships || {};
+    let changed = false;
+    changes.forEach(ch => {
+      const actor = normalizeRelationshipId(ch.actorId, player);
+      const target = normalizeRelationshipId(ch.targetId, player);
+      let relKey = null;
+      if (actor === char.id) relKey = target === 'player' ? 'player' : target;
+      if (actor === 'player' && target === char.id) relKey = 'player';
+      if (!relKey || relKey === char.id || relKey === '__gmz__') return;
+      const current = relationshipBaseForKey(char, relKey);
+      relationships = {
+        ...relationships,
+        [relKey]: +clamp(current + ch.value, -100, 100).toFixed(2),
+      };
+      changed = true;
+    });
+    return changed ? { ...char, relationships } : char;
+  });
+}
+
+function feedRelationshipLogEntry(changes = [], chars = [], player = {}) {
+  if (!changes.length) return null;
+  const all = [...(chars || []), player].filter(Boolean);
+  const byId = (id) => all.find(c => normalizeRelationshipId(c.id, player) === normalizeRelationshipId(id, player));
+  const scoreChanges = changes.map(ch => {
+    const actor = byId(ch.actorId);
+    const target = byId(ch.targetId);
+    const avatarId = ch.actorId === 'player' ? ch.targetId : ch.actorId;
+    const actorHandle = actor?.handle ? `@${actor.handle}` : ch.actorId;
+    const targetHandle = target?.handle ? `@${target.handle}` : ch.targetId;
+    return {
+      avatar: avatarId === 'player' ? ch.targetId : avatarId,
+      label: `${actorHandle} -> ${targetHandle}`,
+      value: ch.value,
+      unit: '%',
+      flavor: `${ch.label}${ch.samples?.[0] ? `: "${ch.samples[0]}"` : ''}`,
+    };
+  });
+  const summary = changes.map(ch => {
+    const actor = byId(ch.actorId);
+    const target = byId(ch.targetId);
+    return `${actor?.handle ? `@${actor.handle}` : ch.actorId} ${ch.value > 0 ? '+' : ''}${ch.value} with ${target?.handle ? `@${target.handle}` : ch.targetId}`;
+  }).join('; ');
+  return {
+    id: `feed-rel-${Date.now()}`,
+    type: 'feed_relationship',
+    visibility: 'public',
+    title: 'Feed relationship shift',
+    text: 'Public feed interactions changed relationship scores.',
+    outcome: summary,
+    participants: [...new Set(changes.flatMap(ch => [ch.actorId, ch.targetId]).map(id => normalizeRelationshipId(id, player)))],
+    relationshipApplied: true,
+    scoreChanges,
+    timestamp: Date.now(),
+  };
 }
 
 function effectivePlayerRelationship(char, eventLog = [], dms = {}, groupChats = []) {
@@ -5329,7 +5722,7 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, onClose, onE
     openingLine();
   }, []);
 
-  function buildScenePrompt(history) {
+  function buildScenePrompt(history, latestText = '') {
     const roster = participants.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description?.slice(0,220)||c.bio}\n${communicationStyleFor(c, 'live scene')}`).join('\n');
     return `Write a live scene with these characters:
 ${roster}
@@ -5338,6 +5731,7 @@ ${pronounRule([player, ...participants])}
 ${COMMUNICATION_PATTERN_RULE}
 ${multiSpeakerDialogueSeparationRule(participants, 'live scene')}
 ${threadPatternVarietyGuard(history ? [history] : [])}
+${latestText ? directResponseRoutingLine(latestText, participants, player) : ''}
 
 SCENE: ${setting.label} — ${setting.sub}
 VIBE: ${vibe.label} ${vibe.emoji}
@@ -5373,7 +5767,7 @@ ${BANNED_PHRASES_RULE}`;
         m.role === 'user' ? `${player.name}: ${m.text}` : `${getSceneChar(m.charId)?.name}: ${m.text}`
       ).join('\n');
       const res = await window.claude.complete({
-        messages:[{ role:'user', content: buildScenePrompt(history) + `\n\nRespond to: ${userMsg.text}\nChoose the character or characters who would naturally answer. In a group scene, not everyone needs to speak every turn, but more than one may jump in if the moment invites it.\nReturn ONLY a JSON array of 1-3 objects like [{"handle":"rowancade","text":"..."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. No narration. No inner monologue spelled out.` }]
+        messages:[{ role:'user', content: buildScenePrompt(history, userMsg.text) + `\n\nRespond to: ${userMsg.text}\nChoose the character or characters who would naturally answer. In a group scene, not everyone needs to speak every turn, but if the player directly names one participant, that participant answers first. More than one may jump in only if the moment invites it.\nReturn ONLY a JSON array of 1-3 objects like [{"handle":"rowancade","text":"..."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. No narration. No inner monologue spelled out.` }]
       });
       const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
       const usedSceneTexts = msgs.map(m => m.text || '').filter(Boolean);
@@ -6005,7 +6399,8 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
 
   async function send() {
     if (!input.trim() || loading) return;
-    const userMsg = { role:'user', charId:'player', text: input.trim(), id: Date.now(), ts: Date.now() };
+    const outgoingText = input.trim();
+    const userMsg = { role:'user', charId:'player', text: outgoingText, id: Date.now(), ts: Date.now() };
     const newMsgs = [...msgs, userMsg];
     setMsgs(newMsgs);
     setGroupChats(gs => gs.map(g => g.id === group.id ? {...g, messages: newMsgs} : g));
@@ -6023,14 +6418,19 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
       return `${sender?.name || 'Someone'}: "${m.text}"`;
     }).join('\n');
     const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, player, allChars, channel:'group', audienceIds: group.members || [] });
-    const groupIntentLine = dmIntentLine(input);
+    const groupIntentLine = dmIntentLine(outgoingText);
+    const directTargets = directlyAddressedMembers(outgoingText, members, player);
+    const directTargetIds = new Set(directTargets.map(c => c.id));
+    const responderOrder = orderedGroupResponders(aiMembers, outgoingText, members, player);
 
     let updatedMsgs = [...newMsgs];
     const sharedMoveLog = { usedMoves: new Set(), usedShapes: new Set() };
-    for (const member of aiMembers) {
+    for (const member of responderOrder) {
       const quietTypes = ['reserved','quiet','deadpan','minimal'];
       const isQuiet = quietTypes.some(q => (member.personality||'').includes(q));
-      if (Math.random() < (isQuiet ? 0.4 : 0.15)) continue; // sometimes they don't respond
+      const isDirectTarget = directTargetIds.has(member.id);
+      const silenceChance = isDirectTarget ? 0 : directTargets.length ? (isQuiet ? 0.65 : 0.45) : (isQuiet ? 0.4 : 0.15);
+      if (Math.random() < silenceChance) continue; // sometimes they don't respond
 
       try {
         const otherMembers = members.filter(m => m.id !== member.id).map(m => `${identityFactsFor(m)}; ${m.personality || m.bio}`).join('; ');
@@ -6046,7 +6446,8 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
             [...sharedMoveLog.usedMoves].join(', ') +
             '. Do not use these. Choose a different social action from your character\'s lane.'
           : '';
-        const groupAvoidTexts = [historyStr, input, generatedThisTurn].filter(Boolean);
+        const groupAvoidTexts = [historyStr, outgoingText, generatedThisTurn].filter(Boolean);
+        const groundingLine = groupConversationGroundingLine(outgoingText, member, members, player);
         const reply = await window.claude.complete({ messages:[{ role:'user', content:
           `Write as ${member.name} in a group chat called "${group.name}".
 ${identityPromptFor(member)}
@@ -6062,17 +6463,18 @@ Recent campus feed:\n${recentFeed}
 Chat history:\n${historyStr}
 Wider memory available to everyone here:
 ${appMemory}
+${groundingLine}
 ${generatedThisTurn ? `Other characters already answered this turn:\n${generatedThisTurn}\nDo not echo their key verb, punchline scaffold, or social move. Answer from your own dialogue contract.` : ''}
 ${moveBan}
 ${threadPatternVarietyGuard(groupAvoidTexts)}
-${player.name} just said: "${input}"
+${player.name} just said: "${outgoingText}"
 Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound. Teammate loyalty still matters: if someone outside the team swings at one of your people, the usual move is to back your teammate first, then roast them privately or as "our mess."
 ${groupIntentLine}
-Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Everyone listed as present can see this message. If you mean someone in the chat, talk to them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. Sometimes ignore the question and say something tangential. Be natural.
+Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Everyone listed as present can see this message. If the latest message directly asks you something, answer the actual question before any tangent. If it directly asks someone else something, do not answer for them. If you mean someone in the chat, talk to them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. Be natural.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]
         });
-        const charMsg = { role:'char', charId: member.id, text: cleanChatText(reply, member, player, true, { avoidTexts: groupAvoidTexts }), id: Date.now() + Math.random(), ts: Date.now() };
+        const charMsg = { role:'char', charId: member.id, text: cleanChatText(reply, member, player, true, { avoidTexts: groupAvoidTexts, latestUserText: outgoingText, directlyAddressed: isDirectTarget }), id: Date.now() + Math.random(), ts: Date.now() };
         const replyFlags = dialoguePatternFlags(charMsg.text);
         replyFlags.forEach(f => sharedMoveLog.usedMoves.add(f));
         if (/\?$/.test((charMsg.text || '').trim())) sharedMoveLog.usedShapes.add('question');
@@ -6567,7 +6969,7 @@ function LogScoreRow({ ch, allChars }) {
           : <span style={{fontSize:18, width:24, textAlign:'center'}}>{ch.icon}</span>
         }
         <span style={{color:C.text, fontWeight:700, fontSize:14, flex:1}}>
-          {relChar ? `@${relChar.handle}` : ch.label}
+          {relChar ? (ch.label || `@${relChar.handle}`) : ch.label}
         </span>
         <span style={{color, fontWeight:800, fontSize:15}}>{displayVal}</span>
       </div>
@@ -7102,6 +7504,7 @@ function App() {
   const [day, setDayRaw] = useState(DEFAULT_DAY);
   const [socialPresence, setSocialPresenceRaw] = useState(DEFAULT_SOCIAL_PRESENCE);
   const [stateLoaded, setStateLoaded] = useState(false);
+  const feedRelationshipKeysRef = useRef(new Set());
 
   function cloneDefault(value) {
     return JSON.parse(JSON.stringify(value));
@@ -7181,6 +7584,19 @@ function App() {
       window.removeEventListener('beforeunload', flushSave);
     };
   }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, socialPresence]);
+
+  useEffect(() => {
+    if (!stateLoaded || !feed?.length) return;
+    const scan = scanFeedRelationshipInteractions(feed, chars, player, feedRelationshipKeysRef.current);
+    if (!scan.changedFeed && !scan.changes.length) return;
+    scan.trackedKeys.forEach(key => feedRelationshipKeysRef.current.add(key));
+    if (scan.changedFeed) setFeedRaw(scan.feed.slice(0, 60));
+    if (scan.changes.length) {
+      const logEntry = feedRelationshipLogEntry(scan.changes, chars, player);
+      setCharsRaw(prev => applyFeedRelationshipChanges(prev, scan.changes, player));
+      if (logEntry) setEventLogRaw(prev => [logEntry, ...prev].slice(0, 30));
+    }
+  }, [stateLoaded, feed, chars, player]);
 
   function addSocialPresence(gains) {
     setSocialPresence(prev => ({
@@ -7473,9 +7889,12 @@ ${BANNED_PHRASES_RULE}` }
     const lastMsg = recentMessages[recentMessages.length - 1];
     const lastSpeakerId = lastMsg?.role === 'user' ? 'player' : lastMsg?.charId;
     const candidates = aiMembers.filter(m => m.id !== lastSpeakerId);
-    const pool = candidates.length ? candidates : aiMembers;
+    const latestUserText = [...recentMessages].reverse().find(m => m?.role === 'user')?.text || context;
+    const directTargets = directlyAddressedMembers(latestUserText, members, player).filter(t => aiMembers.some(m => m.id === t.id));
+    const pool = directTargets.length ? directTargets : (candidates.length ? candidates : aiMembers);
     const weighted = pool.map(member => {
       let w = 1 + Math.random();
+      if (directTargets.some(t => t.id === member.id)) w += 4;
       if (/chaotic|shameless|loud|nosy|restless|funny|provocative|reactive|opportunistic/i.test(member.personality || '')) w += 1.2;
       if (/quiet|composed|controlled|disciplined|reserved/i.test(member.personality || '')) w -= 0.35;
       return { member, w };
@@ -7493,6 +7912,7 @@ ${BANNED_PHRASES_RULE}` }
     }).join('\n');
     const otherMembers = members.filter(m => m.id !== member.id).map(m => identityFactsFor(m)).join('; ');
     const popInAvoidTexts = [recentFeed, historyStr, context].filter(Boolean);
+    const groundingLine = groupConversationGroundingLine(latestUserText, member, members, player);
 
     try {
       const reply = await window.claude.complete({ messages:[{ role:'user', content:
@@ -7511,15 +7931,16 @@ ${recentFeed || '(quiet feed)'}
 ${phraseRepetitionGuard(feed, recentFeed, { charId: member.id, dms, groupChats })}
 Recent group chat history:
 ${historyStr || '(new group chat)'}
+${groundingLine}
 ${threadPatternVarietyGuard(popInAvoidTexts)}
 
 The chat went quiet. Pop back in naturally because of this context: ${context}
 Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound. Teammate loyalty still matters: if someone outside the team swings at one of your people, the usual move is to back your teammate first, then roast them privately or as "our mess."
-Write ONE short in-character group chat message. Everyone listed as present can see it. If you mean someone in the chat, address them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. It can revive the joke, @someone, ask a messy question, flirt, complain, gossip, or drag the conversation sideways. It should feel like a person came back after a lull, not like a formal announcement. 4-22 words. No quotes.
+Write ONE short in-character group chat message. Everyone listed as present can see it. If the latest unanswered message directly asked you something, answer that premise before riffing. If it asked someone else, do not answer for them. If you mean someone in the chat, address them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. It can revive the joke, @someone, ask a messy question, flirt, complain, gossip, or drag the conversation sideways. It should feel like a person came back after a lull, not like a formal announcement. 4-22 words. No quotes.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]
       });
-      const clean = cleanChatText(reply, member, player, true, { avoidTexts: popInAvoidTexts });
+      const clean = cleanChatText(reply, member, player, true, { avoidTexts: popInAvoidTexts, latestUserText, directlyAddressed: directTargets.some(t => t.id === member.id) });
       if (!clean) return;
       const charMsg = { role:'char', charId: member.id, text: clean, id: Date.now() + Math.random(), ts: Date.now(), revived: true };
       setGroupChats(gs => gs.map(g => g.id === group.id

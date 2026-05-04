@@ -390,7 +390,7 @@ SOCIAL APP FORMAT:
 - DMs can be more private, but still message-like: brief, evasive, direct, teasing, checking in, fishing, or pressing. No novel paragraphs unless the user pushes for depth.
 - Group chats should overlap socially. People can ignore the exact question, answer the wrong part, pile on, deflect, or make it worse. Everyone listed in the group chat is present and can read the message. Do not talk about a present member like they are absent; address them with @handle, "you", or "captain" if that fits.
 - Quidditch is a public pressure system, not the whole world. Let posts also pull from classes, dorms, exes, siblings, parties, rumors, punishments, professors, injuries, money, reputation, and who was seen with whom.
-- Use handles, screenshots, clips, likes, deleted posts, subtweets, quote-post energy, comment threads, edits, and GMZ gossip as story mechanics.
+- Use handles, screenshots, clips, likes, deleted posts, subtweets, quote-post energy, comment threads, edits, and GMZ gossip as story mechanics only when they are visible evidence or framed as uncertain rumor. Do not invent Keres liking, unliking, deleting, rewriting, screenshotting, or reposting something unless the user, current event, or visible app state explicitly says she did.
 - Make public vs private matter. A line on the feed should carry reputation risk; a DM can dodge, soften, threaten, flirt, or ask for the version nobody posted.
 
 CANON AND FACT RULES:
@@ -399,6 +399,9 @@ CANON AND FACT RULES:
 - If a character would not know something, they cannot state it as fact. They may speculate, ask, misread, subtweet, gossip, or say "rumor is", but keep uncertainty visible.
 - GMZ and gossip accounts can exaggerate public rumors, but they still cannot create hard canon. Frame unconfirmed claims as rumor, alleged sightings, sources, or timeline speculation.
 - Prefer reacting to visible app evidence: the post text, tags, replies, likes, clips, screenshots, current relationship notes, and recent messages.
+- Ambiguous feed language like "someone liked it", "someone deleted a post", or "someone screenshotted it" is not proof that Keres did it. Do not turn "someone" into Keres in DMs, replies, or follow-up posts unless she was explicitly named/tagged or the user says it was her.
+- If Keres denies a concrete action or asks where the evidence is, accept that correction as the current DM reality. Do not repeat the invented accusation harder.
+- Keres is not responsible for other people's attraction, thirst, jealousy, screenshots, replies, or audience reaction. Characters can tease the social effect around her, but do not scold her for "making" someone notice her, looking at her, liking her, or reacting to her unless she explicitly baited that exact move in visible context.
 - Preserve visible thread chronology. The original post happened first, then replies happened in timestamp/order. Do not say Keres "started it", "swung first", "showed up swinging", or caused the fight if the visible thread shows another character attacked, tagged, or escalated before her. If Keres spells out the order of events, treat that as corrective context unless the responding character is deliberately lying or baiting, and make that intentional.
 - If a character is named, tagged, or clearly included as one of the people in a rumor/callout, they must speak from inside that role. They should use I/me/we/us or address the other named person directly, not talk like an outside commentator saying "both of you", "you two", "the two of them", or "those two" unless they are genuinely not one of the named participants.
 - Do not accuse someone of dodging, not showing up, refusing to play, missing a game, ducking a challenge, or failing the team unless the visible post/thread explicitly says that happened. If you need pressure without facts, use "you keep changing the framing", "say what you mean", "that sounded cleaner in your head", or a playful pointed question.
@@ -421,6 +424,7 @@ ANTI-AI PATTERNS:
 - Avoid defensive banter dodges when there is no actual argument: "didn't know you were keeping score", "you're thinking of X", "you just proved X right", "why aren't you already", "if you could actually X, you'd do it", "for the record", "actually", "i'm just the guy/person with X", or any "not me, that other person" sidestep. If someone teases you, take the hit, laugh, flirt, throw a sharper joke back, or make it worse.
 - Avoid sticky phrase loops and repeated joke scaffolds: "respect the bit", "respect the commitment", "commitment to the bit", "respect the distraction", or repeated "respect the X" constructions.
 - Avoid spectator recap language unless it is very rare and specific: "discourse", "reality tv", "production value", "documentary mode", "screenplay", "narrative", "transparently", "performative care".
+- Avoid blamey psychoanalysis of Keres for other people's reactions: "you know what you're doing", "you know exactly what gets a reaction", "you like the reaction more than the person", "performing for likes", "hand him ammunition", "that's you being readable", or similar.
 - Avoid generic labels like menace unless the line has a specific target and reason.
 - If a line is only there to sound sharp, flirty, threatening, or profound, rewrite it toward the character's actual motive and the live social situation.`;
 
@@ -433,6 +437,7 @@ CHARACTER TONE BALANCE:
 - Keres is visibly hot, provocative, and talented. People notice. Attraction, curiosity, thirst, showing off, jealousy, trying not to look impressed, and stupid flirting should regularly color posts/replies, especially when photos of her are posted. Do not sanitize this into abstract respect.
 - Not everyone is attracted to Keres, but even non-attracted characters can notice the social effect of her looks, confidence, and bad-idea energy.
 - Keres is often chasing fun, attention, laughter, and a good reaction, not always hiding a tactical angle. Do not make everyone respond to her like she is running a conspiracy. If her post is playful, provocative, flirty, or clearly joke-driven, most characters should meet the energy, laugh despite themselves, tease back, escalate the joke, flirt, or pretend to be annoyed while enjoying it. Save "what's your angle" suspicion for genuinely strategic, secretive, or high-stakes moments.
+- Do not twist Keres being hot, confident, or playful into her being at fault for someone else's reaction. If Havoc, Rowan, Silas, Jude, or the audience reacts, that is their behavior too. The fun is in the messy mutual social weather, not everyone scolding Keres like she orchestrated every glance.
 - Public joke replies like "eat shit", "i'm laughing", "cry about it", "skill issue", or obvious deflections are valid banter beats. Do not treat them as a failure to answer unless the thread is actually about danger, betrayal, evidence, or a real accusation.
 - Most public chatter should feel alive: jokes, thirst, teasing, bad ideas, overreactions, petty side comments, stupid observations, flirtation, and people replying because they are bored.
 - Do not make the whole cast sound like captains giving discipline speeches. Quidditch matters, but they also have classes, dorm drama, parties, crushes, petty rivalries, gossip, bad sleep, snacks, bets, deleted posts, and terrible judgment.
@@ -1228,6 +1233,55 @@ function looksLikeJudePsychoanalysis(text = '') {
     || /\bwhich is worse because\b/i.test(lower);
 }
 
+function looksLikeUnsupportedPlayerActionClaim(text = '', latestUserText = '', player = null) {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  const user = String(latestUserText || '').toLowerCase().replace(/[’]/g, "'");
+  const playerHandle = player?.handle ? escapeRegExp(String(player.handle).replace(/^@/, '').toLowerCase()) : 'keresvalen';
+  const playerName = player?.name ? escapeRegExp(String(player.name).toLowerCase()) : 'keres';
+  const playerAnchor = `(?:\\b(?:you|${playerHandle}|${playerName}|keres)\\b|@${playerHandle}\\b)`;
+  const actionVerb = `(?:liked?|unliked?|deleted|rewrote|reposted|screenshotted|screen.?shotted|typed\\s+and\\s+deleted)`;
+  const hardClaim = new RegExp(`${playerAnchor}.{0,100}\\b${actionVerb}\\b|\\b${actionVerb}\\b.{0,100}${playerAnchor}`, 'i').test(lower);
+  const likeUnlikeLoop = /\b(?:liked\s+it\.?\s+unliked\s+it|liked(?:\s+\w+){0,6}\s+unliked|unliked(?:\s+\w+){0,6}\s+liked|like\s+and\s+unlike|liked\s+and\s+unliked|deleted(?:\s+\w+){0,6}\s+rewrote|rewrote(?:\s+\w+){0,6}\s+times|typed\s+and\s+deleted)\b/i.test(lower);
+  const userCorrected = /\b(?:i\s+didn'?t|i\s+did\s+not|didn'?t\s+do\s+that|i\s+never|what\s+(?:tweet|post)|where'?s\s+the\s+evidence|what\s+am\s+i\s+doing|what\s+says\s+i|how\s+is\s+.*\s+my\s+fault|not\s+my\s+fault)\b/i.test(user);
+  return hardClaim || (userCorrected && likeUnlikeLoop);
+}
+
+function looksLikePhantomEngagementGossip(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\bsomeone\b.{0,90}\b(?:like\s+and\s+unlike|liked\s+and\s+unliked|liked(?:\s+\w+){0,6}\s+unliked|unliked(?:\s+\w+){0,6}\s+liked|deleted(?:\s+\w+){0,6}\s+rewrote|rewrote(?:\s+\w+){0,6}\s+times|typed\s+and\s+deleted)\b/i.test(lower);
+}
+
+function looksLikeReactionBlameSpiral(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\byou\s+know\s+(?:exactly\s+)?what\s+(?:you'?re|you are)\s+doing\b/i.test(lower)
+    || /\byou\s+know\s+(?:exactly\s+)?what\s+gets\s+a\s+reaction\b/i.test(lower)
+    || /\bknowing\s+it\s+works\s+and\s+doing\s+it\s+anyway\b/i.test(lower)
+    || /\bnot\s+about\s+fault\.?\s+about\s+knowing\b/i.test(lower)
+    || /\byou\s+like\s+the\s+reaction\s+more\s+than\s+you\s+like\s+the\s+actual\s+person\b/i.test(lower)
+    || /\bperforming\s+for\s+likes\b/i.test(lower)
+    || /\bhand\s+him\s+ammunition\b/i.test(lower)
+    || /\bthat'?s\s+you\s+being\s+readable\b/i.test(lower)
+    || /\byou'?re\s+being\s+readable\b/i.test(lower)
+    || /\byou\s+keep\s+doing\s+it\s+anyway\b/i.test(lower)
+    || /\b(?:you\s+made|you\s+make|you\s+wanted)\s+(?:him|her|them|everyone)\s+(?:react|look|notice|want)\b/i.test(lower);
+}
+
+function fallbackUnsupportedBlameLine(char, player, group = false) {
+  const pool = {
+    silas: ['then rowan left it vague. useful for gossip, useless as evidence.', 'if there is no evidence, stop feeding the rumor.', 'fine. the accusation was sloppy. i hate sloppy.'],
+    jude: ['then everyone is yelling at a shadow. productive little circus.', 'annoying. not your paperwork, then.', 'if they guessed wrong, that is almost funnier.'],
+    rowan: ['then mystery person stays mysterious. tragic for my caption.', 'fair. i saw motion, not a confession.', 'then everyone else did the heavy lifting. useful.'],
+    havoc: ['then everyone is arguing with a ghost. solid afternoon.', 'not you, then. still funny. worse, maybe.', 'great. anonymous chaos. my favorite kind to deny.'],
+    callum: ['then say that. vague rumors are bad evidence.', 'if they guessed wrong, correct the record and move.', 'fine. wrong target, same circus.'],
+    briar: ['then everyone can stop making bad evidence louder.', 'if it was not you, say so cleanly.', 'useful correction. annoying that it was needed.'],
+    tamsin: ['then the useful question is who benefited from making it sound like you.', 'noted. vague rumors remain terrible evidence.', 'then they are reacting to a version they invented. familiar problem.'],
+    elara: ['then they wanted a culprit and chose the pretty one. dull of them.', 'wrong accusation, excellent noise. typical.', 'then let them embarrass themselves with certainty.'],
+    theo: ['correction logged. the caption was stronger than the evidence.', 'then the story is worse journalism than usual. impressive.', 'anonymous behavior, public confidence. classic mistake.'],
+    milo: ['wait, so everyone guessed and committed? bold. terrible. kind of inspiring.', 'then this is not evidence, it is vibes wearing a hat.', 'wrong target. still chaotic. i am learning.'],
+  }[char?.id] || ['then the rumor is doing more work than the evidence.', 'wrong target, loud room.', 'if it was not you, that changes the joke.'];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 function cleanChatText(text = '', char = null, player = null, group = false, opts = {}) {
   if (group && typeof group === 'object') {
     opts = group;
@@ -1243,6 +1297,9 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
     .trim();
   if (char?.id === 'rowan' && /\bshould i be worried\b/i.test(clean)) {
     return 'tamsin is always already worried. the question is how much evidence she has.';
+  }
+  if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
+    return fallbackUnsupportedBlameLine(char, player, group);
   }
   if (char?.id === 'jude' && looksLikeJudePsychoanalysis(clean)) {
     return fallbackChatLine(char, player, group);
@@ -1441,7 +1498,7 @@ function cleanSocialPostText(raw = '', char, player, opts = {}) {
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, opts.avoidTexts || []) || clean.length > 280) {
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikePhantomEngagementGossip(clean) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, opts.avoidTexts || []) || clean.length > 280) {
     return fallbackPostForChar(char, player, opts.avoidTexts || []);
   }
   return clean;
@@ -1567,6 +1624,9 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     .replace(/^reply:\s*/i, '')
     .replace(/^comment:\s*/i, '')
     .trim();
+  if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
+    return fallbackUnsupportedBlameLine(char, player, false);
+  }
   if (char && looksLikeInterrogationSpiral(clean)) {
     return fallbackPublicBanterLine(char, player);
   }
@@ -4159,6 +4219,10 @@ RULES:
 - Treat house/team/player status like fixed identity. If you are talking about your own house or Quidditch team, use we/us/our. If you are not on a Quidditch team, do not speak as if you play.
 - Be brief: 1-3 sentences max unless pushed.
 - Reference the feed naturally if it's relevant — bring up posts, gossip, what others did.
+- Treat recent feed posts as visible evidence and rumor, not omniscient truth. If a post says "someone" liked, unliked, deleted, rewrote, screenshotted, or reposted something, do not decide that "someone" was ${player.name} unless she was explicitly named/tagged or she says so.
+- Do not claim ${player.name} liked, unliked, deleted, rewrote, screenshotted, reposted, or performed any other app action unless it appears in the current prompt, app memory, visible feed with her handle/name, or her own DM message.
+- If ${player.name} denies doing a concrete action, asks what evidence exists, or says everyone else is reacting, accept that correction and pivot. Do not restate the accusation as if repetition makes it true.
+- Do not scold ${player.name} for someone else's attraction, attention, likes, screenshots, jealousy, or audience reaction. You can tease her effect on the room, but the other person still owns their reaction.
 - Remember prior events, scenes, DMs, and group chats from app memory when they are relevant to your character. Do not borrow another character's concerns, priorities, or relationships as your own.
 - If ${player.name} tells you what happened in a completed scene, accept it as the current shared reality and move forward from it. Do not remain in a pre-scene "are you okay / what happened" mentality after she has recapped the scene.
 - Do not ask whether you should understand an obvious relationship consequence. If someone mentions your sister, best friend, ex, captain, or teammate reacting to gossip about you, reason from what you know about that person only if that relationship is actually yours.
@@ -5749,6 +5813,7 @@ Rules:
 - "chars" must use exact roster ids, never handles, never "player".
 - Use 1-3 involved characters per event.
 - At least one event should not be directly about @${player.handle}.
+- Do not invent @${player.handle} liking, unliking, deleting, rewriting, screenshotting, or reposting something. If an app-action rumor is useful, make it clearly about another named character or keep the source anonymous without implying Keres did it.
 - No death, serious injury, sexual coercion, real-world news, or apocalypse stakes.
 - Do not explain the JSON.`
       }]});
@@ -6807,6 +6872,8 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
 - 1-2 sentences max, punchy
 - Optionally tag 0-2 handles if natural
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
+- Do not invent a concrete app action like someone liked/unliked, deleted/rewrote, screenshotted, or reposted something unless that action is visible in recent context. If you need gossip with thin context, keep it broader, funnier, nosier, or ask a question.
+- Do not make Keres the culprit for anonymous or ambiguous feed behavior unless @${player.handle} is explicitly named in the prompt or recent context.
 - NO hashtags, NO quotes around the post, JUST the post text
 - Do not introduce yourself, list identity facts, summarize rules, or mention prompts/context.
 ${BANNED_PHRASES_RULE}` }] });
@@ -6926,6 +6993,7 @@ ${BANNED_PHRASES_RULE}` }] });
         messages: [
           { role:'user', content: sysPrompt },
           { role:'user', content: `You just saw something happen (${context}). Slide into ${player.name}'s DMs with a short, in-character opening message. Something you'd actually say given your personality. Do not default to anger; teasing, flirting, checking in, joking, or being nosy can fit better. 1-2 sentences max.
+Do not turn ambiguous public gossip into a hard accusation against ${player.name}. If the context is about what other people did, react to their behavior or ask what happened instead of blaming her for the reaction.
 Output ONLY the DM message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${CHARACTER_TONE_RULE}
 ${BANNED_PHRASES_RULE}` }

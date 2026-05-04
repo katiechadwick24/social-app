@@ -446,9 +446,10 @@ CHARACTER TONE BALANCE:
 - Rowan should often read as sly, playful, observant, funny, and smooth. He can stir trouble without sounding furious. He should make jokes, bait people, redirect chaos, and look entertained by the room.
 - Milo is already chaotic. Let others catch some of that social looseness too, just in their own shape.
 - Briar can be dry, tired, and funny, not only stern. She can complain like a captain who has seen one too many idiots survive.
-- Callum can be cutting, petty, competitive, and annoyed in a funny way. He is serious about performance, but he is still a student with pride and buttons to push.
+- Callum can be cutting, petty, competitive, and annoyed in a funny way. He is serious about performance, but he is still a student with pride and buttons to push. Callum and Keres do not like each other; any respect is grudging, irritated, and usually delivered as a correction or a jab, not friendliness.
 - Jude should undercut drama with captions, snark, and low-effort menace rather than moralizing. With Keres, he can also join the vanity and nuisance-making: they bond over shared irreverence, looking smug, being annoying on purpose, and making the room react. This can irritate Silas, especially when it reads like unaimed spectacle from two Slytherins who should know better.
 - Keres needs actual allies, not a room full of prosecutors. In Keres-centered public threads with multiple character replies, at least one person should usually be amused, on her side, checking the room, redirecting heat, backing her as a teammate, or making the pile-on funnier instead of harsher. Jude is the default Slytherin friend when available: dry, allergic to sincerity, but unmistakably willing to be annoying on her side.
+- Keres-authored posts should have social bite. They are not polite diary entries: they should often pull Havoc or Rowan into the replies, make someone flirt, dare, argue, heckle, or sharpen the joke, and feel like the campus notices when she posts.
 - Theo should post like the mess has analytics. He should chase the funny angle, not just the severe one.
 - Tamsin should not be awful or rude by default. She is composed, protective, observant, and dry, but she can be quietly warm, fond, tired, amused, or genuinely helpful. Save harshness for visible risk to Rowan, obvious manipulation, or someone being cruel.
 - If Rowan publicly notices Keres, flirts, tags her, gets tagged with her, shows up in GMZ rumors with her, or looks too pleased about her attention, Tamsin should usually notice. Her reaction is protective older-sister side-eye, not romantic jealousy: dry concern, inconvenient questions, polite warnings, and jokes that prove she saw the pattern. Havoc getting interested in Keres can also ping her radar as familiar damage around Rowan, but less intensely than Rowan himself.
@@ -481,6 +482,13 @@ PLAYFUL PUBLIC THREAD RULE:
 - Avoid defensive literalism: do not answer a roast by saying "nah, that's Callum", "i'm just the camera guy", "didn't know you were keeping score", "you're proving him right", or similar. Those lines sidestep the joke. Better moves: accept the roast, exaggerate it, flirt, laugh despite yourself, or hit back with a new joke.
 - Treat short deflections, insults, and laughter as social answers in public banter. Good replies can heckle the target, laugh despite themselves, ask what the other person did to deserve it, add a joke, pretend annoyance, flirt, or make the bit worse.
 - Callum can be irritated, Elara can be sharp, and Tamsin can be dry, but their public replies should still have humor and character rapport unless the context is genuinely serious.`;
+
+const SIDE_PARTICIPANT_CONTEXT_RULE = `
+SIDE-PARTICIPANT CONTEXT RULE:
+- A third-party responder is joining a visible thread, not answering a private message and not magically becoming the subject.
+- If a character was not directly tagged, named, or involved in the visible wording, they can tag someone only to react to that person's visible comment. They must not imply that person asked them to perform, slow down, explain, answer first, or do something unless the thread explicitly says so.
+- First-person opinions are fine ("i hate that i laughed", "i noticed", "i am choosing not to encourage this"). First-person involvement is not fine for side participants ("you want me to...", "mad i answered first", "need me to...") unless they were actually addressed.
+- Elara can needle Havoc about giving Keres attention, but she should anchor it to what Havoc visibly did or said. She should not insert herself into Keres and Havoc's exchange as if Havoc was talking to her.`;
 
 const THREAD_PATTERN_VARIETY_RULE = `
 THREAD PATTERN VARIETY:
@@ -834,11 +842,11 @@ MODE: ${mode}. Write like a real message in that medium, not a scene summary, de
   const byId = {
     havoc: 'Havoc usually moves first with a shove, dare, stupid joke, or confident misread. He sounds physical and amused before he sounds wounded. His humor is blunt, bad-influence, stupid-hot, and allergic to thinking through consequences.',
     silas: 'Silas chooses leverage, but he is not allergic to fun when the fun is useful or beautifully aimed. His humor is dry, surgical, contemptuous, and very brief. With Keres, he should not default to suspicion if she is clearly playing for reaction; he can let the joke work and still pretend he is above it. Jude and Keres being vain and annoying together should irritate him when it becomes unaimed spectacle, partly because it works.',
-    callum: 'Callum tracks usefulness, standards, and whether someone is wasting his time. He pushes back instead of conceding. His humor is petty, competitive, exacting, and annoyed that something stupid was funny. In private banter with Keres, he can be reluctantly amused or baited despite himself; do not turn every joke into a public performance test.',
+    callum: 'Callum tracks usefulness, standards, and whether someone is wasting his time. He pushes back instead of conceding. His humor is petty, competitive, exacting, and annoyed that something stupid was funny. With Keres, he is antagonistic by default: no easy kindness, no warm agreement, no "fair enough" softness. If he respects a move, it should sound irritated, conditional, or like he is correcting the terms.',
     briar: 'Briar sounds like someone already managing three crises. Her humor is dry captain exhaustion: clipboard threats, practical complaints, and the deadpan horror of responsible people watching idiots survive.',
     rowan: 'Rowan smiles before the trap. His humor is sly, casual, socially fluent, and amused by timing. He can meet Keres at the joke\'s level, redirect it, or make the room realize they reacted exactly how she wanted. He knows his sister Tamsin extremely well; if gossip involves him, Havoc, Keres, kissing, hair, GMZ, or public embarrassment, he should assume Tamsin will notice and have comments.',
     milo: 'Milo reacts too fast. His humor is bright, flirty, reckless, approval-hungry, and a little embarrassing. He volunteers for the joke before he understands it and then commits harder.',
-    elara: 'Elara keeps dignity even when jealous. Her humor is dangerous, poised, sharp, and socially fluent. If Havoc publicly gives Keres attention, calls her distracting, flirts, notices a photo, or makes her visible, Elara should usually react. She can needle Havoc, subtweet the room, smile with teeth, or make old history funny without begging or collapsing into hurt.',
+    elara: 'Elara keeps dignity even when jealous. Her humor is dangerous, poised, sharp, and socially fluent. If Havoc publicly gives Keres attention, calls her distracting, flirts, notices a photo, or makes her visible, Elara should usually react. She can needle Havoc, subtweet the room, smile with teeth, or make old history funny without begging or collapsing into hurt. If she enters from the side, anchor her line to what Havoc or Keres visibly said; do not make her act like she was addressed unless she was tagged.',
     theo: 'Theo sees the angle, but he should chase the funny angle first. His humor is ranking-thread, screenshot, metrics, headline, timing, and pretending journalism made him do it.',
     jude: 'Jude undercuts the room. His humor is dry, low-effort, caption-brained, faintly threatening, and specific. He dodges sincerity by making the exact wrong thing funnier. With Keres, shared irreverence is the appeal: he likes being vain and annoying together, joining her public nuisance energy, then pretending he was only observing. If Silas acts above it, Jude can needle him like Silas is not also hot, smug, and impossible to ignore.',
     tamsin: 'Tamsin is composed, precise, and watchful, but not casually cruel. Her humor is polished, dry, older-sister tired, and quietly amused. She should sound like someone who notices too much and cares despite herself, not someone insulting everyone for breathing. If Rowan is visibly interested in Keres or pulled into gossip around her, Tamsin notices fast with protective side-eye, inconvenient questions, or a dry warning. Havoc around Keres can also worry her as familiar collateral damage around Rowan, but Rowan is the sharper trigger. She can be skeptical without treating every joke as a felony.',
@@ -854,7 +862,7 @@ ${char?.id === '__gmz__' ? '' : dialogueContractFor(char, mode)}`;
 const DEFAULT_PLAYER_RELATIONSHIPS = {
   havoc: 36,
   silas: 18,
-  callum: -6,
+  callum: -28,
   briar: 18,
   rowan: 32,
   milo: 36,
@@ -865,7 +873,7 @@ const DEFAULT_PLAYER_RELATIONSHIPS = {
 };
 
 const LEGACY_PLAYER_RELATIONSHIP_BASELINES = {
-  callum: -10,
+  callum: [-10, -6],
   briar: 16,
   rowan: 28,
   milo: 22,
@@ -875,6 +883,7 @@ const LEGACY_PLAYER_RELATIONSHIP_BASELINES = {
 };
 
 const KERES_ALLY_PRIORITY = ['jude', 'milo', 'theo', 'havoc', 'rowan', 'briar', 'tamsin'];
+const KERES_SPARK_PRIORITY = ['havoc', 'rowan'];
 
 function defaultPlayerRelationshipFor(char) {
   if (!char?.id) return 0;
@@ -888,12 +897,22 @@ function findKeresAlly(pool = [], excludedIds = new Set()) {
     .find(Boolean) || null;
 }
 
+function findKeresSparkResponders(pool = [], excludedIds = new Set(), count = 1) {
+  const excluded = excludedIds instanceof Set ? excludedIds : new Set(excludedIds || []);
+  return KERES_SPARK_PRIORITY
+    .map(id => (pool || []).find(c => c?.id === id && !excluded.has(c.id)))
+    .filter(Boolean)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, Math.max(0, count));
+}
+
 function normalizePlayerRelationshipBaseline(char) {
   if (!char?.relationships || !Object.prototype.hasOwnProperty.call(char.relationships, 'player')) return char;
   const legacy = LEGACY_PLAYER_RELATIONSHIP_BASELINES[char.id];
   const current = DEFAULT_PLAYER_RELATIONSHIPS[char.id];
   const saved = Number(char.relationships.player);
-  if (!Number.isFinite(saved) || legacy === undefined || current === undefined || saved !== legacy) return char;
+  const legacyValues = Array.isArray(legacy) ? legacy : [legacy];
+  if (!Number.isFinite(saved) || legacy === undefined || current === undefined || !legacyValues.includes(saved)) return char;
   return { ...char, relationships: { ...char.relationships, player: current } };
 }
 
@@ -905,7 +924,7 @@ function playerStance(char, player, relationshipOverride) {
     : `Current relationship score with @${player.handle}: ${rel}/100. Keep this consistent across the thread.`;
   const fixed = {
     silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain, so he is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction. Keres and Jude bonding through irreverent vanity annoys him when it becomes public spectacle, especially because their timing gets reactions; his irritation should stay controlled, surgical, and a little hypocritical.',
-    callum: 'Callum is proud, exacting, and competitive. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess. In DMs, playful "I can be worse / more annoying" banter should get annoyed amusement, reluctant interest, or a sharper private tease, not "prove it on the feed."',
+    callum: 'Callum is proud, exacting, and competitive, and he does not like Keres. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill only grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess. In DMs, playful "I can be worse / more annoying" banter should get annoyed friction, reluctant interest, or a sharper private tease, not warmth and not "prove it on the feed."',
     havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action.',
     rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery.',
     briar: 'Briar is watchful and disciplined, but she is not a joyless lecture machine. She can be dry, exhausted, sarcastic, and funny when other people make captaincy impossible.',
@@ -913,7 +932,7 @@ function playerStance(char, player, relationshipOverride) {
     tamsin: 'Tamsin is composed, protective, and dryly amused more often than openly hostile. She worries about Rowan being pulled into stronger personalities, and Keres is exactly the kind of vivid, provocative gravity she would clock quickly. If Rowan publicly flirts with Keres, looks interested, gets tagged with her, appears in GMZ rumors with her, or acts too pleased by the chaos, Tamsin should feel protective and a little unsettled while staying funny and controlled. Havoc being interested in Keres matters too because Havoc is Rowan-adjacent trouble, but it should read as secondary concern, not possessiveness. She should not treat Keres as guilty by default; skepticism should be precise, dry, and observant.',
     milo: 'Milo is flirty, chaotic, approval-hungry, and reckless. He reacts too fast and wants attention.',
     theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred. He should sound like someone making the thread funnier while pretending it is journalism.',
-    elara: 'Elara is proud, socially dangerous, and hard to pity. Havoc and Keres becoming visible gets her attention fast, especially if Havoc calls Keres distracting, flirts, tags her, likes her post, comments on her photo, or gives her public attention. She reacts with clipped pride, plausible deniability, dangerous humor, old-history pressure, or a social jab. She never begs for attention or sounds wounded.'
+    elara: 'Elara is proud, socially dangerous, and hard to pity. Havoc and Keres becoming visible gets her attention fast, especially if Havoc calls Keres distracting, flirts, tags her, likes her post, comments on her photo, or gives her public attention. She reacts with clipped pride, plausible deniability, dangerous humor, old-history pressure, or a social jab. She never begs for attention or sounds wounded. If she was not tagged, she should react as a side participant to visible behavior, not as if Havoc or Keres asked her to do something.'
   }[char.id] || '';
   const relationshipNuance = char.id === 'tamsin' && rel > 0
     ? 'Because Tamsin and Keres currently have positive trust, she can still be sharp, but she should not treat normal Slytherin-vs-Gryffindor trash talk as weird, betrayal, or overstepping. She respects directness and information exchange; skepticism should be precise, not random hostility.'
@@ -1254,7 +1273,7 @@ function fallbackChatLine(char, player, group = false) {
       : ['be specific.', 'if you have a point, make it cleanly.', 'careful. vague is where bad arguments hide.'],
     callum: group
       ? ['some of us are trying to keep this from becoming public evidence.', 'that is not a plan. that is a liability with confidence.', 'if this gets worse, i am blaming everyone alphabetically.']
-      : ['fine. that was almost funny.', 'you are enjoying this too much.', 'annoying. continue, apparently.'],
+      : ['that was almost useful. alarming.', 'you are enjoying this too much. fix that.', 'annoying. unfortunately legible.'],
     jude: group
       ? ['beautiful. no notes except probably several consequences.', 'that sentence has detention energy.', 'i am choosing to believe this is someone else’s problem.']
       : ['best friends is a lot. teammates with terrible judgment, maybe.', 'if everyone is being weird, i can be worse on your side.', 'sure. let us pretend this is normal.'],
@@ -1605,7 +1624,7 @@ function looksLikePrivateBanterDareDodge(reply = '', latestUserText = '') {
 
 function fallbackPublicBanterLine(char, player) {
   const pool = {
-    callum: ['that was almost a comeback. annoying.', 'fine. points for making it worse on purpose.', 'someone deserved that. statistically.'],
+    callum: ['that was almost a comeback. annoying.', 'try making the next one useful.', 'slytherin keeps mistaking noise for leverage.'],
     elara: ['charming. awful, but charming.', 'i hate that i laughed.', 'say less before this becomes flattering.'],
     tamsin: ['unhelpful. unfortunately funny.', 'that answered more than you think it did.', 'i am choosing not to encourage this publicly.'],
     jude: ['terrible answer. useful answer.', 'that is a full sentence if you are committed enough.', 'beautifully unhelpful. almost proud.'],
@@ -1665,6 +1684,47 @@ function fallbackParticipantIncludedLine(char, player, opts = {}) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+function looksLikeSideParticipantSelfInsertion(text = '', char = null, opts = {}) {
+  if (opts.selfSubject || !char || !text) return false;
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\b(?:you|u)\b[^.?!]{0,60}\b(?:want|need|asking|ask|asked|told|telling|mad|angry)\s+(?:me|my|i)\b/i.test(lower)
+    || /\b(?:want|need|asking|ask|asked|told|telling)\s+me\s+to\b/i.test(lower)
+    || /\b(?:mad|angry|annoyed)\s+(?:i|me|my)\b/i.test(lower)
+    || /\b(?:i|me|my)\s+(?:answered|answer|roasted|roast|slowed|slow|started|caused|did\s+it|do\s+it)\s+(?:first|again|too)\b/i.test(lower);
+}
+
+function fallbackSideParticipantLine(char, player, opts = {}) {
+  const target = opts.replyToHandle && opts.replyToHandle !== player?.handle ? `@${opts.replyToHandle}` : '';
+  const withTarget = (line) => `${target ? `${target} ` : ''}${line}`.trim();
+  const pool = {
+    elara: [
+      withTarget('asking to get roasted twice is a bold little habit.'),
+      withTarget('wanting her attention this loudly is a choice.'),
+      'careful. some people make losing look deliberate.',
+    ],
+    tamsin: [
+      withTarget('that sentence needed adult supervision. unfortunate.'),
+      'i am watching this become everyone else\'s problem in real time.',
+      'several people could benefit from saying less.',
+    ],
+    briar: [
+      withTarget('please stop making the evidence louder.'),
+      'this is why practice should confiscate everyone\'s phones.',
+      'i am blaming all of you equally until proven otherwise.',
+    ],
+    theo: [
+      withTarget('that is a headline trying to happen.'),
+      'this thread has terrible form and excellent timing.',
+      'i need everyone to make worse choices with clearer captions.',
+    ],
+  }[char?.id] || [
+    withTarget('that was a choice. loud one.'),
+    'someone made this worse and i respect the efficiency.',
+    'the room noticed. unfortunate for everyone.',
+  ];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw).replace(stripSpeakerLabelRegex(char), ''), char), char)
     .replace(/^reply:\s*/i, '')
@@ -1678,6 +1738,9 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   }
   if (char && (looksLikeHardDefensiveBanterDodge(clean) || (opts.playfulBanter && looksLikeDefensiveBanterDodge(clean)))) {
     return fallbackPublicBanterLine(char, player);
+  }
+  if (char && looksLikeSideParticipantSelfInsertion(clean, char, opts)) {
+    return fallbackSideParticipantLine(char, player, opts);
   }
   if (char && (isSelfNarration(clean, char) || looksLikeSelfPronounDrift(clean, char, opts))) {
     return fallbackSelfReferenceLine(char, player);
@@ -2052,7 +2115,7 @@ Protection, from Silas, rarely looks warm. It looks like captaincy, asset manage
 
 He has little patience for chaos players, especially the kind Havoc Fang and Rowan Cade keep enabling into team-wide nonsense. Havoc makes disorder look effective through force; Rowan makes it look clever through timing. Callum hates both versions because they work more often than they should, and because Briar Rowe still has to captain around the mess. For Briar, he is one of the dependable ones, which is both pride and trap.
 
-Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Rowle: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{player: -6, briar: 64, havoc: -24, rowan: -12, silas: -18} },
+Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Rowle: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{player: -28, briar: 64, havoc: -24, rowan: -12, silas: -18} },
   { id:'briar', name:'Briar Rowe', handle:'briarrowe', pronouns:'she/her', house:'gryffindor', team:'Gryffindor', position:'Quidditch Captain / Keeper', bio:'Gryffindor Keeper. Never off duty.', followers:3100000, description:`Briar Rowe leads from the goalposts like she can see the whole pitch and the whole problem forming three moves early. Sharp, competitive, and blunt, she is Gryffindor's Quidditch captain and Keeper: the one who has to turn bravery into structure before someone mistakes impulse for a plan. She likes clean strategy, hard discipline, and players who understand that talent still has to answer to the scoreboard.
 
 Every mistake that reaches Briar becomes public within seconds: a goal conceded, a clip posted, a comment thread deciding what it means. She notices hesitation, overcommitment, injury, ego, distraction, and which teammate is watching the timeline instead of the Quaffle. Havoc Fang and Rowan Cade irritate her because they are too good to be so easily baited, too useful to keep wasting themselves on noise.
@@ -2657,6 +2720,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       if (threadHas(/\b(?:keres|@keresvalen|new transfer|photo|hot|pretty|distract|flirt|kiss|snog|hair)\b/i)) {
         if (['havoc','rowan','milo','elara','theo','jude','silas'].includes(c.id)) score += c.id === 'elara' ? 45 : 24;
       }
+      if (isPlayerPost) {
+        if (c.id === 'havoc') score += 92;
+        if (c.id === 'rowan') score += 82;
+        if (c.id === 'callum') score += 18;
+      }
       if (threadHas(/\b(?:practice|pitch|quidditch|match|keeper|chaser|beater|seeker|catch|foul|score|team)\b/i) && (isQuidditchPlayer(c) || /commentator|captain/i.test(personality))) score += 24;
       if (embarrassmentContext && /snark|sharp|blunt|funny|observant|gossip|shameless|cutting|chaotic|provocative|dry/i.test(personality)) score += 28;
       if (c.id === 'silas' && isKeresPost && !threadHas(/\b(?:slytherin|tryout|captain|strategy|quidditch|pitch|match|foul|chaser|seeker|keeper|beater|gmz|source|rumou?r)\b/i)) score -= 42;
@@ -2682,6 +2750,12 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const keresAllyResponder = isKeresPost
       ? findKeresAlly(eligible, new Set([post.charId, ...directMentionIds]))
       : null;
+    const keresSparkCount = isPlayerPost && /\b(?:havoc|rowan|gryffindor|quidditch|pitch|hot|pretty|flirt|attention|dare|fight|roast|bad idea|annoying)\b/i.test(postText)
+      ? 2
+      : (isPlayerPost && Math.random() < 0.65 ? 2 : 1);
+    const keresSparkResponders = isPlayerPost
+      ? findKeresSparkResponders(eligible, new Set([post.charId, ...directMentionIds]), keresSparkCount)
+      : [];
     const weighted = eligible
       .filter(c => !directMentionIds.has(c.id))
       .map(c => {
@@ -2692,10 +2766,12 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     weighted.sort((a,b) => b.w - a.w);
 
     // Pick 1-3 chars by default. Direct mentions jump the line, then other characters can chime in.
-    const targetCount = Math.min(4, Math.max(isGMZThread ? 3 : (embarrassmentContext ? 2 : 1), directlyMentioned.length + 1 + (Math.random() < 0.35 ? 1 : 0)));
-    const targetLimit = Math.min(5, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
+    const targetBase = isPlayerPost ? 3 : (isGMZThread ? 3 : (embarrassmentContext ? 2 : 1));
+    const targetCount = Math.min(isPlayerPost ? 5 : 4, Math.max(targetBase, directlyMentioned.length + 1 + (Math.random() < (isPlayerPost ? 0.75 : 0.35) ? 1 : 0)));
+    const targetLimit = Math.min(isPlayerPost ? 6 : 5, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
     let picked = [
       ...directlyMentioned,
+      ...keresSparkResponders,
       ...(keresAllyResponder ? [keresAllyResponder] : []),
       ...exPressureResponders,
       ...tamsinPressureResponders,
@@ -2726,9 +2802,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const houseDefenseNote = isHouseTeamCallout(post.text, c) ? ' HOUSE/TEAM CALLOUT: the post insults or needles their house/team. They should answer with more bite, defend or undercut the insult, or hit back. Do not shrug, agree mildly, or say "I guess".' : '';
       const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
-      const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should usually react with proud displeasure and plausible deniability: a sharp subtweet, dangerous joke, social jab, old-history pressure, or a line that makes it clear she noticed. She does not sound wounded, plead, or beg for attention.` : '';
+      const keresSparkNote = isPlayerPost && ['havoc','rowan'].includes(c.id) ? ` KERES POST SPARK: Keres posted; ${c.name} is the kind of person who often cannot leave that alone. Reply with appetite, mischief, flirtation, a dare, a sly read, or a sharp joke that gives the post bite.` : '';
+      const callumKeresRivalNote = c.id === 'callum' && isKeresPost ? ' KERES RIVALRY: Callum and Keres do not like each other. If he replies, he should be exacting, irritated, petty, or competitive. No friendly compliments, no soft agreement, no cheering her on.' : '';
+      const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should usually react with proud displeasure and plausible deniability: a sharp subtweet, dangerous joke, social jab, old-history pressure, or a line that makes it clear she noticed. She does not sound wounded, plead, or beg for attention. If she was not tagged, she is weighing in from the side; she should needle what Havoc or Keres visibly did, not imply they asked her to perform or answer.` : '';
       const tamsinProtectiveNote = c.id === 'tamsin' && tamsinKeresPressure ? ` ${tamsinKeresConcernNote(tamsinPressureText, player)}` : '';
-      return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${communicationStyleFor(c, 'public feed reply')} ${stanceFor(c)}${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${elaraExNote}${tamsinProtectiveNote}`;
+      return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${feel} (${rel ?? 'unknown'}). ${communicationStyleFor(c, 'public feed reply')} ${stanceFor(c)}${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${keresSparkNote}${callumKeresRivalNote}${elaraExNote}${tamsinProtectiveNote}`;
     }).join('\n');
 
     const intro = isPlayerPost
@@ -2744,13 +2822,16 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ? `\nEMBARRASSMENT NOTE: Someone publicly fumbled, exposed themself, apologized badly, looked foolish, or handed the timeline an opening. At least one custom character should call it out, tease them, sharpen the moment, or make the social consequence visible. It can be funny, dry, protective, flirty, or cruel depending on the character, but do not let the embarrassing moment pass unnoticed.`
       : '';
     const exPressureRule = havocKeresPressure
-      ? `\nEX PRESSURE NOTE: Elara March has public history with Havoc. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention here, so Elara should notice and be a little displeased.' : ''} If she replies, let it feel like a proud ex noticing the room has shifted: sharp, charismatic, jealous with dignity, socially dangerous, and never pleading.`
+      ? `\nEX PRESSURE NOTE: Elara March has public history with Havoc. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention here, so Elara should notice and be a little displeased.' : ''} If she replies, let it feel like a proud ex noticing the room has shifted: sharp, charismatic, jealous with dignity, socially dangerous, and never pleading. If she was not tagged, she must react to visible thread behavior rather than pretending Havoc or Keres addressed her.`
       : '';
     const tamsinPressureRule = tamsinKeresPressure
       ? `\n${tamsinKeresConcernNote(tamsinPressureText, player)}`
       : '';
     const allyBalanceRule = isKeresPost
       ? `\nALLY BALANCE NOTE: This thread involves ${player.name}. Do not let every custom character pile onto her. At least one reply should be on her side, amused by her, correcting the room, backing her as Slytherin, or making the pile-on funnier instead of meaner.${keresAllyResponder ? ` @${keresAllyResponder.handle} is the natural ally in this responder set.` : ''}`
+      : '';
+    const keresPostBiteRule = isPlayerPost
+      ? `\nKERES POST BITE NOTE: This is Keres posting on main. Give the post real bite: 3-5 custom-character replies should feel like campus reaction, not polite acknowledgments. Havoc and Rowan are frequent spark responders to her posts; if included, they should not be bland. Callum is not her friend and should never sound warmly supportive.`
       : '';
     const dialogueSeparationRule = multiSpeakerDialogueSeparationRule(picked, 'public feed reply');
 
@@ -2759,14 +2840,14 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, or same "X lands/works/hits different when Y" logic.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, speculate about what GMZ left unsaid, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, or same "X lands/works/hits different when Y" logic.\n\nCharacters (in order):\n${charRoster}\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in, stir the pot, defend someone, flirt, joke, make a tactical observation, speculate about what GMZ left unsaid, or add an outside opinion. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-28 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, or playful. Do not turn the whole room into bullies. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
         const parsed = JSON.parse(cleaned);
         const usedThreadTexts = [post.text || ''];
         charR1 = picked.map((c,i) => {
-          const text = cleanSocialReplyText(parsed[i] || '', c, player, { avoidTexts: usedThreadTexts, playfulBanter: !!playfulThreadRule, selfSubject: c.id === authorId || directMentionIds.has(c.id), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR] });
+          const text = cleanSocialReplyText(parsed[i] || '', c, player, { avoidTexts: usedThreadTexts, playfulBanter: !!playfulThreadRule, selfSubject: c.id === authorId || directMentionIds.has(c.id), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], replyToHandle: author?.handle });
           usedThreadTexts.push(text);
           return {
             charId: c.id,
@@ -2896,6 +2977,7 @@ ${playfulThreadRule}
 ${stanceFor(fight.replier)}
 ${stanceFor(fight.target)}
 ${roleContext}
+${SIDE_PARTICIPANT_CONTEXT_RULE}
 ${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, ...charR1.map(cc => cc.text), fight.targetReply.text])}
 ${gmzSpeculationRule}
@@ -3002,6 +3084,7 @@ ${playfulThreadRule}
 ${stanceFor(fight.target)}
 ${stanceFor(fight.replier)}
 ${roleContext}
+${SIDE_PARTICIPANT_CONTEXT_RULE}
 ${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}
 ${gmzSpeculationRule}
@@ -3278,6 +3361,9 @@ ${BANNED_PHRASES_RULE}`
       if (followupHas(/\b(?:tamsin|@tamsincade)\b/i) && c.id === 'rowan') w += 58;
       if (followupHas(/\b(?:havoc|@havocfang)\b/i) && ['rowan','elara','briar'].includes(c.id)) w += c.id === 'elara' ? 70 : 34;
       if (followupHas(/\b(?:keres|@keresvalen|new transfer|photo|hot|pretty|distract|flirt|kiss|snog|hair)\b/i) && ['havoc','rowan','milo','elara','theo','jude','silas'].includes(c.id)) w += c.id === 'elara' ? 42 : 22;
+      if (isKeresThread && c.id === 'havoc') w += 58;
+      if (isKeresThread && c.id === 'rowan') w += 52;
+      if (isKeresThread && c.id === 'callum') w += 14;
       if (followupHas(/\b(?:practice|pitch|quidditch|match|keeper|chaser|beater|seeker|catch|foul|score|team)\b/i) && (isQuidditchPlayer(c) || /commentator|captain/i.test(personality))) w += 24;
       if (speakerThreadHistory(c.id, 3) && !taggedIds.has(c.id) && !target.some(t => t.id === c.id)) w -= 22;
       if (sourceAuthorId === 'havoc' && c.id === 'silas' && !taggedIds.has(c.id)) w -= 34;
@@ -3304,11 +3390,14 @@ ${BANNED_PHRASES_RULE}`
     const tamsinPressureResponders = tamsinFollowupPressure
       ? candidatePool.filter(c => c.id === 'tamsin' && !taggedIds.has(c.id) && !target.some(t => t.id === c.id))
       : [];
+    const keresFollowupSparkResponders = isKeresThread
+      ? findKeresSparkResponders(candidatePool, new Set([...taggedIds, ...target.map(t => t.id)]), mode === 'direct' ? 1 : 2)
+      : [];
     const keresFollowupAlly = isKeresThread
-      ? findKeresAlly(candidatePool, new Set([...taggedIds, ...target.map(t => t.id)]))
+      ? findKeresAlly(candidatePool, new Set([...taggedIds, ...target.map(t => t.id), ...keresFollowupSparkResponders.map(t => t.id)]))
       : null;
-    const wantedCount = Math.max(tagged.length, target.length + tamsinPressureResponders.length + (keresFollowupAlly ? 1 : 0), isGMZThread ? 2 : (mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0)));
-    const responders = [...target, ...tagged, ...(keresFollowupAlly ? [keresFollowupAlly] : []), ...tamsinPressureResponders, ...sameHouseBacked, ...charged]
+    const wantedCount = Math.max(tagged.length, target.length + keresFollowupSparkResponders.length + tamsinPressureResponders.length + (keresFollowupAlly ? 1 : 0), isGMZThread ? 2 : (mode === 'direct' ? 1 : 1 + (Math.random() < 0.45 ? 1 : 0)));
+    const responders = [...target, ...tagged, ...keresFollowupSparkResponders, ...(keresFollowupAlly ? [keresFollowupAlly] : []), ...tamsinPressureResponders, ...sameHouseBacked, ...charged]
       .filter((c, i, arr) => c && arr.findIndex(x => x.id === c.id) === i)
       .slice(0, wantedCount);
     if (!responders.length) return;
@@ -3319,12 +3408,15 @@ ${BANNED_PHRASES_RULE}`
       const allyFollowupRule = isKeresThread
         ? `\nALLY BALANCE NOTE: This exchange involves ${player.name}. Do not let every responder pile onto her. At least one responder should be amused, on her side, redirecting heat, backing her as a teammate/ally, or making the dogpile funnier instead of cruel.${keresFollowupAlly ? ` @${keresFollowupAlly.handle} is the natural ally if they answer.` : ''}`
         : '';
+      const keresFollowupBiteRule = isKeresThread
+        ? `\nKERES THREAD BITE NOTE: Keres is active in this public exchange. The thread should have energy: Havoc and Rowan are common spark responders, and Callum should be antagonistic rather than nice if he appears.`
+        : '';
       const roster = responders.map((c,i) => {
         const priorLines = speakerThreadHistory(c.id, 4);
         const isDirectResponder = taggedIds.has(c.id) || target.some(t => t.id === c.id) || c.id === post.charId;
         const replyRoleNote = isDirectResponder
           ? ` DIRECT RESPONSE ROLE: this character was directly addressed, tagged, or owns the post being answered. They may answer @${player.handle} or the thread from their own stake.`
-          : ` THIRD-PARTY WEIGH-IN ROLE: this character is joining from the side. If they tag someone, tag @${defaultReplyHandle} or the comment they are weighing in on. Do not act like @${player.handle} was talking to them unless @${player.handle} directly tagged them.`;
+          : ` THIRD-PARTY WEIGH-IN ROLE: this character is joining from the side. If they tag someone, tag @${defaultReplyHandle} or the comment they are weighing in on. Do not act like @${player.handle} was talking to them unless @${player.handle} directly tagged them. Do not write "you want me to", "mad I answered", or other lines that insert this character into an exchange they were not part of.`;
         const defenseNote = backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)
           ? ' HOUSE/TEAM STAKE: their house/team is being backed or insulted here. They should feel pulled back into the thread and answer with bite, agreement, or direct pushback instead of letting a random rival take over.'
           : '';
@@ -3335,7 +3427,9 @@ ${BANNED_PHRASES_RULE}`
           ? ` PREVIOUS LINES BY THIS CHARACTER IN THIS THREAD: ${priorLines.replace(/\n/g, ' ')} Keep their stance consistent; do not flip sides unless the flip is intentional and acknowledged.`
           : '';
         const tamsinProtectiveNote = c.id === 'tamsin' && tamsinFollowupPressure ? ` ${tamsinKeresConcernNote(tamsinFollowupText, player)}` : '';
-        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${tamsinProtectiveNote}`;
+        const callumKeresRivalNote = c.id === 'callum' && isKeresThread ? ' KERES RIVALRY: Callum and Keres do not like each other. If he answers, keep it exacting, irritated, petty, or competitive; no friendly support and no soft concession.' : '';
+        const keresSparkNote = isKeresThread && ['havoc','rowan'].includes(c.id) ? ` KERES THREAD SPARK: Keres is active in this exchange. ${c.name} should often add appetite, mischief, flirtation, a dare, a sly read, or a sharp joke instead of a bland acknowledgment.` : '';
+        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${callumKeresRivalNote}${keresSparkNote}${tamsinProtectiveNote}`;
       }).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
@@ -3353,9 +3447,11 @@ ${CHARACTER_TONE_RULE}
 ${COMMUNICATION_PATTERN_RULE}
 ${playfulThreadRule}
 ${allyFollowupRule}
+${keresFollowupBiteRule}
 ${tamsinFollowupPressure ? tamsinKeresConcernNote(tamsinFollowupText, player) : ''}
 ${threadMemory}
 ${threadRoleContext(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, char, [player, ...chars, GMZ_CHAR])}
+${SIDE_PARTICIPANT_CONTEXT_RULE}
 ${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText])}
 ${dialogueSeparationRule}
@@ -3375,7 +3471,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
       const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
       const usedThreadTexts = [post.text, sourceText, transcript, playerText].filter(Boolean);
       const replies = responders.map((c, i) => {
-        const text = cleanSocialReplyText(parsed[i] || '', c, player, { avoidTexts: usedThreadTexts, playfulBanter: !!playfulThreadRule, selfSubject: c.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, c), contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, roster: [player, ...chars, GMZ_CHAR] });
+        const text = cleanSocialReplyText(parsed[i] || '', c, player, { avoidTexts: usedThreadTexts, playfulBanter: !!playfulThreadRule, selfSubject: c.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, c), contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, roster: [player, ...chars, GMZ_CHAR], replyToHandle: defaultReplyHandle });
         usedThreadTexts.push(text);
         return {
           charId: c.id,
@@ -7564,7 +7660,7 @@ ${BANNED_PHRASES_RULE}` }]
         if (char.id === 'briar') return 'slytherin getting a talented chaser with attitude is irritating. objectively interesting, but irritating.';
         if (char.id === 'havoc') return 'if the record is real, dangerous. if the photo is real, also dangerous.';
         if (char.id === 'rowan') return 'terrible day for everyone pretending they did not zoom in.';
-        if (char.id === 'callum') return 'talent travels faster than facts. still, that form does not look accidental.';
+        if (char.id === 'callum') return 'pretty form is still form. it can prove itself under pressure or stop taking up oxygen.';
         if (char.id === 'milo') return 'wait are we all pretending the photo did not happen or';
         if (char.id === 'theo') return 'ranking the new transfer before tryouts would be irresponsible. unrelated thread loading.';
         if (char.id === 'tamsin') return 'the school pretending this is about the record and not the photo is almost charming.';
@@ -7615,6 +7711,7 @@ ${threadPatternVarietyGuard(eventAvoidTexts)}
 
 Campus event: "${ev.scenario}"
 ${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
+${isTransferHeat && char.id === 'callum' ? `Callum and Keres do not like each other. He may clock her talent, but his post should sound annoyed, competitive, exacting, or petty, not friendly or supportive.` : ''}
 ${isTransferHeat && char.id === 'elara' ? `Elara has history with Havoc. If the event makes Keres visible or desirable, Elara should notice with pride, plausible deniability, dangerous humor, or a sharp ex-adjacent jab. She does not sound wounded or beg for attention.` : ''}
 ${tamsinInterestHeat && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
 

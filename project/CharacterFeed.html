@@ -1865,6 +1865,17 @@ function looksLikeSilasCamaraderieMisread(text = '', char = null, opts = {}) {
   return camaraderie && /\b(?:don'?t\s+let\s+her\s+distract|distract\s+you|distraction|performing|not\s+performing)\b/i.test(lower);
 }
 
+function looksLikeMadeItWorseSubjectMisread(text = '', opts = {}) {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  const context = String(opts.contextText || '').toLowerCase().replace(/[’]/g, "'");
+  if (!/\bmade\s+it\s+worse\b/i.test(context)) return false;
+  const flippedSubject = /\bmade\s+you\s+worse\b/i.test(lower)
+    || /\b(?:admitting|admitted|saying|said)\b[^.?!]{0,80}\bmade\s+(?:it\s+)?worse\b/i.test(lower);
+  const selfRoastRead = /\bself\s+roast\b/i.test(lower)
+    && /\b(?:ate|admitting|admitted|didn'?t\s+even\s+realize|made\s+(?:it\s+)?worse)\b/i.test(lower);
+  return flippedSubject || selfRoastRead;
+}
+
 function looksLikeDefensiveBanterDodge(text = '') {
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
   return looksLikeHardDefensiveBanterDodge(lower)
@@ -2047,6 +2058,11 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     .replace(/^reply:\s*/i, '')
     .replace(/^comment:\s*/i, '')
     .trim();
+  if (looksLikeMadeItWorseSubjectMisread(clean, opts)) {
+    if (opts.bot) return fallbackBotLine(opts.bot);
+    if (char) return fallbackDialogueContractLine(char, player, opts.avoidTexts || []);
+    return fallbackChatLine(char, player, false, opts.avoidTexts || []);
+  }
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
     return fallbackUnsupportedBlameLine(char, player, false, opts.avoidTexts || []);
   }
@@ -3263,9 +3279,10 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
         const parsed = JSON.parse(cleaned);
+        const botAvoidTexts = [post.text, ...charR1.map(cc => cc.text)].filter(Boolean);
         bots = botsPicked.map((b,i) => ({
           bot: b.id,
-          text: cleanSocialReplyText(parsed[i] || '', null, player, { bot: b }),
+          text: cleanSocialReplyText(parsed[i] || '', null, player, { bot: b, contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], avoidTexts: botAvoidTexts }),
           likes: Math.floor(Math.random()*15000),
           timestamp: baseTs + 45000 + i*55000 + Math.floor(Math.random()*150000),
         })).filter(b => b.text);
@@ -3359,9 +3376,10 @@ Return ONLY the reply text. No other text.`
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
             const parsed2 = JSON.parse(cleaned2);
+            const reactBotContext = `${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`;
             reactComments = reactBots.map((b,i) => ({
               bot: b.id,
-              text: cleanSocialReplyText(parsed2[i] || '', null, player, { bot: b }),
+              text: cleanSocialReplyText(parsed2[i] || '', null, player, { bot: b, contextText: reactBotContext, roster: [player, ...chars, GMZ_CHAR], avoidTexts: [post.text, fight.targetReply.text, clapback.text].filter(Boolean) }),
               likes: Math.floor(Math.random()*25000) + 3000,
               timestamp: baseTs + 600000 + i*30000,
               replyTo: fight.replier.handle,

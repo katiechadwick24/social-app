@@ -3806,7 +3806,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-const THREAD_STYLE_VERSION = 5;
+const THREAD_STYLE_VERSION = 6;
 
 function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
   return (post.charComments || []).some(cc => cc?.charId === player?.id)
@@ -4146,6 +4146,33 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         .slice(0, botCount)
         .map(x => x.b);
       const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}. ${botGroundingRule(b)}`).join('\n');
+      const hotAudienceThread = isHighStakesThread || isAppearancePost || isDramaPost || isKeresPost || (charR1.length >= 3);
+
+      function chooseBotReplyTarget(text = '', botIndex = 0) {
+        if (!charR1.length) return '';
+        const lower = String(text || '').toLowerCase();
+        const mentioned = charR1.find(cc => {
+          const c = allChars.find(x => x.id === cc.charId);
+          return c?.handle && lower.includes(`@${c.handle.toLowerCase()}`);
+        });
+        if (mentioned) return allChars.find(c => c.id === mentioned.charId)?.handle || '';
+        if (!hotAudienceThread && Math.random() > 0.35) return '';
+        const scored = charR1
+          .map((cc, idx) => {
+            const c = allChars.find(x => x.id === cc.charId);
+            const textBits = `${cc.text || ''} ${c?.personality || ''}`.toLowerCase();
+            let score = Math.max(1, Number(cc.likes || 0) / 2000) + (charR1.length - idx) * 0.2;
+            if (/(hot|pretty|flirt|kiss|snog|photo|gmz|rumou?r|source|alibi|caught|wild|insane|ate|roast|drag|mess|worse|thirst)/i.test(textBits)) score += 3;
+            if (c?.id === 'silas' && /hug|cuddle|soft|affection/i.test(lower)) score -= 6;
+            if (c?.id === post.charId) score += 1.5;
+            return { cc, c, score: score + Math.random() * 2 };
+          })
+          .filter(x => x.c?.handle)
+          .sort((a,b) => b.score - a.score);
+        if (!scored.length) return '';
+        if (hotAudienceThread) return scored[botIndex % Math.min(scored.length, 3)].c.handle;
+        return Math.random() < 0.55 ? scored[0].c.handle : '';
+      }
 
       let bots = [];
       if (botCount > 0) try {
@@ -4170,6 +4197,7 @@ Write replies from random anonymous student accounts joining the comment thread.
 - use casual slang lightly: lmfao, oop, bestie, the way, screaming
 - react with a mix of thirst, jokes, skeptical gossip, and taking sides
 - often reply directly to someone with @handle, ask a playful question, flirt, heckle, correct, beg for details, or make a joke at someone in the thread
+- in hot threads, many comments should be replies to specific character comments, not just reactions to the original post. Aim at the person who said the most provocative, funny, thirsty, strategic, or suspicious thing.
 - when the thread is about a hot/talented new transfer, most audience comments should be excited, impressed, thirsty, curious, or playfully chaotic, not bullying
 - interject with original opinions, questions, fan behavior, tactical reads, rumors, side-eye, admiration, or warnings
 - on GMZ threads, at least one account should speculate, question the alibi, infer a motive, or float a messy theory with uncertainty
@@ -4197,7 +4225,10 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           text: cleanSocialReplyText(parsed[i] || '', null, player, { feed, bot: b, contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], avoidTexts: botAvoidTexts }),
           likes: Math.floor(Math.random()*15000),
           timestamp: baseTs + 45000 + i*55000 + Math.floor(Math.random()*150000),
-        })).filter(b => b.text);
+        })).map((bc, i) => {
+          const replyTo = chooseBotReplyTarget(bc.text, i);
+          return replyTo ? { ...bc, replyTo } : bc;
+        }).filter(b => b.text);
       } catch(e) {}
 
       if (cancelled) return;
@@ -7274,7 +7305,7 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
       type: customType,
       scenario: customScenario.trim(),
       chars: selectedChars,
-      xp: [80, 200],
+      xp: EVENT_XP_DEFAULTS[customType] || [80, 200],
       custom: true,
       canon: true,
     });

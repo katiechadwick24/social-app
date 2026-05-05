@@ -2001,7 +2001,7 @@ function stripSpeakerLabelRegex(char) {
 function looksLikePromptLeak(text = '') {
   const normalized = String(text).replace(/[‘’]/g, "'").toLowerCase();
   return /^#+\s*[a-z][a-z\s.'-]+\s*\(@?[a-z0-9_]+\)/i.test(String(text || '').trim())
-    || /i need context|i don't have enough|i do not have enough|need more context|need to know what'?s happening|what'?s the most recent|let me check|looking at the recent feed|i'm ready|i understand (?:the character|the rules|continuity|the identity|silas|callum|pronouns|house|team)|i know the rules|identity rule|identity:|target identity|original poster identity|pronouns and houses|pronouns locked|house logic|team logic|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|personality:|description:|relationship with @|current relationship with|i understand continuity|i understand the identity|i understand silas|i understand callum|college students are|here'?s/i.test(normalized);
+    || /i need context|i need a prompt|i need context or a prompt|context to write a|what should this post react to|what'?s happening on campus right now|what should i (?:post|write|respond)|i don't have enough|i do not have enough|need more context|need to know what'?s happening|what'?s the most recent|let me check|looking at the recent feed|i'm ready|i understand (?:the character|the rules|continuity|the identity|silas|callum|pronouns|house|team)|i know the rules|identity rule|identity:|target identity|original poster identity|pronouns and houses|pronouns locked|house logic|team logic|continuity rules|style rules|anti-ai|banned|what's the prompt|what'?s my reply|here'?s my reply|i can write as|i track logic|i'?m not going to sound|rules, the continuity|return only|as an ai|write one|given his character|given her character|he'd either|she'd either|option \d|personality:|description:|relationship with @|current relationship with|i understand continuity|i understand the identity|i understand silas|i understand callum|college students are|here'?s/i.test(normalized);
 }
 
 function fallbackPostForChar(char, player, avoidTexts = []) {
@@ -2010,56 +2010,108 @@ function fallbackPostForChar(char, player, avoidTexts = []) {
       'someone in charms just tried to flex and set their sleeve on fire. strong start.',
       'practice was quiet for six minutes. new school record.',
       'if anyone asks, i was not tutoring first years. i was preventing a disaster.',
+      'gryffindor ran the same play three times today. we scored every time. very kind of them.',
+      'whoever scheduled back-to-back theory lectures on match week has never played a sport.',
+      'our keeper literally stopped a shot with his face. that was not in the playbook but it counted.',
+      'someone just asked me if chaser strategy is mostly vibes. i need to sit down.',
+      'library group study is a myth. it is six people on their phones and one person who actually read the chapter.',
     ],
     rowan: [
-      'some people show their whole strategy because nobody asked nicely enough.',
+      'everyone at this school is either a snitch or a witness. no in between.',
+      'found out today that three separate people think they are the funniest person in our year. interesting.',
+      'the amount of drama that could be avoided if people just said the actual thing is criminal.',
+      'some people make everything so much harder than it needs to be. you know who you are.',
+      'our common room had an argument about something so stupid i cannot even repeat it. i laughed for ten minutes.',
+      'someone left a very personal letter in the wrong drawer and the whole floor knows now.',
       'not naming names. mostly because that would be generous.',
-      'funny how fast everyone gets honest once the angle changes.',
+      'nothing spreads faster at this school than someone saying "don\'t tell anyone".',
     ],
     havoc: [
+      'so apparently "can we talk after practice" means something different to everyone. good to know.',
+      'i absolutely should not have done that. also it worked.',
+      'the best ideas only sound bad before they succeed.',
+      'someone told me to be more careful. i said yes and meant no.',
+      'asked the professor to repeat the question and she said never mind, which is a win.',
       'i did not start it. i improved it.',
-      'restraint remains a theory i do not personally endorse.',
-      'bad idea, good timing. i see no issue.',
+      'got told the play was "too risky." won anyway. unrelated.',
+      'genuinely confused how anyone gets through this week without doing something they regret.',
     ],
     silas: [
       'gryffindor left a playbook unattended. tragic. unrelated, i am reading.',
       'someone explain why the library is louder than the pitch today.',
       'if anyone needs me, no you do not.',
+      'two of my players turned in their formations essay late. they were in adjacent seats.',
+      'practice ran long because someone did not want to admit they did not know the play. fifteen extra minutes.',
+      'gryffindor has three weaknesses. they are about to practice one of them.',
+      'we do not wing it. other teams wing it. that is why we win.',
+      'whoever keeps moving the reserved pitch times is going to meet me in a hallway.',
     ],
     briar: [
       'team bonding is not a synonym for inventing a new disciplinary category.',
       'the next person tracking mud into the changing room is meeting my clipboard.',
       'whoever taught the first years victory chants owes me an apology.',
+      'if i see one more player show up to warm-ups eating a pasty i am adding laps.',
+      'we had one rule about broom maintenance. one rule.',
+      'someone convinced half the team that sleep is optional during match week. wrong.',
+      'my clipboard has more names on it than it did this morning. this is not a good sign.',
+      'team spirit is great. please direct it toward the correct goal post.',
     ],
     theo: [
+      'new poll: which team is more delusional about their odds this weekend.',
+      'practice clips are the most honest thing anyone at this school produces.',
+      'the amount of post-match spin happening in my mentions right now.',
+      'someone on the pitch just did something that is either genius or a disaster. stay tuned.',
+      'the library wifi is down and people are losing their minds. good data.',
       'six minutes until someone lies about this with confidence.',
-      'practice clips remain the school\'s least private public resource.',
-      'i am not saying this needs a poll. i am saying the poll already knows.',
+      'ranking campus coffees by how much chaos they were ordered during: full report coming.',
+      'i love match week for the content. everybody shows exactly who they are.',
     ],
     jude: [
       'awful timing. useful for me.',
       'slytherin morale remains suspiciously entertained.',
       'if this becomes my problem, everyone lie better.',
+      'interesting choice. can\'t wait to watch.',
+      'whoever made that decision is someone else\'s problem.',
+      'i said nothing. that is my official position.',
+      'the thing about consequences is they do not care if the idea was fun.',
+      'campus energy today is unhinged and i am enjoying it from a safe distance.',
     ],
     elara: [
       'funny how quickly everyone develops taste in public.',
-      'some people call it restraint because admitting they looked twice is harder.',
+      'i hate that i laughed.',
+      'some days this campus writes itself.',
+      'three people explained the same situation to me like i would take their side. bold.',
       'charming mess today. almost worth the noise.',
+      'the common room just had a whole thing and i was eating my lunch in peace.',
+      'it is impressive, in a specific kind of way.',
+      'if you are going to be obvious about it, at least be entertaining.',
     ],
     tamsin: [
       'the campus has confused evidence with volume again.',
       'i am choosing to call this educational and move on.',
       'someone should supervise this. regrettably, not me.',
+      'someone knocked on my door to tell me drama i already knew. very kind of them.',
+      'i have watched this exact situation play out three times. it always ends the same way.',
+      'everyone in this building has an opinion and somehow none of them are useful.',
+      'i asked one clarifying question and suddenly i am involved.',
+      'rowan texted me a single word at 2am and i knew immediately something stupid had happened.',
     ],
     milo: [
       'if this is a bad idea, nobody tell me yet.',
       'i understood the risk and immediately got distracted.',
       'somebody say whether we are helping or making it funnier.',
+      'the good news is i am only slightly responsible for what just happened.',
+      'asked for help with transfiguration. ended up in a completely different situation.',
+      'today\'s plan lasted until about 9am.',
+      'i said yes before they finished the sentence and i regret nothing.',
+      'everyone keeps asking what i was thinking. great question.',
     ],
   }[char?.id] || [
     `@${player?.handle || 'keresvalen'} has half the campus pretending not to watch. cute.`,
     'the timeline is doing that thing where everyone acts surprised by consequences.',
     'logging on against better judgment again.',
+    'someone just did something in the common room that i cannot explain but witnessed fully.',
+    'this school is so funny. everyone here acts like their situation is unique.',
   ];
   const start = Math.floor(Math.random() * pool.length);
   for (let i = 0; i < pool.length; i++) {
@@ -8449,6 +8501,8 @@ Write ONE social media post that is specifically directed at or about @${target.
 - 1-2 sentences, punchy. It can be teasing, flirty, funny, smug, himbo-stupid, backhanded, passive-aggressive, or surprisingly warm depending on your relationship
 - Use the recent feed only for continuity. Do not parrot its current buzzwords or recycle the same argument unless this is clearly a direct continuation.
 - MUST tag @${target.handle} naturally in the text
+- Say something SPECIFIC and DIRECT — name the actual thing (the play, the class, the moment, the person, the thing they did). Do not write a vague philosophical one-liner that could apply to anyone.
+- Sound like a college student texting, not a poet or a schemer. Direct, casual, concrete.
 - NO hashtags, NO quotes around the post, just the post text
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
 ${BANNED_PHRASES_RULE}`
@@ -8479,6 +8533,7 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 - Do not parrot the current feed's buzzwords. Avoid repeating "structure", "discipline", "standards", "scoreboard", or "formation" unless the primary topic truly requires Quidditch.
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, parties, food, bets, bad sleep, gossip, someone acting weird, deleted posts, or stupid things people did.
 - Unless the character is Silas, strongly prefer social mess, jokes, teasing, flirtation, petty commentary, curiosity, ordinary school chaos, or bad ideas over captain-speech language.
+- VOICE: Sound like a college student typing on their phone — direct, specific, casual. Say the ACTUAL thing. Name the specific class, person, play, situation, or event. DO NOT write vague philosophical one-liners like "restraint remains a theory" or "some people show their strategy". Real people say "professor just assigned us a 2000 word essay due friday" or "just watched callum argue with a first year for six minutes". Be concrete.
 - NO hashtags, NO quotes around the post, JUST the post text
 - Make it feel real and casual, like they just typed it
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.

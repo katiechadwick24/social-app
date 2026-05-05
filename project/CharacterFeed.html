@@ -5597,8 +5597,8 @@ function MessagesScreen({ chars, player, dms, onOpenChat, dmNotifs = {}, setDmNo
 
 // ─── Chat Screen ──────────────────────────────────────────────────
 function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], groupChats = [], latestUserText = '', dmIntent = '', dmSituation = '') {
-  // Recent feed posts (last 12, newest first)
-  const recentPosts = [...feed].slice(0, 12).map(p => {
+  // Recent feed posts — trimmed to 6 to reduce noise
+  const recentPosts = [...feed].slice(0, 6).map(p => {
     const poster = allChars.find(c => c.id === p.charId);
     const lines = [`@${poster?.handle || p.charId}: "${p.text}"`];
     if (p.reply) {
@@ -5608,25 +5608,27 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
     return lines.join('\n');
   }).join('\n');
 
-  // Relationships with other chars
+  // Relationships — only chars with a defined (non-neutral) score
   const relLines = allChars
-    .filter(c => c.id !== char.id)
+    .filter(c => c.id !== char.id && char.relationships?.[c.id] !== undefined)
     .map(c => {
-      const val = char.relationships?.[c.id];
-      const feel = val === undefined ? 'neutral' : val > 60 ? 'close friends / very positive' : val > 20 ? 'friendly' : val > 0 ? 'acquaintances' : val > -30 ? 'tense / complicated' : 'enemies / strongly negative';
-      return `- ${identityFactsFor(c)}: ${feel}${val !== undefined ? ` (${val > 0 ? '+':''}${val}%)` : ''}`;
+      const val = char.relationships[c.id];
+      const feel = val > 60 ? 'close friends / very positive' : val > 20 ? 'friendly' : val > 0 ? 'acquaintances' : val > -30 ? 'tense / complicated' : 'enemies / strongly negative';
+      return `- ${identityFactsFor(c)}: ${feel} (${val > 0 ? '+':''}${val}%)`;
     }).join('\n');
 
-  // Past DM history summary (only if exists)
-  const pastMsgs = (dms[char.id] || []);
-  const historyNote = pastMsgs.length > 0
-    ? `\nYou and ${player.name} have been talking. Here are your recent exchanges — reference them naturally if relevant:\n` +
-      pastMsgs.slice(-10).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n')
-    : '';
   const effectiveRel = effectivePlayerRelationship(char, eventLog, dms, groupChats).value;
   const effectiveRelMode = relationshipBehaviorMode(effectiveRel);
   const situationLine = dmSituation || dmSituationRulesFor(char, player, latestUserText);
-  const privateCanon = ['havoc','rowan'].includes(char?.id) ? KERES_HAVOC_ROWAN_CANON : '';
+
+  // KERES_HAVOC_ROWAN_CANON only when the conversation is actually about that dynamic
+  const recentDmText = (dms[char.id] || []).slice(-6).map(m => m.text || '').join(' ');
+  const isKeresContext = ['havoc','rowan'].includes(char?.id) && (
+    /keres|@keresvalen|dorm|sneak|both of you|together|the three|hooked up|you two/i.test(latestUserText)
+    || /keres|@keresvalen/i.test(recentDmText)
+  );
+  const privateCanon = isKeresContext ? KERES_HAVOC_ROWAN_CANON : '';
+
   const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'dm' });
 
   return `Write as ${char.name} (@${char.handle}), a real person with a social media presence.
@@ -5634,10 +5636,11 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
 ${identityPromptFor(char)}
 Pronouns: ${pronounsFor(char)}
 Voice cues: ${char.personality}
-Profile context: ${char.bio}. ${char.description}
+Profile context: ${char.bio}. ${(char.description || '').slice(0, 220)}
 
 ${pronounRule(allChars)}
 ${CHARACTER_TONE_RULE}
+${COMMUNICATION_PATTERN_RULE}
 ${communicationStyleFor(char, 'private DM')}
 ${relationshipLogicFor(char)}
 ${privateCanon}
@@ -5647,13 +5650,8 @@ ${playerStance(char, player, effectiveRel)}
 Relationship behavior mode with ${player.name}: ${effectiveRelMode.label}. Behavioral mode: ${effectiveRelMode.behavioral}
 Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%. Keep that relationship level consistent without mentioning the number.
 ${appMemory}
-
-YOUR RELATIONSHIPS WITH OTHERS:
-${relLines || 'No known relationships yet.'}
-
-WHAT'S BEEN HAPPENING ON THE FEED RECENTLY:
-${recentPosts || 'Nothing yet.'}
-${historyNote}
+${relLines ? `\nYOUR RELATIONSHIPS WITH OTHERS:\n${relLines}` : ''}
+${recentPosts ? `\nWHAT'S BEEN HAPPENING ON THE FEED RECENTLY:\n${recentPosts}` : ''}
 
 This is a private DM with ${player.name} (@${player.handle}).
 
@@ -5677,6 +5675,12 @@ RULES:
 - React to ${player.name}'s messages the way YOUR character would — not generically.
 - If ${player.name} makes a playful private bid like "I can fix that" or "I can be more annoying", treat it as banter. Do not turn it into "prove it", "do it on the feed", or a public challenge unless she explicitly asks for one.
 ${BANNED_PHRASES_RULE}`;
+}
+
+// Compact identity block injected right before the latest user message so the
+// character anchor stays prominent regardless of how long the DM history is.
+function buildDMCharacterAnchor(char) {
+  return `[CHARACTER ANCHOR — respond as this person only: ${char.name} (@${char.handle}). Voice: ${(char.personality || '').slice(0, 160)}. Your personality drives tone, vocabulary, and what you care about. Stay completely in character.]`;
 }
 
 function gmzTipReceiptText() {
@@ -5739,11 +5743,15 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
       const dmIntent = dmIntentLine(outgoingText);
       const dmSituation = dmSituationRulesFor(char, player, outgoingText);
       const systemPrompt = buildSystemPrompt(char, player, allChars, feed, dms, eventLog, groupChats, outgoingText, dmIntent, dmSituation);
-      const history = newMsgs.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+      // All history except the current message, then re-inject anchor + current message
+      // so the character identity stays prominent at the bottom of the context window.
+      const priorHistory = newMsgs.slice(0, -1).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+      const anchoredMessage = buildDMCharacterAnchor(char) + '\n\n' + outgoingText;
       const reply = await window.claude.complete({
         messages: [
           { role:'user', content: systemPrompt },
-          ...history,
+          ...priorHistory,
+          { role:'user', content: anchoredMessage },
         ]
       });
       const charMsg = { role:'char', text: cleanChatText(reply, char, player, false, { feed, latestUserText: outgoingText }), id: Date.now()+1 };

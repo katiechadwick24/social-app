@@ -414,7 +414,8 @@ SOCIAL APP FORMAT:
 - DMs can be more private, but still message-like: brief, evasive, direct, teasing, checking in, fishing, or pressing. No novel paragraphs unless the user pushes for depth.
 - Group chats should overlap socially, but direct address still matters. If someone names a person or asks them a question, that person answers the literal premise first; others can pile on after. People may answer the wrong part, deflect, or make it worse only when the latest message is not a direct question to them. Everyone listed in the group chat is present and can read the message. Do not talk about a present member like they are absent; address them with @handle, "you", or "captain" if that fits.
 - Quidditch is a public pressure system, not the whole world. Let posts also pull from classes, dorms, exes, siblings, parties, rumors, punishments, professors, injuries, money, reputation, and who was seen with whom.
-- Use handles, screenshots, clips, likes, deleted posts, subtweets, quote-post energy, comment threads, edits, and GMZ gossip as story mechanics only when they are visible evidence or framed as uncertain rumor. Do not invent Keres liking, unliking, deleting, rewriting, screenshotting, or reposting something unless the user, current event, or visible app state explicitly says she did.
+- Use handles, screenshots, clips, visible likes, subtweets, quote-post energy, comment threads, edits, and GMZ gossip as story mechanics only when they are visible evidence or framed as uncertain rumor. Do not invent Keres liking, unliking, deleting, rewriting, screenshotting, or reposting something unless the user, current event, or visible app state explicitly says she did.
+- Avoid vague "someone deleted a post / took something down / scrubbed the timeline / suspicious like" scenarios as drama engines. They are too ungrounded and should not become boosted campus events unless the user explicitly supplies the deleted content and why it matters.
 - Make public vs private matter. A line on the feed should carry reputation risk; a DM can dodge, soften, threaten, flirt, or ask for the version nobody posted.
 
 CANON AND FACT RULES:
@@ -468,7 +469,7 @@ CHARACTER TONE BALANCE:
 - Do not twist Keres being hot, confident, or playful into her being at fault for someone else's reaction. If Havoc, Rowan, Silas, Jude, or the audience reacts, that is their behavior too. The fun is in the messy mutual social weather, not everyone scolding Keres like she orchestrated every glance.
 - Public joke replies like "eat shit", "i'm laughing", "cry about it", "skill issue", or obvious deflections are valid banter beats. Do not treat them as a failure to answer unless the thread is actually about danger, betrayal, evidence, or a real accusation.
 - Most public chatter should feel alive: jokes, thirst, teasing, bad ideas, overreactions, petty side comments, stupid observations, flirtation, and people replying because they are bored.
-- Do not make the whole cast sound like captains giving discipline speeches. Quidditch matters, but they also have classes, dorm drama, parties, crushes, petty rivalries, gossip, bad sleep, snacks, bets, deleted posts, and terrible judgment.
+- Do not make the whole cast sound like captains giving discipline speeches. Quidditch matters, but they also have classes, dorm drama, parties, crushes, petty rivalries, gossip, bad sleep, snacks, bets, and terrible judgment.
 - Many replies should be playful, amused, flirty, unserious, awkward, distracted, smug, curious, or charmingly stupid. A character can be sharp without being furious.
 - Havoc should often read as physical, smug, impulsive, funny, himbo-adjacent, and bad at minding his business. He teases before he rages. He can say something stupid-hot, start a running joke, threaten a dare, or make the wrong thing worse for fun.
 - Rowan should often read as sly, playful, observant, funny, and smooth. He can stir trouble without sounding furious. He should make jokes, bait people, redirect chaos, and look entertained by the room.
@@ -1889,6 +1890,17 @@ function looksLikePhantomEngagementGossip(text = '') {
   return /\bsomeone\b.{0,90}\b(?:like\s+and\s+unlike|liked\s+and\s+unliked|liked(?:\s+\w+){0,6}\s+unliked|unliked(?:\s+\w+){0,6}\s+liked|deleted(?:\s+\w+){0,6}\s+rewrote|rewrote(?:\s+\w+){0,6}\s+times|typed\s+and\s+deleted)\b/i.test(lower);
 }
 
+function looksLikeVagueDeletedPostDrama(text = '', opts = {}) {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  const context = contextTextForGuards(opts);
+  const deletionBeat = /\b(?:deleted|deleting|delete|took\s+(?:it|the\s+post|a\s+post|tweet|status)\s+down|taken\s+down|taking\s+down|pulled\s+(?:it|the\s+post|a\s+post)|scrubbed|wiped|vanished|disappeared|unposted|unsent|typed\s+and\s+deleted|rewrote|edited\s+(?:it|the\s+post)|silent(?:ly)?\s+unfollowed|unfollowed\s+someone|suspicious\s+like|liked\s+(?:it\s+)?(?:then\s+)?unliked|unliked\s+(?:it\s+)?(?:then\s+)?liked)\b/i.test(lower);
+  if (!deletionBeat) return false;
+  const hasSuppliedContent = /\b(?:said|wrote|read|caption(?:ed)?|quote|quoted|screenshot(?:ted)?|screen.?shot|clip|photo|receipts?|evidence|because|after)\b/i.test(`${lower} ${context}`)
+    || /["“”][^"“”]{8,}["“”]/.test(`${text} ${opts.contextText || ''}`);
+  const explicitUserSetup = /\b(?:user supplied|custom event|anonymous tip|current event)\b/i.test(context);
+  return !hasSuppliedContent && !explicitUserSetup;
+}
+
 function looksLikeReactionBlameSpiral(text = '') {
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
   return /\byou\s+know\s+(?:exactly\s+)?what\s+(?:you'?re|you are)\s+doing\b/i.test(lower)
@@ -2252,7 +2264,7 @@ function cleanSocialPostText(raw = '', char, player, opts = {}) {
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts }) || looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts }) || looksLikePhantomEngagementGossip(clean) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || looksLikeVagueAphorism(clean) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, avoidTexts) || clean.length > 280) {
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts }) || looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts }) || looksLikePhantomEngagementGossip(clean) || looksLikeVagueDeletedPostDrama(clean, { ...opts, avoidTexts }) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || looksLikeVagueAphorism(clean) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, avoidTexts) || clean.length > 280) {
     return fallbackPostForChar(char, player, avoidTexts);
   }
   return clean;
@@ -3610,7 +3622,7 @@ const EVENT_POOL = [
     scenario:'@silasmontague\'s perfectly controlled match analysis post has one fatal flaw — a background detail only you would notice. You could say nothing. Or you could say everything.',
     chars:['silas'], xp:[100,180] },
   { id:'ev15', type:'opportunity',
-    scenario:'@briarrowe just silently unfollowed someone and the entire school noticed. You are one of the few who knows why. Say something or let the chaos cook?',
+    scenario:'@briarrowe just posted a brutally specific practice standard that only makes sense if you saw the drill she is talking about. You did. Say something or let the chaos cook?',
     chars:['briar'], xp:[80,160] },
 ];
 
@@ -3685,6 +3697,7 @@ function normalizeCampusEvent(raw = {}, index = 0, chars = []) {
     .trim()
     .slice(0, 420);
   if (!scenario || scenario.length < 24) return null;
+  if (looksLikeVagueDeletedPostDrama(scenario, { contextText: 'generated campus event' })) return null;
 
   const listed = Array.isArray(raw.chars) ? raw.chars : Array.isArray(raw.characters) ? raw.characters : [];
   const listedIds = listed.map(id => normalizeEventCharId(id, chars)).filter(Boolean);
@@ -8299,7 +8312,8 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
 - 1-2 sentences max, punchy
 - Optionally tag 0-2 handles if natural
 - Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
-- Do not invent a concrete app action like someone liked/unliked, deleted/rewrote, screenshotted, or reposted something unless that action is visible in recent context. If you need gossip with thin context, keep it broader, funnier, nosier, or ask a question.
+- Do not invent a concrete app action like someone liked/unliked, deleted/rewrote, screenshotted, or reposted something unless that action is visible in recent context.
+- Do not use vague deleted-post drama as the hook: no "someone deleted a post," "took it down," "scrubbed the timeline," "typed and deleted," "suspicious like," or "silent unfollow" posts unless the deleted content and stakes are explicitly visible in recent context. If you need gossip with thin context, use a concrete school moment instead.
 - Do not make Keres the culprit for anonymous or ambiguous feed behavior unless @${player.handle} is explicitly named in the prompt or recent context.
 - NO hashtags, NO quotes around the post, JUST the post text
 - Do not introduce yourself, list identity facts, summarize rules, or mention prompts/context.
@@ -8589,7 +8603,7 @@ ${BANNED_PHRASES_RULE}` }]
         'a spell going wrong',
         'library behavior',
         'a party, dare, bet, or bad idea',
-        'a deleted post or suspicious like',
+        'a too-loud hallway moment everyone pretended not to hear',
         'weather, uniforms, bruises, or bad sleep',
         'crushes, flirting, jealousy, or pretending not to stare',
       ];
@@ -8695,7 +8709,8 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 - Primary topic to use today: ${campusTopic}
 - This is a fresh standalone post, not a mandatory reply to the recent feed. Use recent posts only for continuity.
 - Do not parrot the current feed's buzzwords. Avoid repeating "structure", "discipline", "standards", "scoreboard", or "formation" unless the primary topic truly requires Quidditch.
-- Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, parties, food, bets, bad sleep, gossip, someone acting weird, deleted posts, or stupid things people did.
+- Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, parties, food, bets, bad sleep, gossip, someone acting weird, overheard hallway moments, or stupid things people did.
+- Do not use vague deleted-post drama as the hook: no "someone deleted a post," "took it down," "scrubbed the timeline," "typed and deleted," "suspicious like," or "silent unfollow" posts unless the deleted content and stakes are explicitly visible in recent context.
 - Unless the character is Silas, strongly prefer social mess, jokes, teasing, flirtation, petty commentary, curiosity, ordinary school chaos, or bad ideas over captain-speech language.
 - VOICE: Sound like a college student typing on their phone — direct, specific, casual. Say the ACTUAL thing. Name the specific class, person, play, situation, or event. DO NOT write vague philosophical one-liners like "restraint remains a theory" or "some people show their strategy". Real people say "professor just assigned us a 2000 word essay due friday" or "just watched callum argue with a first year for six minutes". Be concrete.
 - NO hashtags, NO quotes around the post, JUST the post text

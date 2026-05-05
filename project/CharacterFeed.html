@@ -395,6 +395,8 @@ STYLE RULES:
 - Avoid run-on sentences and stacked clauses.
 - Prefer one short sentence, or two very short sentences.
 - Keep replies punchy, readable, and conversational.
+- Do not use "mate" as a default address. It turns every character into the same voice. Use a handle, name, team role, or no address unless a profile explicitly makes that word natural.
+- Avoid catchphrase replies that can be pasted anywhere: "I can make that worse", "that helped nobody. excellent.", "beautiful. no notes", "that's just called having standards", and similar label-punchlines.
 
 SOCIAL APP FORMAT:
 - This is a campus social app for college-aged students, not adult professionals and not chapter prose. They should sound like messy young people with phones, classes, crushes, grudges, group chats, bad judgment, and too much access to each other's lives.
@@ -519,6 +521,22 @@ SIDE-PARTICIPANT CONTEXT RULE:
 - First-person opinions are fine ("i hate that i laughed", "i noticed", "i am choosing not to encourage this"). First-person involvement is not fine for side participants ("you want me to...", "mad i answered first", "need me to...") unless they were actually addressed.
 - Elara can needle Havoc about giving Keres attention, but she should anchor it to what Havoc visibly did or said. She should not insert herself into Keres and Havoc's exchange as if Havoc was talking to her.`;
 
+const PUBLIC_THREAD_GROUNDING_RULE = `
+PUBLIC THREAD GROUNDING:
+- Anchor every public reply to the smallest visible unit being answered: the post, the specific comment, or the exact @handle tag. Wider feed memory is background, not permission to answer a different thread.
+- Before writing, identify the visible words that caused the reply. If the reply cannot point to a quoted line, tag, photo, team stake, or known public memory, make it broader, ask a playful question, or stay silent.
+- When answering a reply, answer that reply first. Do not keep treating the original post as the only context after the thread has moved.
+- A repeated catchphrase from another post is not continuity. It is noise unless the current line clearly invites that exact running joke.
+- Do not tag yourself or refer to yourself by handle/name as if you are a different person. If you are the speaker or one of the named participants, use I/me/we/us or address the other person directly.
+- If a bot or side account comments, it should add a grounded campus reaction, not a stock "my roommate..." template or a disconnected moral verdict.`;
+
+const BOT_REALITY_RULE = `
+BOT COMMENT REALITY:
+- Anonymous accounts are campus people with motives, not generic bot templates. They can be thirsty, bored, biased, wrong, funny, or nosy, but their comment still needs a visible trigger.
+- House-leaning accounts keep their allegiance. A Slytherin-leaning account does not sincerely hype Gryffindor over Slytherin unless the line is obviously sarcastic or self-aware.
+- "my roommate just..." jokes, spilled-coffee reactions, and "I screamed in class" beats are occasional texture only. Do not use them when the thread has no dorm, food, class, noise, or roommate hook.
+- Do not make every anonymous account overreact in the same stan syntax. Mix practical complaints, rumor questions, side-taking, thirst, hater reads, and small campus observations.`;
+
 const THREAD_PATTERN_VARIETY_RULE = `
 THREAD PATTERN VARIETY:
 - Do not repeat the previous speaker's sentence logic with different nouns.
@@ -550,10 +568,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'polished thread recap or moral analysis',
       'flat concession after a flirt opening',
     ],
-    reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|caption is writing|caption writes|discourse|narrative|exhibit a|camera roll|clip dealer|detention energy|someone else'?s problem|almost useful|go\s+off|useful,\s*if\s+accidentally|going\s+for\s+the\s+hard\s+no|doesn'?t\s+want\s+the\s+distraction|that's\s+just\s+tactical|that\s+is\s+just\s+tactical)\b|beautiful\.?\s+no notes|no notes except/i,
+    reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|caption is writing|caption writes|discourse|narrative|exhibit a|camera roll|clip dealer|detention energy|someone else'?s problem|almost useful|go\s+off|useful,\s*if\s+accidentally|going\s+for\s+the\s+hard\s+no|doesn'?t\s+want\s+the\s+distraction|that's\s+just\s+tactical|that\s+is\s+just\s+tactical|i\s+can\s+make\s+that\s+worse)\b|beautiful\.?\s+no notes|no notes except/i,
     publicFallbacks: [
       'worried i\'ll distract you? rude. accurate, but rude.',
-      'i can make that worse in under ten seconds.',
+      'bad idea. i heard my name.',
       '{player} do it again. slower this time.',
       'say less. i\'ll stand where you can pretend not to look.',
     ],
@@ -775,7 +793,7 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'captain speeches',
       'psychoanalysis',
     ],
-    reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|data says|camera roll|clip dealer|shove|square up|throw hands|punch|hold my broom|i can make that worse|bad idea, better timing|do it again\.?\s+slower|become useful)\b/i,
+    reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|data says|camera roll|clip dealer|shove|square up|throw hands|punch|hold my broom|i can make that worse|bad idea, better timing|do it again\.?\s+slower|become useful|that helped nobody|beautiful\.?\s+no notes|no notes except)\b/i,
     publicFallbacks: [
       'awful. keep going.',
       'sure. nothing here can become evidence.',
@@ -1143,6 +1161,11 @@ const STICKY_PHRASE_BANS = [
   'respect the distraction',
   'respect the commitment to the bit',
   'respect the dedication',
+  'i can make that worse',
+  'that helped nobody',
+  'beautiful. no notes',
+  'thats just called having standards',
+  "that's just called having standards",
 ];
 
 function looksLikePhraseInfection(text = '') {
@@ -1150,10 +1173,57 @@ function looksLikePhraseInfection(text = '') {
   return PHRASE_INFECTION_REGEXES.some(rx => rx.test(source));
 }
 
+function collectRecentFeedDialogue(feed = [], opts = {}) {
+  const {
+    limit = 10,
+    includePosts = true,
+    includeReplies = true,
+    includeComments = true,
+    charId = null,
+    botId = null,
+  } = opts || {};
+  const entries = [];
+  const push = (text, meta = {}) => {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return;
+    if (charId && meta.charId !== charId) return;
+    if (botId && meta.botId !== botId) return;
+    entries.push({ ...meta, text: clean });
+  };
+
+  (feed || []).slice(0, limit).forEach(post => {
+    if (includePosts) push(post?.text, { kind:'post', charId: post?.charId, postId: post?.id });
+    if (includeReplies && post?.reply) {
+      push(post.reply.text, { kind:'reply', charId: post.reply.charId, postId: post?.id });
+    }
+    if (includeComments) {
+      (post?.charComments || []).forEach((cc, index) => {
+        push(cc?.text, { kind:'char-comment', charId: cc?.charId, postId: post?.id, index });
+      });
+      (post?.botComments || []).forEach((bc, index) => {
+        push(bc?.text, {
+          kind:'bot-comment',
+          charId: bc?.isPlayer ? 'player' : null,
+          botId: bc?.bot,
+          postId: post?.id,
+          index,
+        });
+      });
+    }
+  });
+  return entries;
+}
+
+function recentFeedDialogueText(feed = [], opts = {}) {
+  return collectRecentFeedDialogue(feed, opts)
+    .map(entry => entry.text)
+    .join('\n');
+}
+
 function repeatedRecentPhrases(feed = [], extra = '', opts = {}) {
   const { dms = {}, charId = null, groupChats = [] } = opts;
   const texts = [
-    ...(feed || []).slice(0, 10).map(p => p?.text || ''),
+    ...collectRecentFeedDialogue(feed, { limit: 10 }).map(entry => entry.text),
     extra || '',
   ].filter(Boolean);
   if (charId && dms[charId]) {
@@ -1409,10 +1479,10 @@ function fallbackChatLine(char, player, group = false, avoidTexts = []) {
   const name = player?.name?.split(' ')[0] || 'you';
   const pool = {
     havoc: group
-      ? ['wait, that was the sane version of the thought.', 'i support this getting worse for morale reasons.', 'someone say less before i start helping.']
+      ? ['wait, that was the sane version of the thought.', 'that plan has terrible survival instincts.', 'someone say less before i start helping.']
       : [`you say that like i was supposed to behave, ${name}.`, 'i was being helpful. badly, maybe, but helpful.', 'that depends. are we calling this a warning or an invitation?'],
     rowan: group
-      ? ['terrible idea. suspiciously good timing though.', 'i would like my objections noted and ignored.', 'this chat is one bad decision from becoming evidence.']
+      ? ['bad plan. annoyingly good timing though.', 'i would like my objections noted and ignored.', 'this chat is one bad decision from becoming evidence.']
       : ['that is a dangerous amount of confidence for one message.', 'i am listening. regrettably interested, even.', 'depends what you want me to do with that.'],
     silas: group
       ? ['focus for six seconds. try it as an experiment.', 'if this is strategy, spell it correctly first.', 'gryffindor would call this planning. unfortunate.']
@@ -1421,7 +1491,7 @@ function fallbackChatLine(char, player, group = false, avoidTexts = []) {
       ? ['some of us are trying to keep this from becoming public evidence.', 'that is not a plan. that is a liability with confidence.', 'if this gets worse, i am blaming everyone alphabetically.']
       : ['that was almost useful. alarming.', 'you are enjoying this too much. fix that.', 'annoying. unfortunately legible.'],
     jude: group
-      ? ['beautiful. no notes except probably several consequences.', 'that sentence has detention energy.', 'i am choosing to believe this is someone else’s problem.']
+      ? ['awful structure. several consequences.', 'that sentence has detention energy.', 'i am choosing to believe this is someone else’s problem.']
       : ['best friends is a lot. teammates with terrible judgment, maybe.', 'if everyone is being weird, i can be worse on your side.', 'sure. let us pretend this is normal.'],
     tamsin: group
       ? ['i looked away for one minute and somehow that was optimistic.', 'that was almost a plan. i am choosing to be encouraged.', 'please tell me someone brought snacks to this bad decision.']
@@ -1549,7 +1619,7 @@ function fallbackGroupQuestionLine(char, player, opts = {}) {
   const latest = String(opts.latestUserText || '').toLowerCase();
   const pool = /\bobjection\b/i.test(latest) ? {
     rowan: ['my objection is mostly to saying this much before the match.', 'i object to everyone sounding this confident before warmups.', 'the objection is that both teams are talking like the scoreboard already agreed.'],
-    havoc: ['rowan objects as a hobby. i respect the consistency.', 'his objection is that i said the fun part out loud.', 'rowan objects when the bad idea has witnesses. professional of him.'],
+    havoc: ['rowan objects as a hobby. very consistent.', 'his objection is that i said the fun part out loud.', 'rowan objects when the bad idea has witnesses. professional of him.'],
   }[char?.id] : null;
   const options = pool || {
     havoc: ['say it cleaner and i might even answer the right part.', 'i heard you. i am choosing the funnier answer.', 'fine. actual answer first, then bad idea.'],
@@ -1574,6 +1644,61 @@ function looksLikeJudePsychoanalysis(text = '') {
     || /\bshe(?:'?s|\s+is)\s+(?:the\s+one\s+who(?:'d|\s+would)\s+have\s+actual\s+opinions|also\s+not\s+wrong\s+about\s+most\s+things)\b/i.test(lower)
     || /\b(?:actually sharp instead of just looking like|means you know what you're doing|sharp people who know what they're doing|worse to be around|can't pretend you didn't see it coming|cannot pretend you did not see it coming)\b/i.test(lower)
     || /\bwhich is worse because\b/i.test(lower);
+}
+
+function looksLikeAddressSlop(text = '', char = null) {
+  if (!char || !text) return false;
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\bmate\b/i.test(lower);
+}
+
+function looksLikeCatchphraseSlop(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\bi\s+can\s+make\s+that\s+worse\b/i.test(lower)
+    || /\bthat\s+helped\s+nobody\b/i.test(lower)
+    || /\bbeautiful\.?\s+no\s+notes\b/i.test(lower)
+    || /\bno\s+notes\s+except\b/i.test(lower)
+    || /\bbeautifully\s+helpful\b/i.test(lower)
+    || /\bthat'?s\s+just\s+called\s+having\s+standards\b/i.test(lower)
+    || /\bthat'?s\s+called\s+having\s+standards\b/i.test(lower)
+    || /\b(?:the\s+)?confidence\s+of\s+someone\s+who\s+knows\b/i.test(lower);
+}
+
+function botHouseLean(bot = {}) {
+  const source = `${bot?.id || ''} ${bot?.handle || ''} ${bot?.name || ''} ${bot?.type || ''} ${bot?.vibe || ''}`.toLowerCase();
+  if (source.includes('slytherin')) return 'slytherin';
+  if (source.includes('gryffindor')) return 'gryffindor';
+  if (source.includes('ravenclaw')) return 'ravenclaw';
+  if (source.includes('hufflepuff')) return 'hufflepuff';
+  return '';
+}
+
+function botGroundingRule(bot = {}) {
+  const house = botHouseLean(bot);
+  const lines = [];
+  if (house) {
+    lines.push(`House allegiance: ${house}. Keep that bias unless the comment is obviously sarcastic or self-mocking.`);
+  }
+  if (bot?.id === 'dormfridge' || /roommate|leftovers|food/i.test(`${bot?.handle || ''} ${bot?.vibe || ''}`)) {
+    lines.push('Roommate/leftovers jokes are texture, not a required template. Use one only when it hooks into the visible thread.');
+  }
+  return lines.join(' ');
+}
+
+function looksLikeBotPatternSlop(text = '', bot = {}, opts = {}) {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  const context = String(opts.contextText || '').toLowerCase().replace(/[’]/g, "'");
+  const contextAllowsRoommate = /\b(?:roommate|dorm|common room|coffee|spill|spilled|food|snack|leftovers|class|lecture|library|screamed|reading this)\b/i.test(context);
+  if (/\bmy\s+roommate\b/i.test(lower) && !contextAllowsRoommate) return true;
+
+  const house = botHouseLean(bot);
+  if (house === 'slytherin') {
+    const praisesGryffindor = /\bgryffindor\b.{0,90}\b(?:practic(?:e|ing|ed)|better|harder|ready|win|wipe|help|confidence|deserve)\b/i.test(lower)
+      || /\b(?:practic(?:e|ing|ed)|better|harder|ready|win|wipe|help|confidence|deserve)\b.{0,90}\bgryffindor\b/i.test(lower);
+    const clearlyMocking = /\b(?:lol|lmfao|lmao|as if|sure|imagine|not|never|can't|cannot|couldn'?t|please|cute|tragic|allegedly)\b/i.test(lower);
+    if (praisesGryffindor && !clearlyMocking) return true;
+  }
+  return false;
 }
 
 function looksLikeUnsupportedPlayerActionClaim(text = '', latestUserText = '', player = null) {
@@ -1667,6 +1792,8 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
     group = !!opts.group;
   }
   opts = opts || {};
+  const avoidTexts = [...(opts.avoidTexts || [])];
+  if (opts.feed) avoidTexts.push(recentFeedDialogueText(opts.feed, { limit: opts.feedAvoidLimit || 8 }));
   const names = [char?.name, char?.handle, char?.handle ? `@${char.handle}` : ''].filter(Boolean).map(escapeRegExp);
   let clean = cleanGeneratedText(text)
     .replace(/[“”]/g, '"')
@@ -1678,30 +1805,30 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
     return 'tamsin is always already worried. the question is how much evidence she has.';
   }
   if (group && char && looksLikeTeamPronounFlip(clean, opts.latestUserText || '')) {
-    return fallbackGroupTeamBanterLine(char, player, opts);
+    return fallbackGroupTeamBanterLine(char, player, { ...opts, avoidTexts });
   }
   if (group && char && looksLikeGroupDirectQuestionDodge(clean, opts)) {
-    return fallbackGroupQuestionLine(char, player, opts);
+    return fallbackGroupQuestionLine(char, player, { ...opts, avoidTexts });
   }
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
-    return fallbackUnsupportedBlameLine(char, player, group, opts.avoidTexts || []);
+    return fallbackUnsupportedBlameLine(char, player, group, avoidTexts);
   }
-  if (char && (looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
-    return fallbackChatLine(char, player, group, opts.avoidTexts || []);
+  if (char && (looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
+    return fallbackChatLine(char, player, group, avoidTexts);
   }
   if (char?.id === 'jude' && looksLikeJudePsychoanalysis(clean)) {
-    return fallbackChatLine(char, player, group, opts.avoidTexts || []);
+    return fallbackChatLine(char, player, group, avoidTexts);
   }
   if (!group && char && (looksLikePrivateBanterDareDodge(clean, opts.latestUserText || '') || looksLikePrivateBanterDareDodge(clean, 'annoying'))) {
-    return fallbackChatLine(char, player, group, opts.avoidTexts || []);
+    return fallbackChatLine(char, player, group, avoidTexts);
   }
   if (char && violatesCharacterDialogueContract(clean, char)) {
-    return fallbackDialogueContractLine(char, player, opts.avoidTexts || []);
+    return fallbackDialogueContractLine(char, player, avoidTexts);
   }
-  if (char && hasDialoguePatternCollision(clean, opts.avoidTexts || [])) {
-    return fallbackDialogueContractLine(char, player, opts.avoidTexts || []);
+  if (char && hasDialoguePatternCollision(clean, avoidTexts)) {
+    return fallbackDialogueContractLine(char, player, avoidTexts);
   }
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeIdentityConfusion(clean, char)) return fallbackChatLine(char, player, group, opts.avoidTexts || []);
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeIdentityConfusion(clean, char)) return fallbackChatLine(char, player, group, avoidTexts);
   return clean;
 }
 
@@ -1886,18 +2013,26 @@ function looksLikeIdentityConfusion(text = '', char) {
 
 function cleanSocialPostText(raw = '', char, player, opts = {}) {
   opts = opts || {};
+  const avoidTexts = [...(opts.avoidTexts || [])];
+  if (opts.feed) avoidTexts.push(recentFeedDialogueText(opts.feed, { limit: opts.feedAvoidLimit || 8 }));
   const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw).replace(stripSpeakerLabelRegex(char), ''), char), char)
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikePhantomEngagementGossip(clean) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, opts.avoidTexts || []) || clean.length > 280) {
-    return fallbackPostForChar(char, player, opts.avoidTexts || []);
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikePhantomEngagementGossip(clean) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, avoidTexts) || clean.length > 280) {
+    return fallbackPostForChar(char, player, avoidTexts);
   }
   return clean;
 }
 
 function fallbackBotLine(bot = {}) {
-  const pool = [
+  const house = botHouseLean(bot);
+  const pool = house === 'slytherin' ? [
+    'slytherin watching gryffindor discover consequences is self care',
+    'the green side of this thread is eating today',
+    'gryffindor fans are brave for typing through this',
+    'someone check the slytherin group chat because they are absolutely insufferable right now',
+  ] : [
     'i have homework and somehow this is louder',
     'someone post the screenshot or stop whispering',
     'my group chat is already fighting about this',
@@ -1989,11 +2124,18 @@ function looksLikeBannedFlatPhrase(text = '') {
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
   return /\bgo\s+off\b/i.test(lower)
     || /\bfair\b/i.test(lower)
+    || /\bmate\b/i.test(lower)
     || /\buseful,\s*if\s+accidentally\b/i.test(lower)
     || /\bthat'?s\s+just\s+tactical\b/i.test(lower)
     || /\bthat\s+is\s+just\s+tactical\b/i.test(lower)
     || /\bdoesn'?t\s+want\s+the\s+distraction\b/i.test(lower)
     || /\bgoing\s+for\s+the\s+hard\s+no\b/i.test(lower)
+    || /\bi\s+can\s+make\s+that\s+worse\b/i.test(lower)
+    || /\bthat\s+helped\s+nobody\b/i.test(lower)
+    || /\bbeautiful\.?\s+no\s+notes\b/i.test(lower)
+    || /\bno\s+notes\s+except\b/i.test(lower)
+    || /\bbeautifully\s+helpful\b/i.test(lower)
+    || /\bthat'?s\s+just\s+called\s+having\s+standards\b/i.test(lower)
     || /\bcould\s+be\s+entertaining\.?$/i.test(lower)
     || /^(?:fine|valid|noted|correct)\.?$/i.test(lower);
 }
@@ -2105,7 +2247,7 @@ function fallbackFlatThreadLine(char, player, opts = {}) {
   ] : {
     havoc: [`${playerTag}that sounded like an invitation with bad manners.`, `${playerTag}bad idea. better delivery.`, `${playerTag}try the no again. it almost worked.`],
     silas: [`${target}make the joke useful or stop spending it.`, `${target}be precise. then be annoying.`, `${target}if this is teamwork, aim it.`],
-    jude: [`${target}awful. keep typing.`, `${target}terrible restraint. proud of you.`, `${target}that helped nobody. excellent.`],
+    jude: [`${target}awful. keep typing.`, `${target}terrible restraint. proud of you.`, `${target}useless contribution. unfortunately funny.`],
     rowan: [`${target}interesting answer. poor survival instinct.`, `${target}say that like you meant to be subtle.`, `${target}bad timing. excellent face-saving.`],
     callum: [`${target}try a cleaner angle.`, `${target}that was almost the useful version.`, `${target}you are enjoying being wrong.`],
     elara: [`${target}charming. almost on purpose.`, `${target}careful. that nearly sounded brave.`, `${target}say less before it flatters someone.`],
@@ -2115,7 +2257,20 @@ function fallbackFlatThreadLine(char, player, opts = {}) {
     milo: [`${target}i understood half and support the dangerous half.`, `${target}wait, are we making this worse on purpose?`, `${target}bad idea. i brought enthusiasm.`],
   }[char?.id] || [`${target}say that with a cleaner angle.`, `${target}that made it louder. useful choice.`, `${target}interesting. inconveniently.`];
   const options = Array.isArray(pool) ? pool : [pool];
-  return options[Math.floor(Math.random() * options.length)].trim();
+  const start = Math.floor(Math.random() * options.length);
+  for (let i = 0; i < options.length; i++) {
+    const candidate = options[(start + i) % options.length].trim();
+    if (!fallbackWasUsed(char?.id, candidate)
+        && !looksLikeCatchphraseSlop(candidate)
+        && !violatesCharacterDialogueContract(candidate, char)
+        && !hasDialoguePatternCollision(candidate, opts.avoidTexts || [])) {
+      trackFallback(char?.id, candidate);
+      return candidate;
+    }
+  }
+  const fallback = options[start].trim();
+  trackFallback(char?.id, fallback);
+  return fallback;
 }
 
 function fallbackSelfReferenceLine(char, player) {
@@ -2206,29 +2361,33 @@ function fallbackSideParticipantLine(char, player, opts = {}) {
 }
 
 function cleanSocialReplyText(raw = '', char, player, opts = {}) {
+  opts = opts || {};
+  const avoidTexts = [...(opts.avoidTexts || [])];
+  if (opts.feed) avoidTexts.push(recentFeedDialogueText(opts.feed, { limit: opts.feedAvoidLimit || 8 }));
   const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw).replace(stripSpeakerLabelRegex(char), ''), char), char)
     .replace(/^reply:\s*/i, '')
     .replace(/^comment:\s*/i, '')
     .trim();
   if (looksLikeMadeItWorseSubjectMisread(clean, opts)) {
     if (opts.bot) return fallbackBotLine(opts.bot);
-    if (char) return fallbackDialogueContractLine(char, player, opts.avoidTexts || []);
-    return fallbackChatLine(char, player, false, opts.avoidTexts || []);
+    if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
+    return fallbackChatLine(char, player, false, avoidTexts);
   }
+  if (opts.bot && looksLikeBotPatternSlop(clean, opts.bot, opts)) return fallbackBotLine(opts.bot);
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
-    return fallbackUnsupportedBlameLine(char, player, false, opts.avoidTexts || []);
+    return fallbackUnsupportedBlameLine(char, player, false, avoidTexts);
   }
   if (char && looksLikeSilasCamaraderieMisread(clean, char, opts)) {
-    return fallbackFlatThreadLine(char, player, opts);
+    return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
   }
-  if (char && (looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
-    return fallbackFlatThreadLine(char, player, opts);
+  if (char && (looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
+    return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
   }
   if (char && looksLikeInterrogationSpiral(clean)) {
-    return fallbackPublicBanterLine(char, player, opts.avoidTexts || []);
+    return fallbackPublicBanterLine(char, player, avoidTexts);
   }
   if (char && (looksLikeHardDefensiveBanterDodge(clean) || (opts.playfulBanter && looksLikeDefensiveBanterDodge(clean)))) {
-    return fallbackPublicBanterLine(char, player, opts.avoidTexts || []);
+    return fallbackPublicBanterLine(char, player, avoidTexts);
   }
   if (char && looksLikeSideParticipantSelfInsertion(clean, char, opts)) {
     return fallbackSideParticipantLine(char, player, opts);
@@ -2240,18 +2399,18 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     return fallbackParticipantIncludedLine(char, player, opts);
   }
   if (char && violatesCharacterDialogueContract(clean, char)) {
-    return fallbackDialogueContractLine(char, player, opts.avoidTexts || []);
+    return fallbackDialogueContractLine(char, player, avoidTexts);
   }
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeCrypticVomit(clean, opts.contextText || '') || hasDialoguePatternCollision(clean, opts.avoidTexts || []) || looksLikeIdentityConfusion(clean, char) || clean.length > 360) {
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeCrypticVomit(clean, opts.contextText || '') || hasDialoguePatternCollision(clean, avoidTexts) || looksLikeIdentityConfusion(clean, char) || clean.length > 360) {
     if (opts.bot) return fallbackBotLine(opts.bot);
     if (char && opts.playfulBanter) {
-      const playfulFallback = fallbackPublicBanterLine(char, player, opts.avoidTexts || []);
-      return hasDialoguePatternCollision(playfulFallback, opts.avoidTexts || []) || violatesCharacterDialogueContract(playfulFallback, char)
-        ? fallbackDialogueContractLine(char, player, opts.avoidTexts || [])
+      const playfulFallback = fallbackPublicBanterLine(char, player, avoidTexts);
+      return hasDialoguePatternCollision(playfulFallback, avoidTexts) || violatesCharacterDialogueContract(playfulFallback, char)
+        ? fallbackDialogueContractLine(char, player, avoidTexts)
         : playfulFallback;
     }
-    if (char) return fallbackDialogueContractLine(char, player, opts.avoidTexts || []);
-    return fallbackChatLine(char, player, false, opts.avoidTexts || []);
+    if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
+    return fallbackChatLine(char, player, false, avoidTexts);
   }
   return clean;
 }
@@ -2724,10 +2883,16 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
       if (recent) memory.push(`Recent group chat "${group.name}": ${recent}`);
     });
 
-  const recentPosts = (feed || []).slice(0, 5).map(p => {
-    const poster = byId(p.charId);
-    return poster?.handle && p.text ? `@${poster.handle}: "${String(p.text).slice(0, 120)}"` : '';
-  }).filter(Boolean);
+  const recentPosts = collectRecentFeedDialogue(feed, { limit: 5 })
+    .slice(0, 12)
+    .map(entry => {
+      const speaker = entry.kind === 'bot-comment'
+        ? (entry.botId ? { handle: entry.botId } : null)
+        : byId(entry.charId);
+      const target = entry.kind.includes('comment') || entry.kind === 'reply' ? ' replied' : '';
+      return speaker?.handle && entry.text ? `@${speaker.handle}${target}: "${String(entry.text).slice(0, 120)}"` : '';
+    })
+    .filter(Boolean);
   if (recentPosts.length) memory.push(`Recent visible feed: ${recentPosts.join(' / ')}`);
 
   const privacyRule = channel === 'public'
@@ -2897,7 +3062,7 @@ const DIALOGUE_REGRESSION_SMOKE_CASES = [
   { charId:'havoc', text:'engagement forecast: deeply annoying, wildly clickable.', reject:true },
   { charId:'jude', text:'new poll: who made this worse fastest.', reject:true },
   { charId:'theo', text:'awful. keep going.', reject:true },
-  { charId:'havoc', text:'i can make that worse in under ten seconds.', reject:false },
+  { charId:'havoc', text:'i can make that worse in under ten seconds.', reject:true },
   { charId:'jude', text:'awful. keep going.', reject:false },
   { charId:'theo', text:'new poll: who made this worse fastest.', reject:false },
   {
@@ -3317,7 +3482,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-const THREAD_STYLE_VERSION = 2;
+const THREAD_STYLE_VERSION = 3;
 
 function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
   return (post.charComments || []).some(cc => cc?.charId === player?.id)
@@ -3584,7 +3749,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\n${intentLine}\n\nCharacters (in order):\n${charRoster}\n\nSENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\n${intentLine}\n\nCharacters (in order):\n${charRoster}\n\nSENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -3592,7 +3757,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         const usedThreadTexts = [post.text || ''];
         charR1 = picked.map((c,i) => {
           const speakerHistory = speakerThreadHistory(c.id, 8);
-          const text = cleanSocialReplyText(parsed[i] || '', c, player, { avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === authorId || directMentionIds.has(c.id), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], replyToHandle: author?.handle });
+          const text = cleanSocialReplyText(parsed[i] || '', c, player, { feed, avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === authorId || directMentionIds.has(c.id), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], replyToHandle: author?.handle });
           usedThreadTexts.push(text);
           return {
             charId: c.id,
@@ -3630,7 +3795,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         ? 3 + (Math.random() < 0.55 ? 1 : 0)
         : 2 + (Math.random() < 0.35 ? 1 : 0);
       const botsPicked = [...pool].sort(() => Math.random()-0.5).slice(0, botCount);
-      const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
+      const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}. ${botGroundingRule(b)}`).join('\n');
 
       let bots = [];
       if (botCount > 0) try {
@@ -3640,10 +3805,12 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 
 ${transcript}
 
-${pronounRule([author, player, ...chars])}
-${SOCIAL_ECOSYSTEM_THREAD_RULE}
-${playfulThreadRule}
-${gmzSpeculationRule}
+	${pronounRule([author, player, ...chars])}
+	${SOCIAL_ECOSYSTEM_THREAD_RULE}
+	${PUBLIC_THREAD_GROUNDING_RULE}
+	${BOT_REALITY_RULE}
+	${playfulThreadRule}
+	${gmzSpeculationRule}
 
 Write replies from random anonymous student accounts joining the comment thread. They are part of the conversation, not a recap channel. They:
 - pick teams sometimes ("team @whoever", "@xxx ate this")
@@ -3675,7 +3842,7 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
         const botAvoidTexts = [post.text, ...charR1.map(cc => cc.text)].filter(Boolean);
         bots = botsPicked.map((b,i) => ({
           bot: b.id,
-          text: cleanSocialReplyText(parsed[i] || '', null, player, { bot: b, contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], avoidTexts: botAvoidTexts }),
+          text: cleanSocialReplyText(parsed[i] || '', null, player, { feed, bot: b, contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], avoidTexts: botAvoidTexts }),
           likes: Math.floor(Math.random()*15000),
           timestamp: baseTs + 45000 + i*55000 + Math.floor(Math.random()*150000),
         })).filter(b => b.text);
@@ -3721,6 +3888,7 @@ Original post by ${author?.name || player.name}: "${post.text}"
 
 ${pronounRule([author, player, fight.replier, fight.target])}
 ${CHARACTER_TONE_RULE}
+${PUBLIC_THREAD_GROUNDING_RULE}
 ${communicationStyleFor(fight.replier, 'public character-to-character reply')}
 ${playfulThreadRule}
 ${stanceFor(fight.replier)}
@@ -3744,7 +3912,7 @@ Return ONLY the reply text. No other text.`
           if (cancelled) return;
           const clapback = {
             charId: fight.replier.id,
-            text: cleanSocialReplyText(res, fight.replier, player, { avoidTexts: [post.text, ...charR1.map(cc => cc.text), fight.targetReply.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.replier.id === authorId || characterMentionedInText(post.text || '', fight.replier), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR] }),
+            text: cleanSocialReplyText(res, fight.replier, player, { feed, avoidTexts: [post.text, ...charR1.map(cc => cc.text), fight.targetReply.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.replier.id === authorId || characterMentionedInText(post.text || '', fight.replier), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR] }),
             likes: Math.floor(Math.random()*20000) + 2000, // clapbacks pop off
             timestamp: baseTs + 480000 + Math.floor(Math.random()*240000),
             replyTo: fight.target.handle,
@@ -3758,13 +3926,13 @@ Return ONLY the reply text. No other text.`
           // ─── ROUND 4: bots react to the clapback ────────────
           const clapTranscript = `${author?.name || player.name}: "${post.text}"\n${fight.target.name}: "${fight.targetReply.text}"\n${fight.replier.name}: "${clapback.text}"`;
           const reactBots = Math.random() < 0.55 ? [...pool].sort(() => Math.random()-0.5).slice(0, 1) : [];
-          const reactRoster = reactBots.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}`).join('\n');
+	          const reactRoster = reactBots.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}. ${botGroundingRule(b)}`).join('\n');
           try {
             let reactComments = [];
             if (reactBots.length > 0) {
             const res2 = await window.claude.complete({
               messages:[{ role:'user', content:
-                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, beg for details, speculate about what GMZ left out, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, beg for details, speculate about what GMZ left out, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
             });
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -3772,7 +3940,7 @@ Return ONLY the reply text. No other text.`
             const reactBotContext = `${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`;
             reactComments = reactBots.map((b,i) => ({
               bot: b.id,
-              text: cleanSocialReplyText(parsed2[i] || '', null, player, { bot: b, contextText: reactBotContext, roster: [player, ...chars, GMZ_CHAR], avoidTexts: [post.text, fight.targetReply.text, clapback.text].filter(Boolean) }),
+              text: cleanSocialReplyText(parsed2[i] || '', null, player, { feed, bot: b, contextText: reactBotContext, roster: [player, ...chars, GMZ_CHAR], avoidTexts: [post.text, fight.targetReply.text, clapback.text].filter(Boolean) }),
               likes: Math.floor(Math.random()*25000) + 3000,
               timestamp: baseTs + 600000 + i*30000,
               replyTo: fight.replier.handle,
@@ -3795,9 +3963,9 @@ Return ONLY the reply text. No other text.`
                   const bot = pool.find(b => b.id === botTarget.bot);
                   const resBot = await window.claude.complete({
                     messages:[{ role:'user', content:
-                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
                   });
-                  const botReply = cleanSocialReplyText(resBot, responder, player, { avoidTexts: [post.text, clapback.text, botTarget.text], playfulBanter: !!playfulThreadRule, selfSubject: responder.id === authorId || characterMentionedInText(`${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, responder), contextText: `${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
+                  const botReply = cleanSocialReplyText(resBot, responder, player, { feed, avoidTexts: [post.text, clapback.text, botTarget.text], playfulBanter: !!playfulThreadRule, selfSubject: responder.id === authorId || characterMentionedInText(`${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, responder), contextText: `${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
                   if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
                     setTimeout(() => {
                       if (cancelled) return;
@@ -3829,6 +3997,7 @@ ${fight.replier.name} (@${fight.replier.handle}) fired back: "${clapback.text}"
 
 ${pronounRule([author, player, fight.target, fight.replier])}
 ${CHARACTER_TONE_RULE}
+${PUBLIC_THREAD_GROUNDING_RULE}
 ${communicationStyleFor(fight.target, 'public counter-reply')}
 ${playfulThreadRule}
 ${stanceFor(fight.target)}
@@ -3850,7 +4019,7 @@ ${BANNED_PHRASES_RULE}
 Return ONLY SILENCE or the reply text.`
                   }]
                 });
-                const counterText = cleanSocialReplyText(res3, fight.target, player, { avoidTexts: [post.text, fight.targetReply.text, clapback.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.target.id === authorId || characterMentionedInText(`${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, fight.target), contextText: `${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
+                const counterText = cleanSocialReplyText(res3, fight.target, player, { feed, avoidTexts: [post.text, fight.targetReply.text, clapback.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.target.id === authorId || characterMentionedInText(`${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, fight.target), contextText: `${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
                 if (!cancelled && counterText && counterText.toUpperCase() !== 'SILENCE') {
                   const counter = {
                     charId: fight.target.id,
@@ -3969,6 +4138,9 @@ Return ONLY SILENCE or the reply text.`
 Original post: "${post.text}"
 Your comment: "${target.sourceText || ''}"
 ${player.name} just replied to your comment: "${text}"
+${PUBLIC_THREAD_GROUNDING_RULE}
+${BOT_REALITY_RULE}
+${botGroundingRule(bot)}
 Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining.
 ${pronounRule([player, ...chars])}
 ${BANNED_PHRASES_RULE}
@@ -3977,7 +4149,7 @@ Return ONLY the reply text. Do not explain the task.`
         });
         setBotComments(prev => [...prev, {
           bot: bot.id,
-          text: cleanSocialReplyText(res, null, player, { bot }),
+          text: cleanSocialReplyText(res, null, player, { feed, bot, contextText: `${post.text || ''} ${target.sourceText || ''} ${text || ''}`, latestUserText: text, avoidTexts: [post.text, target.sourceText, text].filter(Boolean) }),
           likes: Math.floor(Math.random()*3000),
           timestamp: baseTs + 0.2,
           replyTo: player.handle,
@@ -4022,6 +4194,7 @@ Voice cues: ${targetChar.personality}.
 ${pronounRule([targetChar, player, char])}
 ${CHARACTER_TONE_RULE}
 ${SOCIAL_ECOSYSTEM_THREAD_RULE}
+${PUBLIC_THREAD_GROUNDING_RULE}
 ${communicationStyleFor(targetChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(targetChar)}
@@ -4043,7 +4216,7 @@ ${BANNED_PHRASES_RULE}`
         });
         const reply = {
           charId: targetChar.id,
-          text: cleanSocialReplyText(res, targetChar, player, { avoidTexts: [post.text, currentTranscript, priorTargetLines, target.sourceText, text], playfulBanter: !!playfulThreadRule, selfSubject: targetChar.id === post.charId || characterMentionedInText(`${post.text || ''} ${target.sourceText || ''} ${text || ''}`, targetChar), contextText: `${post.text || ''} ${target.sourceText || ''} ${text || ''}`, latestUserText: text, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle }),
+          text: cleanSocialReplyText(res, targetChar, player, { feed, avoidTexts: [post.text, currentTranscript, priorTargetLines, target.sourceText, text], playfulBanter: !!playfulThreadRule, selfSubject: targetChar.id === post.charId || characterMentionedInText(`${post.text || ''} ${target.sourceText || ''} ${text || ''}`, targetChar), contextText: `${post.text || ''} ${target.sourceText || ''} ${text || ''}`, latestUserText: text, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle }),
           likes: Math.floor(Math.random()*9000),
           timestamp: baseTs + 0.2,
           replyTo: player.handle,
@@ -4211,6 +4384,7 @@ ${pronounRule([player, char, ...responders])}
 ${CHARACTER_TONE_RULE}
 ${COMMUNICATION_PATTERN_RULE}
 ${SOCIAL_ECOSYSTEM_THREAD_RULE}
+${PUBLIC_THREAD_GROUNDING_RULE}
 ${playfulThreadRule}
 ${allyFollowupRule}
 ${keresFollowupBiteRule}
@@ -4243,7 +4417,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
       const usedThreadTexts = [post.text, sourceText, transcript, playerText].filter(Boolean);
       const replies = responders.map((c, i) => {
         const speakerHistory = speakerThreadHistory(c.id, 8);
-        const text = cleanSocialReplyText(parsed[i] || '', c, player, { avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, c), contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, latestUserText: playerText, roster: [player, ...chars, GMZ_CHAR], replyToHandle: defaultReplyHandle });
+        const text = cleanSocialReplyText(parsed[i] || '', c, player, { feed, avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, c), contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, latestUserText: playerText, roster: [player, ...chars, GMZ_CHAR], replyToHandle: defaultReplyHandle });
         usedThreadTexts.push(text);
         return {
           charId: c.id,
@@ -4368,6 +4542,7 @@ Voice cues: ${cChar.personality}.
 ${pronounRule([cChar, player, char])}
 ${CHARACTER_TONE_RULE}
 ${SOCIAL_ECOSYSTEM_THREAD_RULE}
+${PUBLIC_THREAD_GROUNDING_RULE}
 ${communicationStyleFor(cChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(cChar)}
@@ -4389,7 +4564,7 @@ ${BANNED_PHRASES_RULE}`
               });
               const reply = {
                 charId: cChar.id,
-                text: cleanSocialReplyText(res, cChar, player, { avoidTexts: [post.text, chronologicalTranscript(12), priorCharLines, cc.text, playerReply], playfulBanter: !!playfulThreadRule, selfSubject: cChar.id === post.charId || characterMentionedInText(`${post.text || ''} ${cc.text || ''} ${playerReply || ''}`, cChar), contextText: `${post.text || ''} ${cc.text || ''} ${playerReply || ''}`, latestUserText: playerReply, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle }),
+                text: cleanSocialReplyText(res, cChar, player, { feed, avoidTexts: [post.text, chronologicalTranscript(12), priorCharLines, cc.text, playerReply], playfulBanter: !!playfulThreadRule, selfSubject: cChar.id === post.charId || characterMentionedInText(`${post.text || ''} ${cc.text || ''} ${playerReply || ''}`, cChar), contextText: `${post.text || ''} ${cc.text || ''} ${playerReply || ''}`, latestUserText: playerReply, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle }),
                 likes: Math.floor(Math.random()*9000),
                 timestamp: replyBaseTs + 0.2,
                 replyTo: player.handle,
@@ -4501,6 +4676,9 @@ Voice cues: ${bot.bio || bot.type}.
 Original post: "${post.text}"
 Your comment: "${bc.text}"
 ${player.name} just replied to your comment: "${playerReply}"
+${PUBLIC_THREAD_GROUNDING_RULE}
+${BOT_REALITY_RULE}
+${botGroundingRule(bot)}
 ${pronounRule([player, ...(chars || [])])}
 Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining. Do not introduce yourself, list rules, or mention prompts.
 ${BANNED_PHRASES_RULE}
@@ -4510,7 +4688,7 @@ Return ONLY the reply text.`
             setBotComments(prev => {
               const next = [...prev];
               const insertAt = next.findIndex(c => c === playerEntry) + 1;
-              next.splice(insertAt, 0, { bot: bc.bot, text: cleanSocialReplyText(res, null, player, { bot }), likes: Math.floor(Math.random()*3000), timestamp: replyBaseTs + 0.2, replyTo: player.handle, nestedReply: false });
+              next.splice(insertAt, 0, { bot: bc.bot, text: cleanSocialReplyText(res, null, player, { feed, bot, contextText: `${post.text || ''} ${bc.text || ''} ${playerReply || ''}`, latestUserText: playerReply, avoidTexts: [post.text, bc.text, playerReply].filter(Boolean) }), likes: Math.floor(Math.random()*3000), timestamp: replyBaseTs + 0.2, replyTo: player.handle, nestedReply: false });
               return next;
             });
             triggerCharacterFollowups({
@@ -5232,7 +5410,7 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
           ...history,
         ]
       });
-      const charMsg = { role:'char', text: cleanChatText(reply, char, player, false, { latestUserText: outgoingText }), id: Date.now()+1 };
+      const charMsg = { role:'char', text: cleanChatText(reply, char, player, false, { feed, latestUserText: outgoingText }), id: Date.now()+1 };
       setDms(d => ({ ...d, [char.id]: [...(d[char.id]||[]), charMsg] }));
     } catch(e) {
       const errMsg = { role:'char', text: '...', id: Date.now()+1 };
@@ -6474,7 +6652,7 @@ Write your response (1-2 sentences, in character). Use the pronouns listed above
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]
         });
-        const charMsg = { role:'char', charId: member.id, text: cleanChatText(reply, member, player, true, { avoidTexts: groupAvoidTexts, latestUserText: outgoingText, directlyAddressed: isDirectTarget }), id: Date.now() + Math.random(), ts: Date.now() };
+        const charMsg = { role:'char', charId: member.id, text: cleanChatText(reply, member, player, true, { feed, avoidTexts: groupAvoidTexts, latestUserText: outgoingText, directlyAddressed: isDirectTarget }), id: Date.now() + Math.random(), ts: Date.now() };
         const replyFlags = dialoguePatternFlags(charMsg.text);
         replyFlags.forEach(f => sharedMoveLog.usedMoves.add(f));
         if (/\?$/.test((charMsg.text || '').trim())) sharedMoveLog.usedShapes.add('question');
@@ -7720,7 +7898,7 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
 - NO hashtags, NO quotes around the post, JUST the post text
 - Do not introduce yourself, list identity facts, summarize rules, or mention prompts/context.
 ${BANNED_PHRASES_RULE}` }] });
-      const cleanText = cleanSocialPostText(raw, char, player, { avoidTexts: [recentContext] });
+      const cleanText = cleanSocialPostText(raw, char, player, { feed, avoidTexts: [recentContext] });
       setFeed(f => [{
         id: `pull-${Date.now()}-${char.id}`,
         charId: char.id,
@@ -7842,7 +8020,7 @@ ${CHARACTER_TONE_RULE}
 ${BANNED_PHRASES_RULE}` }
         ]
       });
-      const dmMsg = { role:'char', text: cleanChatText(msg, triggerChar, player), id: Date.now() };
+      const dmMsg = { role:'char', text: cleanChatText(msg, triggerChar, player, false, { feed }), id: Date.now() };
       setDms(d => ({ ...d, [triggerChar.id]: [...(d[triggerChar.id]||[]), dmMsg] }));
       setDmNotifs(n => ({ ...n, [triggerChar.id]: (n[triggerChar.id]||0) + 1 }));
     } catch(e) {}
@@ -7940,7 +8118,7 @@ Write ONE short in-character group chat message. Everyone listed as present can 
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]
       });
-      const clean = cleanChatText(reply, member, player, true, { avoidTexts: popInAvoidTexts, latestUserText, directlyAddressed: directTargets.some(t => t.id === member.id) });
+      const clean = cleanChatText(reply, member, player, true, { feed, avoidTexts: popInAvoidTexts, latestUserText, directlyAddressed: directTargets.some(t => t.id === member.id) });
       if (!clean) return;
       const charMsg = { role:'char', charId: member.id, text: clean, id: Date.now() + Math.random(), ts: Date.now(), revived: true };
       setGroupChats(gs => gs.map(g => g.id === group.id
@@ -8045,6 +8223,7 @@ Voice cues: ${char.personality}.
 Profile context: ${char.description}
 ${pronounRule([char, target, player])}
 ${CHARACTER_TONE_RULE}
+${PUBLIC_THREAD_GROUNDING_RULE}
 ${communicationStyleFor(char, 'public feed callout')}
 ${playerStance(char, player)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
@@ -8099,7 +8278,7 @@ ${BANNED_PHRASES_RULE}`;
 
         const raw = await window.claude.complete({ messages:[{ role:'user', content: prompt }] });
         if (!active) return;
-        const cleanText = cleanSocialPostText(raw, char, player, { avoidTexts: [recentContext] });
+        const cleanText = cleanSocialPostText(raw, char, player, { feed, avoidTexts: [recentContext] });
         const newPost = {
           id: `auto-${Date.now()}-${char.id}`,
           charId: char.id,
@@ -8145,6 +8324,7 @@ Original poster facts: ${identityFactsFor(char)}.
 Voice cues: ${replier.personality}.
 ${pronounRule([replier, char, player])}
 ${CHARACTER_TONE_RULE}
+${PUBLIC_THREAD_GROUNDING_RULE}
 ${communicationStyleFor(replier, 'public feed reply')}
 ${playerStance(replier, player)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, allChars:[...chars, player, GMZ_CHAR] })}
@@ -8157,7 +8337,7 @@ ${embarrassingPost ? 'This is a public embarrassment, bad look, messy callout, o
 Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} if natural. No quotes, just the reply text.
 ${BANNED_PHRASES_RULE}` }]
                 });
-                const replyText = cleanSocialReplyText(replyRaw, replier, player, { avoidTexts: [recentContext, cleanText], selfSubject: characterMentionedInText(cleanText || '', replier), contextText: cleanText || '', roster: [player, ...chars, GMZ_CHAR] });
+                const replyText = cleanSocialReplyText(replyRaw, replier, player, { feed, avoidTexts: [recentContext, cleanText], selfSubject: characterMentionedInText(cleanText || '', replier), contextText: cleanText || '', roster: [player, ...chars, GMZ_CHAR] });
                 setFeed(f => f.map(p => p.id === newPost.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
               } catch(e) {}
             }, 12000 + Math.random()*13000);
@@ -8241,7 +8421,7 @@ ${threadPatternVarietyGuard(matchReactionTexts)}
 Write ONE punchy social media post reaction. Use insider language for your own team (we/us/our) and rival language for the opponent (they/them). In character. No hashtags. 1 sentence. Do not explain your reasoning or mention prompts/context/rules.
 ${BANNED_PHRASES_RULE}`
         }]});
-        const clean = cleanSocialPostText(raw, char, player, { avoidTexts: matchReactionTexts });
+        const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts: matchReactionTexts });
         matchReactionTexts.push(`@${char.handle}: "${clean}"`);
         handleMatchPost(clean, char.id);
       } catch(e) {}
@@ -8288,7 +8468,7 @@ Write ONE GMZ gossip post. Rules:
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
 ${BANNED_PHRASES_RULE}` }]
       });
-      const cleanText = cleanSocialPostText(raw, GMZ_CHAR, player);
+      const cleanText = cleanSocialPostText(raw, GMZ_CHAR, player, { feed });
       const newPost = {
         id: `gmz-${Date.now()}`,
         charId: '__gmz__',
@@ -8408,7 +8588,7 @@ ${tamsinInterestHeat && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scen
 Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
 ${BANNED_PHRASES_RULE}`
           }]});
-          const clean = cleanSocialPostText(raw, char, player, { avoidTexts: eventAvoidTexts });
+          const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts: eventAvoidTexts });
           if (!clean) return;
           setFeed(f => f.map(p => p.id === basePosts[idx].id ? {...p, text: clean} : p));
         } catch(e) {}

@@ -2243,7 +2243,7 @@ function cleanSocialPostText(raw = '', char, player, opts = {}) {
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts }) || looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts }) || looksLikePhantomEngagementGossip(clean) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, avoidTexts) || clean.length > 280) {
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts }) || looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts }) || looksLikePhantomEngagementGossip(clean) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || looksLikeVagueAphorism(clean) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, avoidTexts) || clean.length > 280) {
     return fallbackPostForChar(char, player, avoidTexts);
   }
   return clean;
@@ -2291,10 +2291,23 @@ function looksLikeCrypticVomit(text = '', context = '') {
   return abstractHits >= 2 && !concrete;
 }
 
-function looksLikePlayfulBanterText(text = '') {
-  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
-  return /\b(?:lol|lmao|lmfao|joking|joke|funny|laughing|i'm laughing|im laughing|eat shit|bite me|cry about it|skill issue|because i can|for the bit|no comment|say less|shut up|best friends|annoying|hot|flirt|flirting)\b/i.test(lower)
+function looksLikePlayfulBanterText(text = ‘’) {
+  const lower = String(text || ‘’).toLowerCase().replace(/[‘]/g, "’");
+  return /\b(?:lol|lmao|lmfao|joking|joke|funny|laughing|i’m laughing|im laughing|eat shit|bite me|cry about it|skill issue|because i can|for the bit|no comment|say less|shut up|best friends|annoying|hot|flirt|flirting)\b/i.test(lower)
     || /[?!]{2,}/.test(lower);
+}
+
+function looksLikeVagueAphorism(text = ‘’) {
+  const s = String(text || ‘’).trim();
+  if (!s || s.length > 150) return false;
+  // Grounded: has a @handle
+  if (/@[a-z0-9_]+/i.test(s)) return false;
+  // Grounded: named characters or locations specific to this world
+  if (/\b(?:keres|valen|havoc|rowan|callum|elara|tamsin|jude|theo|silas|briar|milo|merlin|gryffindor|slytherin|ravenclaw|hufflepuff|quidditch|gmz|professor)\b/i.test(s)) return false;
+  // Grounded: concrete school or social referent
+  if (/\b(?:test|exam|class|homework|practice|match|tryout|runes|potions|detention|pitch|broom|dorm|common room|great hall|library|captain|transfer|schedule|tryout|hallway|common room)\b/i.test(s)) return false;
+  // Only flag known vague-opener patterns — standalone aphorisms with no named referent
+  return /^(?:some people|certain people|not everyone|people really|the way people|honestly the|the audacity|the fact that|wild how|funny how|interesting how|crazy how|it[‘’]s giving|it gives|the thing about|sometimes you just|sometimes i|not me|genuinely can[‘’]t|can[‘’]t believe people|can[‘’]t believe some|why do people|why are people|why is everyone)\b/i.test(s);
 }
 
 function classifyPostIntent(text = '') {
@@ -2470,7 +2483,8 @@ function fallbackPublicBanterLine(char, player, avoidTexts = []) {
 }
 
 function fallbackFlatThreadLine(char, player, opts = {}) {
-  const targetHandle = opts.replyToHandle || player?.handle || '';
+  const safeReplyTo = opts.replyToHandle && opts.replyToHandle !== char?.handle ? opts.replyToHandle : null;
+  const targetHandle = safeReplyTo || (player?.handle !== char?.handle ? player?.handle : '') || '';
   const target = targetHandle ? `@${String(targetHandle).replace(/^@/, '')} ` : '';
   const playerTag = player?.handle ? `@${player.handle} ` : '';
   const context = `${opts.contextText || ''} ${opts.latestUserText || ''}`.toLowerCase().replace(/[’]/g, "'");
@@ -2572,7 +2586,7 @@ function looksLikeSideParticipantSelfInsertion(text = '', char = null, opts = {}
 }
 
 function fallbackSideParticipantLine(char, player, opts = {}) {
-  const target = opts.replyToHandle && opts.replyToHandle !== player?.handle ? `@${opts.replyToHandle}` : '';
+  const target = opts.replyToHandle && opts.replyToHandle !== player?.handle && opts.replyToHandle !== char?.handle ? `@${opts.replyToHandle}` : '';
   const withTarget = (line) => `${target ? `${target} ` : ''}${line}`.trim();
   const pool = {
     elara: [
@@ -4038,6 +4052,9 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const keresPostBiteRule = isPlayerPost
       ? `\nKERES POST BITE NOTE: This is Keres posting on main. Give the post real bite, but do not summon the whole roster. Use 1-3 custom-character replies with actual stake, then let audience accounts make the campus feel alive. Havoc and Rowan are frequent spark responders to her posts; if included, they should not be bland. If Havoc answers a Keres no, refusal, or distraction joke, flirt or escalate instead of recapping her move. Callum is not her friend and should never sound warmly supportive.`
       : '';
+    const vaguePostRule = looksLikeVagueAphorism(post.text || '')
+      ? `\nVAGUE POST NOTE: This post has no named referent, no @handle, and no concrete anchor. Do not have any character ask what it means, who it is about, or comment on the vagueness itself. If a character cannot find a natural stake, they should either make an unrelated joke in their own voice or be silent. Treat the post as intentionally cryptic — reacting to the vibe is fine, but probing the subtext aloud is not.`
+      : '';
     const dialogueSeparationRule = multiSpeakerDialogueSeparationRule(picked, 'public feed reply');
 
     (async () => {
@@ -4045,7 +4062,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\n${intentLine}\n\nCharacters (in order):\n${charRoster}\n\nSENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${THREAD_MENTION_RULE}\n${THREAD_DIRECT_ADDRESS_RULE}\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}${vaguePostRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\n${intentLine}\n\nCharacters (in order):\n${charRoster}\n\nSENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${THREAD_MENTION_RULE}\n${THREAD_DIRECT_ADDRESS_RULE}\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -4773,7 +4790,8 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
       const usedThreadTexts = [post.text, sourceText, transcript, playerText].filter(Boolean);
       const replies = responders.map((c, i) => {
         const speakerHistory = speakerThreadHistory(c.id, 8);
-        const text = cleanSocialReplyText(parsed[i] || '', c, player, { feed, avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, c), contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, latestUserText: playerText, roster: [player, ...chars, GMZ_CHAR], replyToHandle: defaultReplyHandle });
+        const safeDefaultReply = defaultReplyHandle !== c.handle ? defaultReplyHandle : (player.handle !== c.handle ? player.handle : author?.handle || '');
+        const text = cleanSocialReplyText(parsed[i] || '', c, player, { feed, avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, c), contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, latestUserText: playerText, roster: [player, ...chars, GMZ_CHAR], replyToHandle: safeDefaultReply });
         usedThreadTexts.push(text);
         return {
           charId: c.id,

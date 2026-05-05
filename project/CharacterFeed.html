@@ -44,6 +44,7 @@
 </style>
 </head>
 <body>
+<div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -2291,14 +2292,14 @@ function looksLikeCrypticVomit(text = '', context = '') {
   return abstractHits >= 2 && !concrete;
 }
 
-function looksLikePlayfulBanterText(text = ‘’) {
-  const lower = String(text || ‘’).toLowerCase().replace(/[‘]/g, "’");
+function looksLikePlayfulBanterText(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[‘]/g, "’");
   return /\b(?:lol|lmao|lmfao|joking|joke|funny|laughing|i’m laughing|im laughing|eat shit|bite me|cry about it|skill issue|because i can|for the bit|no comment|say less|shut up|best friends|annoying|hot|flirt|flirting)\b/i.test(lower)
     || /[?!]{2,}/.test(lower);
 }
 
-function looksLikeVagueAphorism(text = ‘’) {
-  const s = String(text || ‘’).trim();
+function looksLikeVagueAphorism(text = '') {
+  const s = String(text || '').trim();
   if (!s || s.length > 150) return false;
   // Grounded: has a @handle
   if (/@[a-z0-9_]+/i.test(s)) return false;
@@ -9148,7 +9149,6 @@ ${BANNED_PHRASES_RULE}`
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
-<div id="root"></div>
 <style>
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 </style>

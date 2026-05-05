@@ -354,18 +354,25 @@ function pronounRule(chars = []) {
   return `IDENTITY RULE: These facts are locked. Use the exact pronouns, house, team, and player/non-player status below. Do not infer identity from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. House/team logic works like pronouns: exact and sticky. If someone belongs to a house/team, they can roast it as their own mess, but should use insider language like we/us/our/my team/my house unless clearly joking or quoting. If someone is NOT on a Quidditch team, never imply they play, practice, show up on the pitch, need to prove themselves on the pitch, or have teammates in a Quidditch sense. Direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. In social posts/replies, a speaker must not post about themself in third person: if Callum writes, use "i/my", not "Callum/he/his"; if Havoc writes, use "i/my", not "Havoc/he/his". If a character is mentioned by @handle or name, keep their pronouns and house/team consistent. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
 }
 
-function compressImageFile(file, { maxSize = 720, quality = 0.78 } = {}) {
+function compressImageFile(file, { maxSize = 720, quality = 0.78, square = false } = {}) {
   return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const sourceSize = square ? Math.min(img.width, img.height) : Math.max(img.width, img.height);
+        const scale = Math.min(1, maxSize / sourceSize);
         const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(img.width * scale));
-        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.width = Math.max(1, Math.round((square ? sourceSize : img.width) * scale));
+        canvas.height = Math.max(1, Math.round((square ? sourceSize : img.height) * scale));
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (square) {
+          const sx = Math.max(0, (img.width - sourceSize) / 2);
+          const sy = Math.max(0, (img.height - sourceSize) / 2);
+          ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, canvas.width, canvas.height);
+        } else {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        }
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = () => resolve(reader.result);
@@ -633,17 +640,18 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
     ],
     avoid: [
       'open neediness',
+      'public hugs, cuddling, or soft affection bids on the timeline',
       'rambling captain speeches',
       'goofy physical dares',
       'media-commentator language unless he is mocking it',
       'misreading teammate camaraderie as a seduction plot',
     ],
-    reject: /\b(?:go\s+off|useful,\s*if\s+accidentally|fair\s+enough|fair\s+point|doesn'?t\s+want\s+the\s+distraction|don't\s+let\s+her\s+distract\s+you)\b/i,
+    reject: /\b(?:go\s+off|useful,\s*if\s+accidentally|fair\s+enough|fair\s+point|doesn'?t\s+want\s+the\s+distraction|don't\s+let\s+her\s+distract\s+you|hug(?:s|ged|ging)?|cuddle(?:s|d|)?|come\s+here|bring\s+it\s+in|fine,?\s*(?:you\s+can\s+)?hug|i'?ll\s+hug|you\s+can\s+hug|soft\s+for\s+you|miss(?:ed|es)?\s+you|affection)\b/i,
     publicFallbacks: [
-      'noted.',
-      'okay.',
-      'sure.',
-      'interesting.',
+      'no.',
+      'in public? absolutely not.',
+      'ask a less incriminating question.',
+      'private standards are still standards.',
     ],
   },
   callum: {
@@ -938,7 +946,7 @@ function communicationStyleFor(char, mode = 'public') {
 MODE: ${mode}. Write like a real message in that medium, not a scene summary, debate speech, or polished character monologue.`;
   const byId = {
     havoc: 'Havoc usually moves first with a shove, dare, stupid joke, or confident misread. He sounds physical and amused before he sounds wounded. His humor is blunt, bad-influence, stupid-hot, and allergic to thinking through consequences. MILO/KERES: If Milo is visibly flirting with Keres in the same thread, Havoc gets a low-grade edge — not jealousy he would name, just a slightly sharper redirect, a drier line aimed at Milo, or a move that makes Milo look a little dim without explaining why. He steps on Milo\'s moment without announcing he is doing it. KERES PRIVATE CANON: Havoc is involved with Keres privately — they have hooked up, he has snuck into her dorm, they have been physical together alongside Rowan. He knows Rowan is also involved and does not care; no competition between them about it. In DMs, he is warm, willing to flirt hard, willing to say explicitly filthy things, and not pretending the history is not there. He does not leave her on read.',
-    silas: 'Silas chooses leverage, but he is not allergic to fun when the fun is useful or beautifully aimed. His humor is dry, surgical, contemptuous, and very brief. With Keres, he should not default to suspicion if she is clearly playing for reaction; he can let the joke work and still pretend he is above it. Jude and Keres being vain and annoying together should irritate him when it becomes unaimed spectacle, partly because it works. RELUCTANT FONDNESS: Silas is reluctantly fond of Keres in a way he would never admit. She gets away with things he would shut down from anyone else. She calls him "dad" as a bit and he finds it genuinely annoying, but he lets it pass where he would not from Jude or anyone else — which says more than he would want it to. He knows about the Jude/Keres hookup (week one, they both moved on, clean). He does not hold it against either of them but he has opinions he keeps to himself. SLYTHERIN UNITY: In front of Gryffindor or rival houses, Silas does not undercut Jude or Keres publicly. He closes ranks. Internal frustration stays internal.',
+    silas: 'Silas chooses leverage, but he is not allergic to fun when the fun is useful or beautifully aimed. His humor is dry, surgical, contemptuous, and very brief. With Keres, he should not default to suspicion if she is clearly playing for reaction; he can let the joke work and still pretend he is above it. Jude and Keres being vain and annoying together should irritate him when it becomes unaimed spectacle, partly because it works. RELUCTANT FONDNESS: Silas is reluctantly fond of Keres in a way he would never admit. She gets away with things he would shut down from anyone else. She calls him "dad" as a bit and he finds it genuinely annoying, but he lets it pass where he would not from Jude or anyone else — which says more than he would want it to. PUBLIC AFFECTION LIMIT: on the public timeline he does not agree to hugs, cuddling, softness, or openly needy affection. If baited, he refuses, redirects, or makes it about standards/control. Private warmth can exist in DMs only, and even then it should be clipped. He knows about the Jude/Keres hookup (week one, they both moved on, clean). He does not hold it against either of them but he has opinions he keeps to himself. SLYTHERIN UNITY: In front of Gryffindor or rival houses, Silas does not undercut Jude or Keres publicly. He closes ranks. Internal frustration stays internal.',
     callum: 'Callum tracks usefulness, standards, and whether someone is wasting his time. He pushes back instead of conceding. His humor is petty, competitive, exacting, and annoyed that something stupid was funny. With Keres, he is antagonistic by default: no easy kindness, no warm agreement, no "fair enough" softness. If he respects a move, it should sound irritated, conditional, or like he is correcting the terms.',
     briar: 'Briar sounds like someone already managing three crises. Her humor is dry captain exhaustion: clipboard threats, practical complaints, and the deadpan horror of responsible people watching idiots survive.',
     rowan: 'Rowan smiles before the trap. His humor is sly, casual, socially fluent, and amused by timing. He can meet Keres at the joke\'s level, redirect it, or make the room realize they reacted exactly how she wanted. He knows his sister Tamsin extremely well; if gossip involves him, Havoc, Keres, kissing, hair, GMZ, or public embarrassment, he should assume Tamsin will notice and have comments. KERES PRIVATE CANON: Rowan is involved with Keres privately — they have hooked up, he has snuck into her dorm, they have been physical together alongside Havoc. He knows Havoc is also involved and does not care; no competition, no drama between them about it. In DMs, he is warm toward her, willing to flirt, willing to be explicitly filthy if the vibe calls for it, and not pretending the history is not there. He does not leave her on read if he can help it.',
@@ -1049,7 +1057,7 @@ function playerStance(char, player, relationshipOverride) {
     ? 'No fixed relationship score with Keres yet; use the character profile and recent visible context without hard flipping.'
     : `Current relationship score with @${player.handle}: ${rel}/100. Keep this consistent across the thread.`;
   const fixed = {
-    silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain and is widely respected, feared, and treated as a real problem by rivals. He is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction. Keres and Jude bonding through irreverent vanity annoys him when it becomes public spectacle, especially because their timing gets reactions; his irritation should stay controlled, surgical, and a little hypocritical. RELUCTANT FONDNESS: He is genuinely, reluctantly fond of Keres in a way that reads as exasperation. She calls him "dad" as a running bit — it annoys him and he lets her get away with it anyway, which is not something he does for anyone else. He knows about the Jude/Keres week-one hookup. Both moved on cleanly. He has kept his thoughts to himself. Do not make him dramatic about it.',
+    silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain and is widely respected, feared, and treated as a real problem by rivals. He is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction. Keres and Jude bonding through irreverent vanity annoys him when it becomes public spectacle, especially because their timing gets reactions; his irritation should stay controlled, surgical, and a little hypocritical. RELUCTANT FONDNESS: He is genuinely, reluctantly fond of Keres in a way that reads as exasperation. She calls him "dad" as a running bit — it annoys him and he lets her get away with it anyway, which is not something he does for anyone else. PUBLIC AFFECTION LIMIT: Silas does not agree to hugs, cuddling, softness, or needy affection on main. He refuses or redirects public affection bait; any warmth is private, clipped, and deniable. He knows about the Jude/Keres week-one hookup. Both moved on cleanly. He has kept his thoughts to himself. Do not make him dramatic about it.',
     callum: 'Callum is proud, exacting, and competitive, and he does not like Keres. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill only grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess. In DMs, playful "I can be worse / more annoying" banter should get annoyed friction, reluctant interest, or a sharper private tease, not warmth and not "prove it on the feed."',
     havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action. MILO/KERES: When Milo flirts with Keres in a thread, Havoc gets micro-annoyed — not a meltdown, not a confession, just a subtle edge: a drier comeback than usual, cutting Milo off with a better line, redirecting the room, or making Milo sound slightly foolish without naming why. He does not announce jealousy. He just gets a little mean about it. KERES PRIVATE CANON: Havoc has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Rowan — no competition between him and Rowan about it. In DMs he is warm, flirtatious, and willing to be explicitly filthy. He does not leave her on read.',
     rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery. KERES PRIVATE CANON: Rowan has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Havoc — no competition between him and Havoc about it. In DMs he is warm, willing to flirt, willing to say dirty things, and does not pretend the history is not there. He does not leave her on read.',
@@ -2416,6 +2424,13 @@ function looksLikeSilasCamaraderieMisread(text = '', char = null, opts = {}) {
   return camaraderie && /\b(?:don'?t\s+let\s+her\s+distract|distract\s+you|distraction|performing|not\s+performing)\b/i.test(lower);
 }
 
+function looksLikeSilasPublicSoftness(text = '', char = null) {
+  if (char?.id !== 'silas') return false;
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\b(?:hug(?:s|ged|ging)?|cuddle(?:s|d)?|come\s+here|bring\s+it\s+in|you\s+can\s+hug|i'?ll\s+hug|soft\s+for\s+you|miss(?:ed|es)?\s+you|affection)\b/i.test(lower)
+    || /\b(?:fine|okay|yes|sure)\b[^.?!]{0,40}\b(?:hug|cuddle)\b/i.test(lower);
+}
+
 function looksLikeMadeItWorseSubjectMisread(text = '', opts = {}) {
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
   const context = String(opts.contextText || '').toLowerCase().replace(/[’]/g, "'");
@@ -2658,6 +2673,9 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   }
   if (char && looksLikeSilasCamaraderieMisread(clean, char, opts)) {
     return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
+  }
+  if (char && looksLikeSilasPublicSoftness(clean, char)) {
+    return fallbackDialogueContractLine(char, player, avoidTexts);
   }
   if (char && (looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
     return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
@@ -3763,7 +3781,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
             <span style={{color:C.muted, fontSize:18, cursor:'pointer', padding:'0 4px'}}>···</span>
           </div>
           <p style={{color:C.text, fontSize:fs(14), lineHeight: compact ? 1.35 : 1.5, marginTop:compact ? 2 : 4, cursor:'pointer'}} onClick={() => onOpenThread && onOpenThread(post)}>{renderText(safePostText)}</p>
-          {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', borderRadius:12, marginTop:compact ? 6 : 8, maxHeight:compact ? 160 : 220, objectFit:'cover', cursor:'pointer'}} />}
+          {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', aspectRatio:'1 / 1', borderRadius:12, marginTop:compact ? 6 : 8, objectFit:'cover', cursor:'pointer', display:'block'}} />}
           <div style={{display:'flex', gap:compact ? 16 : 20, marginTop:compact ? 7 : 10, alignItems:'center'}}>
             <button onClick={() => onOpenThread && onOpenThread(post)} style={{background:'none',border:'none',color:C.muted,fontSize:fs(12),cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
               <ReplyGlyph size={16} />
@@ -4832,7 +4850,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
           <span style={{color:C.muted, fontSize:20}}>···</span>
         </div>
         <p style={{color:C.text, fontSize:17, lineHeight:1.6, marginBottom:12}}>{renderText(safePostText)}</p>
-        {post.photo && <img src={post.photo} alt="" style={{width:'100%', borderRadius:14, marginBottom:12, maxHeight:260, objectFit:'cover'}}/>}
+        {post.photo && <img src={post.photo} alt="" style={{width:'100%', aspectRatio:'1 / 1', borderRadius:14, marginBottom:12, objectFit:'cover', display:'block'}}/>}
         <p style={{color:C.muted, fontSize:13, marginBottom:12}}>{fmtTime(post.timestamp)} · <strong style={{color:C.text}}>{fmt(post.likes * 7.2 | 0)}</strong> Views</p>
         <div style={{borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`, padding:'10px 0', display:'flex', gap:16, alignItems:'center'}}>
           <button onClick={() => openReplyTarget({ kind:'post', handle: char?.handle, targetChar: char, sourceText: post.text })} style={{background:C.blue+'22', color:C.blue, border:'none', borderRadius:22, padding:'9px 18px', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:7}}>
@@ -7137,7 +7155,7 @@ function ComposeModal({ chars, player, onClose, onPost }) {
   async function handlePhoto(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const dataUrl = await compressImageFile(file, { maxSize: 900, quality: 0.78 });
+    const dataUrl = await compressImageFile(file, { maxSize: 900, quality: 0.78, square: true });
     setPhoto(dataUrl);
     e.target.value = '';
   }
@@ -7157,20 +7175,21 @@ function ComposeModal({ chars, player, onClose, onPost }) {
   }
 
   return (
-    <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.8)', zIndex:200, display:'flex', flexDirection:'column', justifyContent:'flex-end'}}>
-      <div style={{background:C.card, borderRadius:'20px 20px 0 0', padding:'16px', maxHeight:'85%', display:'flex', flexDirection:'column'}}>
-        {/* Header */}
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
-          <button onClick={onClose} style={{background:'none', border:'none', color:C.muted, fontSize:15, cursor:'pointer'}}>Cancel</button>
-          <span style={{color:C.text, fontWeight:700, fontSize:15}}>New Post</span>
-          <button onClick={submit} disabled={!text.trim() && !photo} style={{
-            background: (text.trim() || photo) ? C.blue : '#333', color:'#fff', border:'none',
-            borderRadius:20, padding:'6px 16px', fontSize:14, fontWeight:700, cursor:(text.trim()||photo)?'pointer':'default',
-          }}>Post</button>
+    <div style={{position:'absolute', inset:0, background:C.bg, zIndex:200, display:'flex', flexDirection:'column'}}>
+      <div style={{padding:'12px 16px', borderBottom:`1px solid ${C.border}`, background:C.bg, display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
+        <button onClick={onClose} style={{background:'none', border:'none', color:C.blue, width:34, height:34, cursor:'pointer', fontSize:24, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>‹</button>
+        <div style={{flex:1, minWidth:0}}>
+          <div style={{color:C.text, fontSize:18, fontWeight:800, lineHeight:1.1}}>New Post</div>
+          <div style={{color:C.muted, fontSize:12, marginTop:2}}>Create a timeline post</div>
         </div>
+        <button onClick={submit} disabled={!text.trim() && !photo} style={{
+          background: (text.trim() || photo) ? C.blue : C.card2, color:(text.trim() || photo) ? '#fff' : C.muted, border:'none',
+          borderRadius:12, padding:'8px 14px', minHeight:36, fontSize:14, fontWeight:800, cursor:(text.trim()||photo)?'pointer':'default',
+        }}>Post</button>
+      </div>
 
-        {/* Post as */}
-        <div style={{marginBottom:12}}>
+      <div style={{flex:1, overflowY:'auto', padding:'16px 16px 20px', display:'flex', flexDirection:'column'}}>
+        <div style={{background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:16, marginBottom:14}}>
           <p style={{color:C.muted, fontSize:11, marginBottom:6}}>POST AS</p>
           <div style={{display:'flex', gap:8, overflowX:'auto', paddingBottom:4}}>
             {allChars.map(c => (
@@ -7186,27 +7205,25 @@ function ComposeModal({ chars, player, onClose, onPost }) {
           </div>
         </div>
 
-        {/* Text input */}
-        <div style={{display:'flex', gap:10, flex:1}}>
+        <div style={{display:'flex', gap:12, flex:1, minHeight:0}}>
           <Avatar char={selectedChar} size={38} />
-          <div style={{flex:1}}>
+          <div style={{flex:1, minWidth:0, display:'flex', flexDirection:'column'}}>
             <textarea value={text} onChange={e => setText(e.target.value)}
               placeholder="What's happening?"
-              style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:16, outline:'none', resize:'none', minHeight:80, lineHeight:1.6}}
+              maxLength={280}
+              style={{width:'100%', background:C.card2, border:`1px solid ${text.trim() ? C.blue+'66' : C.border}`, borderRadius:14, padding:'12px 14px', color:C.text, fontSize:16, outline:'none', resize:'none', minHeight:150, lineHeight:1.55, flexShrink:0}}
             />
             <MentionSuggestions text={text} allChars={allChars} onPick={handle => setText(t => applyMentionToText(t, handle))} />
-            {/* Photo preview */}
             {photo && (
-              <div style={{position:'relative', marginTop:8}}>
-                <img src={photo} alt="" style={{width:'100%', borderRadius:12, maxHeight:200, objectFit:'cover'}} />
+              <div style={{position:'relative', marginTop:12}}>
+                <img src={photo} alt="" style={{width:'100%', aspectRatio:'1 / 1', borderRadius:14, objectFit:'cover', display:'block'}} />
                 <button onClick={() => setPhoto(null)} style={{position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', color:'#fff', borderRadius:'50%', width:26, height:26, cursor:'pointer', fontSize:14}}>×</button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Toolbar */}
-        <div style={{borderTop:`1px solid ${C.border}`, paddingTop:12, marginTop:8, display:'flex', gap:16, alignItems:'center'}}>
+        <div style={{borderTop:`1px solid ${C.border}`, paddingTop:12, marginTop:16, display:'flex', gap:16, alignItems:'center', flexShrink:0}}>
           <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhoto} />
           <button onClick={() => fileRef.current.click()} style={{background:'none', border:'none', color:C.blue, cursor:'pointer', display:'flex', alignItems:'center', gap:4, fontSize:13}}>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
@@ -7787,7 +7804,7 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
                     <span style={{color:C.muted, fontSize:12}}>· {timeAgo(post.timestamp)}</span>
                   </div>
                   {post.text && <p style={{color:C.text, fontSize:14, lineHeight:1.5}}>{post.text}</p>}
-                  {post.photo && <img src={post.photo} alt="" style={{width:'100%', borderRadius:10, marginTop:6, maxHeight:160, objectFit:'cover'}}/>}
+                  {post.photo && <img src={post.photo} alt="" style={{width:'100%', aspectRatio:'1 / 1', borderRadius:10, marginTop:6, objectFit:'cover', display:'block'}}/>}
                   <div style={{display:'flex', gap:16, marginTop:8}}>
                     <span style={{color:C.muted, fontSize:12, display:'inline-flex', alignItems:'center', gap:3}}><ReplyGlyph size={13} /> {post.comments}</span>
                     <span style={{color:C.muted, fontSize:12}}>🔁 {fmt(post.reposts)}</span>

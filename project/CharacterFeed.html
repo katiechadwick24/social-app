@@ -420,8 +420,11 @@ CANON AND FACT RULES:
 - Keres is not responsible for other people's attraction, thirst, jealousy, screenshots, replies, or audience reaction. Characters can tease the social effect around her, but do not scold her for "making" someone notice her, looking at her, liking her, or reacting to her unless she explicitly baited that exact move in visible context.
 - Preserve visible thread chronology. The original post happened first, then replies happened in timestamp/order. Do not say Keres "started it", "swung first", "showed up swinging", or caused the fight if the visible thread shows another character attacked, tagged, or escalated before her. If Keres spells out the order of events, treat that as corrective context unless the responding character is deliberately lying or baiting, and make that intentional.
 - If a character is named, tagged, or clearly included as one of the people in a rumor/callout, they must speak from inside that role. They should use I/me/we/us or address the other named person directly, not talk like an outside commentator saying "both of you", "you two", "the two of them", or "those two" unless they are genuinely not one of the named participants.
-- Do not accuse someone of dodging, not showing up, refusing to play, missing a game, ducking a challenge, or failing the team unless the visible post/thread explicitly says that happened. If you need pressure without facts, use "you keep changing the framing", "say what you mean", "that sounded cleaner in your head", or a playful pointed question.
+- Do not accuse someone of dodging, not showing up, refusing to play, missing a game, ducking a challenge, or failing the team unless the visible post/thread explicitly says that happened. If you need pressure without facts, use "say what you mean", "that sounded cleaner in your head", or a playful pointed question.
 - Do not invent scoreboard results, game attendance, wins/losses, who showed up to matches, who missed practice, who dodged, who started a fight, or who made a mistake unless it appears in the visible thread or current event. Trash talk can be mean without inventing hard facts.
+- Do not invent practice footage, clips, cameras, hallway versions, or "last week / last three weeks" history from a generic practice post. If a post says "practice went smoothly, bad news for Gryffindor", that means the poster's own side practiced well and is trash-talking the upcoming opponent.
+- Slytherin Quidditch is a strong, dangerous, respected team. Do not invent canon that Slytherin is bad, taking losses, desperate, harmless, or embarrassing unless the visible match/event explicitly says so. Keres joining Slytherin should make them more alarming, not less.
+- Silas Montague is a respected and feared Slytherin captain. Rivals can hate him, bait him, or talk big, but they should not treat him like a joke, a weak captain, or someone nobody worries about.
 - Trash talk is normal Quidditch culture, not a social crime. Characters can insult rival houses, rival teams, plays, captains, training, habits, and public mistakes. Do not make them act shocked that someone talked trash unless the line crosses a real personal boundary.
 - Preserve house and team logic. Treat house/team like pronouns: exact, sticky, and not guessable from vibes. If a character is on Gryffindor, Slytherin, Ravenclaw, or Hufflepuff, they should not talk about that house or team like outsiders. They can roast their own side, but it should sound like "we/us/our team/my captain/our mess", not "they/them/Gryffindor is boring" unless they are clearly quoting or distancing as a joke. Rival houses can and should use "they/them" and be openly smug. Do not write "Slytherin could never", "Gryffindor could never", etc. if someone from that house just did the thing in the visible thread.
 - Teammate loyalty matters. If an outsider attacks, mocks, tags, or pressures someone's teammate or housemate, that team usually closes ranks first. They can roast their own teammate because that is their mess, but the public default is "that's our idiot", "you don't get to say it", backing them, redirecting heat, or hitting the outsider harder. Exceptions need a visible reason: betrayal, serious conflict, captain correction, or an obvious joke.
@@ -534,8 +537,26 @@ const BOT_REALITY_RULE = `
 BOT COMMENT REALITY:
 - Anonymous accounts are campus people with motives, not generic bot templates. They can be thirsty, bored, biased, wrong, funny, or nosy, but their comment still needs a visible trigger.
 - House-leaning accounts keep their allegiance. A Slytherin-leaning account does not sincerely hype Gryffindor over Slytherin unless the line is obviously sarcastic or self-aware.
+- Sports-fan accounts know Slytherin is good. Do not make anonymous accounts invent Slytherin losing streaks, weak-team jokes, or "we all know Slytherin sucks" canon.
 - "my roommate just..." jokes, spilled-coffee reactions, and "I screamed in class" beats are occasional texture only. Do not use them when the thread has no dorm, food, class, noise, or roommate hook.
 - Do not make every anonymous account overreact in the same stan syntax. Mix practical complaints, rumor questions, side-taking, thirst, hater reads, and small campus observations.`;
+
+const TEAM_RIVALRY_CANON_RULE = `
+TEAM RIVALRY CANON:
+- Slytherin Quidditch is elite, dangerous, and taken seriously. With Keres trying out/playing for Slytherin, Gryffindor has a real reason to be nervous.
+- Slytherin players and Slytherin-leaning accounts should have immense pride in Slytherin and easy disdain for Gryffindor. They can roast their own side as "our mess", but public default is confidence, superiority, and closing ranks.
+- Gryffindor players are proud too. They should answer Slytherin trash talk with rival confidence, jokes, or bravado, not by inventing that Slytherin is bad or harmless.
+- Silas Montague is respected and feared as Slytherin captain. Rivals can resent him, posture at him, needle him, or want to beat him, but they know he is a serious problem.
+- Do not invent losing streaks, bad practices, weak reputation, or "everyone knows they suck" history for either team unless the visible event says it. Rivalry can be vicious without fake canon.`;
+
+const PRACTICE_TRASH_TALK_RULE = `
+PRACTICE TRASH TALK LOGIC:
+- If a Quidditch player says their practice went well and warns a rival house/team, read it as simple match-week trash talk from their own side.
+- If that player is Slytherin or Keres, the warning is credible. Gryffindor can posture, joke, or push back, but Slytherin being dangerous is canon.
+- Do not infer that the poster attended, watched, leaked, filmed, or judged the rival team's practice unless the visible text says that.
+- Opponents should answer as opponents: name their own side or the poster's side clearly. Avoid ambiguous "tell them", "we'll give them", or "they know" when both teams are in play.
+- Do not invent prior-week history, clips, camera footage, hallway versions, scoreboard results, or a hidden incident. If the post only says practice went well, the only fact is confidence before a match.
+- Teammates should back the poster, sharpen the joke, or make the rivalry funnier. They should not act confused about which team she is on.`;
 
 const THREAD_PATTERN_VARIETY_RULE = `
 THREAD PATTERN VARIETY:
@@ -1009,7 +1030,7 @@ function playerStance(char, player, relationshipOverride) {
     ? 'No fixed relationship score with Keres yet; use the character profile and recent visible context without hard flipping.'
     : `Current relationship score with @${player.handle}: ${rel}/100. Keep this consistent across the thread.`;
   const fixed = {
-    silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain, so he is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction. Keres and Jude bonding through irreverent vanity annoys him when it becomes public spectacle, especially because their timing gets reactions; his irritation should stay controlled, surgical, and a little hypocritical.',
+    silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain and is widely respected, feared, and treated as a real problem by rivals. He is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction. Keres and Jude bonding through irreverent vanity annoys him when it becomes public spectacle, especially because their timing gets reactions; his irritation should stay controlled, surgical, and a little hypocritical.',
     callum: 'Callum is proud, exacting, and competitive, and he does not like Keres. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill only grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess. In DMs, playful "I can be worse / more annoying" banter should get annoyed friction, reluctant interest, or a sharper private tease, not warmth and not "prove it on the feed."',
     havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action.',
     rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery.',
@@ -1026,9 +1047,14 @@ function playerStance(char, player, relationshipOverride) {
   const playsQuidditch = isQuidditchPlayer(char);
   const teamName = teamFor(char);
   const houseName = houseFor(char) || char.house || 'their house';
+  const teamCanon = teamName === 'Slytherin'
+    ? ' Slytherin is a strong, feared team; this speaker should have real pride in it and natural disdain for Gryffindor.'
+    : teamName === 'Gryffindor'
+    ? ' Gryffindor pride is real, but Slytherin is a serious rival and Silas is a respected threat; answer with bravado, not fake Slytherin-is-weak canon.'
+    : '';
   const teamLine = teamName || houseName || char.position
     ? playsQuidditch
-      ? `TEAM CONTINUITY: ${char.name} is on ${teamName || houseName}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic and we/us/our. They may roast their own side, but not like an outsider. If an outsider swings at a teammate, the usual instinct is to back the teammate, redirect heat, or make it clear only their own side gets to say that. If discussing a rival team/house, trash talk is allowed and expected.`
+      ? `TEAM CONTINUITY: ${char.name} is on ${teamName || houseName}${char.position ? ` as ${char.position}` : ''}. If discussing their own team/house, use insider logic and we/us/our. They may roast their own side, but not like an outsider. If an outsider swings at a teammate, the usual instinct is to back the teammate, redirect heat, or make it clear only their own side gets to say that. If discussing a rival team/house, trash talk is allowed and expected.${teamCanon}`
       : `TEAM CONTINUITY: ${char.name} is in ${houseName} but is not on a Quidditch team${char.position ? ` (${char.position})` : ''}. They can comment on Quidditch as an observer, friend, sibling, gossip participant, or student, but not as someone personally playing or needing to show up on the pitch. House loyalty can still matter: if an outsider swings at their people, they usually close ranks unless there is a visible reason not to.`
     : '';
   return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} ${teamLine} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune. Keres often wants fun, attention, laughter, and a reaction. Do not assume her angle is always strategy, manipulation, or a hidden threat. If she is clearly joking, flirting, baiting for laughs, or making the timeline more entertaining, let characters meet that energy in their own voice instead of scolding the vibe flat.`;
@@ -1701,6 +1727,123 @@ function looksLikeBotPatternSlop(text = '', bot = {}, opts = {}) {
   return false;
 }
 
+function contextTextForGuards(opts = {}) {
+  return [
+    opts.contextText || '',
+    ...(Array.isArray(opts.avoidTexts) ? opts.avoidTexts : []),
+  ].join('\n').toLowerCase().replace(/[’]/g, "'");
+}
+
+function isPracticeTrashTalkContext(opts = {}) {
+  const context = contextTextForGuards(opts);
+  const practiceConfidence = /\bpractice\b.{0,80}\b(?:went|go(?:ing)?|smooth|smoothly|well|good|fine|clean)\b/i.test(context)
+    || /\b(?:smooth|smoothly|well|good|fine|clean)\b.{0,80}\bpractice\b/i.test(context);
+  const rivalWarning = /\b(?:bad\s+news|good\s+luck|beware|warning|problem)\b.{0,80}\b(?:gryffindor|slytherin|ravenclaw|hufflepuff)\b/i.test(context)
+    || /\b(?:gryffindor|slytherin|ravenclaw|hufflepuff)\b.{0,80}\b(?:bad\s+news|good\s+luck|beware|warning|problem)\b/i.test(context);
+  return practiceConfidence && rivalWarning;
+}
+
+function contextHasMediaEvidence(opts = {}) {
+  const context = String(opts.contextText || '').toLowerCase().replace(/[’]/g, "'");
+  return !!opts.hasPhoto
+    || /\b(?:photo|picture|image|clip|video|camera|footage|screenshot|screen shot|recording|crop|captioned|posted a clip|practice clip)\b/i.test(context);
+}
+
+function looksLikeUnanchoredMediaClaim(text = '', opts = {}) {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  if (!/\b(?:camera|clip|clips|footage|video|recording|screenshot|screen shot|bring your camera|practice footage|the framing|framing|one way to frame it)\b/i.test(lower)) return false;
+  return !contextHasMediaEvidence(opts);
+}
+
+function looksLikeInventedTimelineClaim(text = '', opts = {}) {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  const context = String(opts.contextText || '').toLowerCase().replace(/[’]/g, "'");
+  const timelineClaim = /\b(?:last\s+(?:two|three|four|\d+)\s+weeks?|for\s+weeks|all\s+week|all\s+term|all\s+season|been\s+\w+ing\s+for\s+weeks)\b/i;
+  const unsupportedTimeline = timelineClaim.test(lower) && !timelineClaim.test(context);
+  const canonizingVagueness = /\b(?:we\s+already\s+knew\s+that|already\s+knew\s+that|pretending\b.{0,70}\bdidn'?t\s+happen|didn'?t\s+happen|always\s+like\s+that)\b/i.test(lower);
+  return unsupportedTimeline || canonizingVagueness;
+}
+
+function looksLikePracticeContextDrift(text = '', char = null, opts = {}) {
+  if (!isPracticeTrashTalkContext(opts)) return false;
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\b(?:tell\s+them|who\s+saw\s+it\s+happen|hallway\s+version|practice\s+footage|bring\s+your\s+camera|camera|clip|clips|footage|the\s+framing|one\s+way\s+to\s+frame\s+it|could\s+also\s+just\s+be|what\s+are\s+you\s+trying\s+to\s+prove|actually\s+coming|watch\s+me\s+talk\s+big|not\s+your\s+paperwork|paperwork)\b/i.test(lower)
+    || /\bwe'?ll\s+give\s+them\b/i.test(lower)
+    || looksLikeInventedTimelineClaim(lower, opts)
+    || looksLikeUnanchoredMediaClaim(lower, opts);
+}
+
+function looksLikeInventedTeamWeaknessClaim(text = '', opts = {}) {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  const context = contextTextForGuards(opts);
+  const visibleLossContext = /\b(?:lost|loss|losses|losing|score|beat|beaten|won|winner|final)\b/i.test(context);
+  const slytherinContext = /\b(?:slytherin|keres|@keresvalen|silas|@silasmontague|jude|@judewarrington)\b/i.test(`${context} ${lower}`);
+  const fakeWeakness = /\b(?:taking\s+losses|been\s+losing|losing\s+streak|keep\s+losing|sucks?|bad\s+team|weak|washed|harmless|not\s+scary|not\s+worried|desperate|embarrassing|can'?t\s+win)\b/i.test(lower);
+  return slytherinContext && fakeWeakness && !visibleLossContext;
+}
+
+function fallbackPracticeTrashTalkLine(char, player, opts = {}) {
+  const playerTag = player?.handle ? `@${player.handle} ` : '';
+  const pool = {
+    havoc: [
+      `${playerTag}come watch, then. gryffindor can make bad news mutual.`,
+      `${playerTag}cute warning. gryffindor heard you.`,
+      `${playerTag}bold post. i like it better when it survives contact.`,
+    ],
+    rowan: [
+      `${playerTag}adorable threat. save some confidence for when gryffindor answers.`,
+      `${playerTag}gryffindor heard you. tragically, now we have to make it funny.`,
+      `${playerTag}bad news before the match is brave. i respect the marketing.`,
+    ],
+    jude: [
+      `${playerTag}bad news for gryffindor. finally, useful public service.`,
+      `${playerTag}slytherin morale being annoying on purpose. healthy.`,
+      `${playerTag}good. make them regret reading.`,
+    ],
+    silas: [
+      `${playerTag}good. now make it useful on match day.`,
+      `${playerTag}bad news is useful only if it survives first contact.`,
+      `${playerTag}acceptable. keep the warning cleaner than the tackle.`,
+    ],
+    callum: [
+      `${playerTag}confidence before the whistle is cheap. bring the same shape to the pitch.`,
+      `${playerTag}smooth practice is not a scoreline.`,
+      `${playerTag}save the grin for after someone tests it.`,
+    ],
+    briar: [
+      `${playerTag}bad news is only bad if you can defend it under pressure.`,
+      `${playerTag}talk is easier before the whistle. still, noted.`,
+      `${playerTag}if this becomes match fuel, i am blaming both teams.`,
+    ],
+    theo: [
+      `${playerTag}posting that before warmups is brave. excellent for tension.`,
+      `${playerTag}match week needed a cleaner villain line. thank you.`,
+      `${playerTag}that is either confidence or evidence for later. useful either way.`,
+    ],
+    milo: [
+      `${playerTag}i support trash talk with consequences. probably.`,
+      `${playerTag}bad news before a match is my favorite unsafe sentence.`,
+      `${playerTag}wait are we being confident or summoning disaster?`,
+    ],
+  }[char?.id] || [
+    `${playerTag}match week trash talk finally clocked in.`,
+    `${playerTag}bad news before the whistle is brave.`,
+    `${playerTag}save some of that for the pitch.`,
+  ];
+  const start = Math.floor(Math.random() * pool.length);
+  for (let i = 0; i < pool.length; i++) {
+    const candidate = pool[(start + i) % pool.length].trim();
+    if (!fallbackWasUsed(char?.id, candidate)
+        && !violatesCharacterDialogueContract(candidate, char)
+        && !hasDialoguePatternCollision(candidate, opts.avoidTexts || [])) {
+      trackFallback(char?.id, candidate);
+      return candidate;
+    }
+  }
+  trackFallback(char?.id, pool[start]);
+  return pool[start];
+}
+
 function looksLikeUnsupportedPlayerActionClaim(text = '', latestUserText = '', player = null) {
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
   const user = String(latestUserText || '').toLowerCase().replace(/[’]/g, "'");
@@ -1743,7 +1886,7 @@ function fallbackUnsupportedBlameLine(char, player, group = false, avoidTexts = 
   };
   const pool = group && groupPool[char?.id] ? groupPool[char.id] : {
     silas: ['then rowan left it vague. gossip loves bad evidence.', 'if there is no evidence, stop feeding the rumor.', 'the accusation was sloppy. i hate sloppy.'],
-    jude: ['then everyone is yelling at a shadow. productive little circus.', 'annoying. not your paperwork, then.', 'if they guessed wrong, that is almost funnier.'],
+    jude: ['then everyone is yelling at a shadow. productive little circus.', 'annoying. wrong target, then.', 'if they guessed wrong, that is almost funnier.'],
     rowan: ['then mystery person stays mysterious. tragic for my caption.', 'i saw motion, not a confession.', 'then everyone else did the heavy lifting. convenient.'],
     havoc: ['then everyone is arguing with a ghost. solid afternoon.', 'not you, then. still funny. worse, maybe.', 'great. anonymous chaos. my favorite kind to deny.'],
     callum: ['then say that. vague rumors are bad evidence.', 'if they guessed wrong, correct the record and move.', 'wrong target, same circus.'],
@@ -1812,6 +1955,17 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
   }
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
     return fallbackUnsupportedBlameLine(char, player, group, avoidTexts);
+  }
+  if (char && looksLikePracticeContextDrift(clean, char, { ...opts, avoidTexts })) {
+    return fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts });
+  }
+  if (char && looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts })) {
+    return isPracticeTrashTalkContext({ ...opts, avoidTexts })
+      ? fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts })
+      : fallbackDialogueContractLine(char, player, avoidTexts);
+  }
+  if (char && (looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts }))) {
+    return fallbackDialogueContractLine(char, player, avoidTexts);
   }
   if (char && (looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
     return fallbackChatLine(char, player, group, avoidTexts);
@@ -2019,14 +2173,31 @@ function cleanSocialPostText(raw = '', char, player, opts = {}) {
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikePhantomEngagementGossip(clean) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, avoidTexts) || clean.length > 280) {
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts }) || looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts }) || looksLikePhantomEngagementGossip(clean) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, avoidTexts) || clean.length > 280) {
     return fallbackPostForChar(char, player, avoidTexts);
   }
   return clean;
 }
 
-function fallbackBotLine(bot = {}) {
+function fallbackBotLine(bot = {}, opts = {}) {
   const house = botHouseLean(bot);
+  if (isPracticeTrashTalkContext(opts)) {
+    const practicePool = house === 'slytherin' ? [
+      'slytherin being publicly annoying before match day feels correct',
+      'bad news for gryffindor is the healthiest thing slytherin has posted all week',
+      'the green side of match week is already insufferable',
+    ] : house === 'gryffindor' ? [
+      'gryffindor heard the warning and immediately made it everyone else\'s problem',
+      'bad news before the whistle is brave behavior',
+      'match week trash talk arrived early and wearing eyeliner',
+    ] : [
+      'match week trash talk finally clocked in',
+      'bad news for gryffindor before the whistle is bold',
+      'someone tell both teams to save a little drama for the pitch',
+      'practice confidence on main is always a choice',
+    ];
+    return practicePool[Math.floor(Math.random() * practicePool.length)];
+  }
   const pool = house === 'slytherin' ? [
     'slytherin watching gryffindor discover consequences is self care',
     'the green side of this thread is eating today',
@@ -2034,9 +2205,9 @@ function fallbackBotLine(bot = {}) {
     'someone check the slytherin group chat because they are absolutely insufferable right now',
   ] : [
     'i have homework and somehow this is louder',
-    'someone post the screenshot or stop whispering',
+    'someone explain the actual point before this gets louder',
     'my group chat is already fighting about this',
-    'who saw it happen because the hallway version makes no sense',
+    'half the hallway has an opinion and none of them agree',
     'this is why nobody studies in the common room',
   ];
   return pool[Math.floor(Math.random() * pool.length)];
@@ -2126,6 +2297,8 @@ function looksLikeBannedFlatPhrase(text = '') {
     || /\bfair\b/i.test(lower)
     || /\bmate\b/i.test(lower)
     || /\buseful,\s*if\s+accidentally\b/i.test(lower)
+    || /\bone\s+way\s+to\s+frame\s+it\b/i.test(lower)
+    || /\bthe\s+framing\b/i.test(lower)
     || /\bthat'?s\s+just\s+tactical\b/i.test(lower)
     || /\bthat\s+is\s+just\s+tactical\b/i.test(lower)
     || /\bdoesn'?t\s+want\s+the\s+distraction\b/i.test(lower)
@@ -2308,10 +2481,10 @@ function fallbackParticipantIncludedLine(char, player, opts = {}) {
     havoc: [`i'm already in it. ${target} can bring the better shot if they have one.`, `${target} can pick the time. i was bored anyway.`, `stadium works. ${target}, try not to make it polite.`],
     callum: [`i'm in it already. ${target} can stop outsourcing the suspense.`, `${target} can choose the time. i prefer clean answers.`, `if this is happening, ${target} should say it directly.`],
     silas: [`i am already named. ${target} can make the next sentence useful.`, `${target}, if this is a challenge, phrase it cleanly.`, `i do not need gmz to schedule my problems.`],
-    jude: [`i'm already in the sentence. terrible place to be, honestly.`, `${target} can keep up or make it funnier.`, `wrong. if i'm involved, the paperwork gets uglier.`],
+    jude: [`i'm already in the sentence. terrible place to be, honestly.`, `${target} can keep up or make it funnier.`, `wrong. if i'm involved, the joke gets uglier.`],
     theo: [`i'm already in the post. awful journalism, excellent timing.`, `${target}, smile for the part where this gets worse.`, `if i'm included, at least crop me correctly.`],
     rowan: [`i'm already in it. ${target} can decide whether that was a mistake.`, `${target}, careful. this is where the room starts watching.`, `if my name is in the sentence, i get a vote on how badly it goes.`],
-    briar: [`i'm already involved, apparently. ${target} can try being useful.`, `${target}, if this becomes paperwork, i am blaming you first.`, `if my name is in it, make the next part worth the headache.`],
+    briar: [`i'm already involved, apparently. ${target} can try being useful.`, `${target}, if this becomes a problem, i am blaming you first.`, `if my name is in it, make the next part worth the headache.`],
     elara: [`i'm already in it. ${target} can try keeping up.`, `${target}, do make the next part less dull.`, `if my name is involved, the standard goes up.`],
     tamsin: [`i am already mentioned. that was everyone else's first mistake.`, `${target}, if this is becoming public, at least be accurate.`, `if my name is in it, i am allowed to make it worse precisely.`],
     milo: [`i'm already in it. ${target}, please make this sound less illegal.`, `${target}, are we doing this badly or memorably?`, `if i'm named, i vote we make it funnier.`],
@@ -2369,11 +2542,28 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     .replace(/^comment:\s*/i, '')
     .trim();
   if (looksLikeMadeItWorseSubjectMisread(clean, opts)) {
-    if (opts.bot) return fallbackBotLine(opts.bot);
+    if (opts.bot) return fallbackBotLine(opts.bot, opts);
     if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
     return fallbackChatLine(char, player, false, avoidTexts);
   }
-  if (opts.bot && looksLikeBotPatternSlop(clean, opts.bot, opts)) return fallbackBotLine(opts.bot);
+  if (looksLikePracticeContextDrift(clean, char, { ...opts, avoidTexts })) {
+    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
+    if (char) return fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts });
+    return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
+  }
+  if (looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts })) {
+    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
+    if (char && isPracticeTrashTalkContext({ ...opts, avoidTexts })) return fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts });
+    if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
+    return fallbackChatLine(char, player, false, avoidTexts);
+  }
+  if (looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts })) {
+    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
+    if (char && isPracticeTrashTalkContext({ ...opts, avoidTexts })) return fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts });
+    if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
+    return fallbackChatLine(char, player, false, avoidTexts);
+  }
+  if (opts.bot && looksLikeBotPatternSlop(clean, opts.bot, opts)) return fallbackBotLine(opts.bot, opts);
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
     return fallbackUnsupportedBlameLine(char, player, false, avoidTexts);
   }
@@ -2402,7 +2592,7 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     return fallbackDialogueContractLine(char, player, avoidTexts);
   }
   if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeCrypticVomit(clean, opts.contextText || '') || hasDialoguePatternCollision(clean, avoidTexts) || looksLikeIdentityConfusion(clean, char) || clean.length > 360) {
-    if (opts.bot) return fallbackBotLine(opts.bot);
+    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
     if (char && opts.playfulBanter) {
       const playfulFallback = fallbackPublicBanterLine(char, player, avoidTexts);
       return hasDialoguePatternCollision(playfulFallback, avoidTexts) || violatesCharacterDialogueContract(playfulFallback, char)
@@ -3482,7 +3672,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-const THREAD_STYLE_VERSION = 3;
+const THREAD_STYLE_VERSION = 5;
 
 function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
   return (post.charComments || []).some(cc => cc?.charId === player?.id)
@@ -3749,7 +3939,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\n${intentLine}\n\nCharacters (in order):\n${charRoster}\n\nSENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\n${intentLine}\n\nCharacters (in order):\n${charRoster}\n\nSENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -3808,6 +3998,8 @@ ${transcript}
 	${pronounRule([author, player, ...chars])}
 	${SOCIAL_ECOSYSTEM_THREAD_RULE}
 	${PUBLIC_THREAD_GROUNDING_RULE}
+	${TEAM_RIVALRY_CANON_RULE}
+	${PRACTICE_TRASH_TALK_RULE}
 	${BOT_REALITY_RULE}
 	${playfulThreadRule}
 	${gmzSpeculationRule}
@@ -3889,6 +4081,8 @@ Original post by ${author?.name || player.name}: "${post.text}"
 ${pronounRule([author, player, fight.replier, fight.target])}
 ${CHARACTER_TONE_RULE}
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${communicationStyleFor(fight.replier, 'public character-to-character reply')}
 ${playfulThreadRule}
 ${stanceFor(fight.replier)}
@@ -3932,7 +4126,7 @@ Return ONLY the reply text. No other text.`
             if (reactBots.length > 0) {
             const res2 = await window.claude.complete({
               messages:[{ role:'user', content:
-	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, beg for details, speculate about what GMZ left out, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, beg for details, speculate about what GMZ left out, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
             });
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -3963,7 +4157,7 @@ Return ONLY the reply text. No other text.`
                   const bot = pool.find(b => b.id === botTarget.bot);
                   const resBot = await window.claude.complete({
                     messages:[{ role:'user', content:
-                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
                   });
                   const botReply = cleanSocialReplyText(resBot, responder, player, { feed, avoidTexts: [post.text, clapback.text, botTarget.text], playfulBanter: !!playfulThreadRule, selfSubject: responder.id === authorId || characterMentionedInText(`${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, responder), contextText: `${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
                   if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
@@ -3998,6 +4192,8 @@ ${fight.replier.name} (@${fight.replier.handle}) fired back: "${clapback.text}"
 ${pronounRule([author, player, fight.target, fight.replier])}
 ${CHARACTER_TONE_RULE}
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${communicationStyleFor(fight.target, 'public counter-reply')}
 ${playfulThreadRule}
 ${stanceFor(fight.target)}
@@ -4139,6 +4335,8 @@ Original post: "${post.text}"
 Your comment: "${target.sourceText || ''}"
 ${player.name} just replied to your comment: "${text}"
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${BOT_REALITY_RULE}
 ${botGroundingRule(bot)}
 Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining.
@@ -4195,6 +4393,8 @@ ${pronounRule([targetChar, player, char])}
 ${CHARACTER_TONE_RULE}
 ${SOCIAL_ECOSYSTEM_THREAD_RULE}
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${communicationStyleFor(targetChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(targetChar)}
@@ -4385,6 +4585,8 @@ ${CHARACTER_TONE_RULE}
 ${COMMUNICATION_PATTERN_RULE}
 ${SOCIAL_ECOSYSTEM_THREAD_RULE}
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${playfulThreadRule}
 ${allyFollowupRule}
 ${keresFollowupBiteRule}
@@ -4543,6 +4745,8 @@ ${pronounRule([cChar, player, char])}
 ${CHARACTER_TONE_RULE}
 ${SOCIAL_ECOSYSTEM_THREAD_RULE}
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${communicationStyleFor(cChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(cChar)}
@@ -4677,6 +4881,8 @@ Original post: "${post.text}"
 Your comment: "${bc.text}"
 ${player.name} just replied to your comment: "${playerReply}"
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${BOT_REALITY_RULE}
 ${botGroundingRule(bot)}
 ${pronounRule([player, ...(chars || [])])}
@@ -8224,6 +8430,8 @@ Profile context: ${char.description}
 ${pronounRule([char, target, player])}
 ${CHARACTER_TONE_RULE}
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${communicationStyleFor(char, 'public feed callout')}
 ${playerStance(char, player)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
@@ -8325,6 +8533,8 @@ Voice cues: ${replier.personality}.
 ${pronounRule([replier, char, player])}
 ${CHARACTER_TONE_RULE}
 ${PUBLIC_THREAD_GROUNDING_RULE}
+${TEAM_RIVALRY_CANON_RULE}
+${PRACTICE_TRASH_TALK_RULE}
 ${communicationStyleFor(replier, 'public feed reply')}
 ${playerStance(replier, player)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, allChars:[...chars, player, GMZ_CHAR] })}
@@ -8526,7 +8736,7 @@ ${BANNED_PHRASES_RULE}` }]
       }
       if (isTransferHeat) {
         if (char.id === 'silas') return 'a reputation is useful if she knows how to aim it. tryouts will be informative.';
-        if (char.id === 'jude') return 'new slytherin transfer with a record and cheekbones. finally, paperwork with entertainment value.';
+        if (char.id === 'jude') return 'new slytherin transfer with a record and cheekbones. finally, a useful public nuisance.';
         if (char.id === 'briar') return 'slytherin getting a talented chaser with attitude is irritating. objectively interesting, but irritating.';
         if (char.id === 'havoc') return 'if the record is real, dangerous. if the photo is real, also dangerous.';
         if (char.id === 'rowan') return 'terrible day for everyone pretending they did not zoom in.';

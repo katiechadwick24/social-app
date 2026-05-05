@@ -591,10 +591,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
     ],
     reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|caption is writing|caption writes|discourse|narrative|exhibit a|camera roll|clip dealer|detention energy|someone else'?s problem|almost useful|go\s+off|useful,\s*if\s+accidentally|going\s+for\s+the\s+hard\s+no|doesn'?t\s+want\s+the\s+distraction|that's\s+just\s+tactical|that\s+is\s+just\s+tactical|i\s+can\s+make\s+that\s+worse)\b|beautiful\.?\s+no notes|no notes except/i,
     publicFallbacks: [
-      'worried i\'ll distract you? rude. accurate, but rude.',
-      'bad idea. i heard my name.',
-      '{player} do it again. slower this time.',
-      'say less. i\'ll stand where you can pretend not to look.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   silas: {
@@ -621,10 +621,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
     ],
     reject: /\b(?:go\s+off|useful,\s*if\s+accidentally|fair\s+enough|fair\s+point|doesn'?t\s+want\s+the\s+distraction|don't\s+let\s+her\s+distract\s+you)\b/i,
     publicFallbacks: [
-      'be specific or be quiet.',
-      'make it useful on purpose.',
-      'that was almost a point. unfortunate ending.',
-      'cleaner next time. if you can manage it.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   callum: {
@@ -648,10 +648,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'Havoc-style bad-idea enthusiasm',
     ],
     publicFallbacks: [
-      'try a cleaner angle.',
-      'that was not the clever version of that thought.',
-      'you are enjoying being wrong.',
-      'standards are not the villain here.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   briar: {
@@ -675,10 +675,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'Milo-level chaos',
     ],
     publicFallbacks: [
-      'i am adding this to the list for practice.',
-      'fantastic. a new category of problem.',
-      'this is why supervision keeps finding me.',
-      'morale should not require incident reports.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   rowan: {
@@ -702,10 +702,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'overexplained strategy',
     ],
     publicFallbacks: [
-      'terrible idea. suspiciously good timing.',
-      'i would like my objection ignored with dignity.',
-      'funny how quickly everyone looked.',
-      'that was almost subtle. almost.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   milo: {
@@ -729,10 +729,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'clean menace',
     ],
     publicFallbacks: [
-      'wait are we doing bad ideas because yes.',
-      'i understood half of that and support all of it.',
-      'dangerous sentence. say more.',
-      'this feels illegal. continue.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   elara: {
@@ -756,10 +756,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'Theo-style analytics',
     ],
     publicFallbacks: [
-      'charming. awful, but charming.',
-      'how generous of everyone to notice now.',
-      'careful. some history has excellent hearing.',
-      'i hate that i laughed.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   theo: {
@@ -785,10 +785,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
     ],
     reject: /\b(?:shove|square up|throw hands|punch|bite|i'?ll\s+(?:hit|swing)|i will\s+(?:hit|swing)|hit\s+(?:him|her|them|you|me)|detention energy|someone else'?s problem|i support this getting worse|under protest|not my problem)\b|beautiful\.?\s+no notes|no notes except|awful\.?\s+keep going|sure\.?\s+nothing here can become evidence|almost useful/i,
     publicFallbacks: [
-      'new poll: who made this worse fastest.',
-      'saving this as exhibit a in bad timing.',
-      'caption is writing itself and it is rude.',
-      'engagement forecast: deeply annoying, wildly clickable.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   jude: {
@@ -816,10 +816,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
     ],
     reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|data says|camera roll|clip dealer|shove|square up|throw hands|punch|hold my broom|i can make that worse|bad idea, better timing|do it again\.?\s+slower|become useful|that helped nobody|beautiful\.?\s+no notes|no notes except)\b/i,
     publicFallbacks: [
-      'awful. keep going.',
-      'sure. nothing here can become evidence.',
-      'beautifully stupid. almost useful.',
-      'that is a problem with better lighting.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
   tamsin: {
@@ -843,10 +843,10 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'Jude lazy menace',
     ],
     publicFallbacks: [
-      'unhelpful. unfortunately funny.',
-      'that answered more than you think it did.',
-      'i am choosing not to encourage this publicly.',
-      'please try to make the next bad idea quieter.',
+      'noted.',
+      'okay.',
+      'sure.',
+      'interesting.',
     ],
   },
 };
@@ -3087,29 +3087,31 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
   const memory = [];
   const allowPrivateConversation = canIncludePrivateConversation(channel);
 
-  (eventLog || [])
-    .filter(entry => entry && canUseMemoryEntry(entry, char, player, { channel, audienceIds }))
-    .slice(0, 8)
-    .forEach(entry => {
-      const isScene = entry.type === 'scene' || !!entry.sceneMemory;
-      const title = isScene ? `Completed scene${entry.title ? `: ${entry.title}` : ''}` : (entry.title || entry.type || (entry.scenario ? 'Event' : 'Memory'));
-      const text = entry.sceneMemory || entry.outcome || entry.action || entry.text || entry.scenario || '';
-      const changes = (entry.scoreChanges || [])
-        .map(ch => {
-          const c = byId(ch.avatar);
-          return c?.handle ? `@${c.handle} ${ch.value > 0 ? '+' : ''}${ch.value}` : '';
-        })
-        .filter(Boolean)
-        .join(', ');
-      const line = `${memoryScopeLabel(entry)} - ${title}: ${String(text).replace(/\s+/g, ' ').slice(0, 260)}${changes ? ` (${changes})` : ''}`;
-      if (line.trim()) memory.push(line);
-    });
+  const filteredLog = (eventLog || []).filter(entry => entry && canUseMemoryEntry(entry, char, player, { channel, audienceIds }));
 
+  function formatLogEntry(entry) {
+    const isScene = entry.type === 'scene' || !!entry.sceneMemory;
+    const title = isScene ? `Completed scene${entry.title ? `: ${entry.title}` : ''}` : (entry.title || entry.type || (entry.scenario ? 'Event' : 'Memory'));
+    const text = entry.sceneMemory || entry.outcome || entry.action || entry.text || entry.scenario || '';
+    const changes = (entry.scoreChanges || [])
+      .map(ch => { const c = byId(ch.avatar); return c?.handle ? `@${c.handle} ${ch.value > 0 ? '+' : ''}${ch.value}` : ''; })
+      .filter(Boolean).join(', ');
+    return `${memoryScopeLabel(entry)} - ${title}: ${String(text).replace(/\s+/g, ' ').slice(0, 260)}${changes ? ` (${changes})` : ''}`;
+  }
+
+  // 1. Scenes first — highest priority for relationship continuity
+  filteredLog
+    .filter(e => e.type === 'scene' || !!e.sceneMemory)
+    .slice(0, 4)
+    .forEach(entry => { const line = formatLogEntry(entry); if (line.trim()) memory.push(line); });
+
+  // 2. DMs — private relationship history
   if (allowPrivateConversation && char?.id && dms?.[char.id]?.length) {
     const recentDm = dms[char.id].slice(-5).map(m => `${m.role === 'user' ? player?.name || 'Player' : char.name}: "${String(m.text || '').slice(0, 120)}"`).join(' / ');
     if (recentDm) memory.push(`Private DM history with @${player?.handle || 'player'}: ${recentDm}`);
   }
 
+  // 2b. Group chats — after DMs
   (groupChats || [])
     .filter(group => {
       const members = group.members || [];
@@ -3125,6 +3127,7 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
       if (recent) memory.push(`Recent group chat "${group.name}": ${recent}`);
     });
 
+  // 3. Public feed / timeline behavior
   const recentPosts = collectRecentFeedDialogue(feed, { limit: 5 })
     .slice(0, 12)
     .map(entry => {
@@ -3137,6 +3140,12 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
     .filter(Boolean);
   if (recentPosts.length) memory.push(`Recent visible feed: ${recentPosts.join(' / ')}`);
 
+  // 4. Other events (non-scene log entries) — lowest priority
+  filteredLog
+    .filter(e => e.type !== 'scene' && !e.sceneMemory)
+    .slice(0, 4)
+    .forEach(entry => { const line = formatLogEntry(entry); if (line.trim()) memory.push(line); });
+
   const privacyRule = channel === 'public'
     ? 'Private DMs, private scenes, and group chats are intentionally omitted here. Do not imply knowledge of private context unless it appears in public feed memory.'
     : channel === 'group'
@@ -3144,9 +3153,9 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
     : 'Do not reveal private memories outside the current private relationship/context.';
 
   return memory.length
-    ? `RECENT APP MEMORY:
-${memory.slice(0, 10).map((line, i) => `${i + 1}. ${line}`).join('\n')}
-Use this as continuity only when it is visible to the current speaker and appropriate for this ${channel} context. ${privacyRule} Completed scenes shown here are already past-tense facts, not hypotheticals. Do not reset relationships, forget scenes/events, invent details beyond it, or leak private memories into public/unrelated dialogue.`
+    ? `RECENT APP MEMORY (priority: scenes > DMs > public feed > events):
+${memory.slice(0, 12).map((line, i) => `${i + 1}. ${line}`).join('\n')}
+Use this as continuity only when it is visible to the current speaker and appropriate for this ${channel} context. ${privacyRule} Completed scenes shown here are already past-tense facts, not hypotheticals. Scenes and DMs outweigh public feed and events — if a scene or DM established something, do not contradict it with a vague public post. Do not reset relationships, forget scenes/events, invent details beyond it, or leak private memories into public/unrelated dialogue.`
     : 'RECENT APP MEMORY: no saved events yet. Do not pretend there is established history.';
 }
 
@@ -5949,51 +5958,17 @@ function scoreSceneRelationshipForChar(char, sceneMessages = [], vibe) {
 }
 
 function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
-  const [step, setStep] = useState('setup'); // setup | invite | declined
   const [setting, setSetting] = useState(null);
   const [vibe, setVibe] = useState(null);
   const [selectedIds, setSelectedIds] = useState([char.id]);
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteResponse, setInviteResponse] = useState(null);
+  const [context, setContext] = useState('');
   const sceneChoices = chars.filter(c => c?.description && c.id !== 'player' && c.id !== '__gmz__');
   const selectedChars = sceneChoices.filter(c => selectedIds.includes(c.id));
+  const canStart = setting && vibe && selectedChars.length > 0;
 
   function toggleSceneChar(id) {
     if (id === char.id) return;
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
-
-  async function sendInvite() {
-    if (!setting || !vibe || selectedChars.length === 0) return;
-    setInviteLoading(true);
-    setStep('invite');
-    try {
-      const roster = selectedChars.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description?.slice(0,150)||c.bio}`).join('\n');
-      const res = await window.claude.complete({
-        messages:[{ role:'user', content:
-          `${player.name} (@${player.handle}) is setting up a scene at ${setting.label} — "${setting.sub}" — vibe: ${vibe.label}.
-
-Invited characters:
-${roster}
-
-${pronounRule([player, ...selectedChars])}
-${COMMUNICATION_PATTERN_RULE}
-${selectedChars.map(c => communicationStyleFor(c, 'scene invite')).join('\n')}
-${multiSpeakerDialogueSeparationRule(selectedChars, 'scene invite')}
-
-Write a short in-character group acceptance preview. It can include one or two quick lines from the invited characters, but keep it compact and natural. 1-3 sentences total. If there are multiple characters, let the chemistry of the group show. NO quotes around the whole response.` }]
-      });
-      setInviteResponse(cleanChatText(res, selectedChars[0], player, selectedChars.length > 1));
-      // Detect decline — if response contains "can't", "won't", "no", "not tonight", "busy" etc.
-      const lower = res.toLowerCase();
-      const declined = ['can\'t', 'won\'t', 'not tonight', 'busy', 'not interested', 'leave me', 'go away'].some(w => lower.includes(w)) && !lower.includes('can\'t wait') && !lower.includes('won\'t be late');
-      if (declined) setStep('declined');
-      else setStep('accepted');
-    } catch(e) {
-      setInviteResponse('...fine. But this doesn\'t mean anything.');
-      setStep('accepted');
-    }
-    setInviteLoading(false);
   }
 
   return (
@@ -6003,121 +5978,92 @@ Write a short in-character group acceptance preview. It can include one or two q
         <div style={{width:36, height:4, background:C.border, borderRadius:2, margin:'0 auto 20px'}}/>
         <button onClick={onClose} style={{position:'absolute', top:18, right:18, background:C.card2, border:'none', color:C.muted, borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:15, display:'flex', alignItems:'center', justifyContent:'center'}}>×</button>
 
-        {step === 'setup' && <>
-          <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:20}}>
-            <Avatar char={char} size={36}/>
-            <div>
-              <p style={{color:C.text, fontWeight:700, fontSize:15}}>Invite {char.name.split(' ')[0]}</p>
-              <p style={{color:C.muted, fontSize:12}}>Pick a setting and a vibe</p>
-            </div>
-          </div>
+        <div style={{marginBottom:20}}>
+          <p style={{color:C.text, fontWeight:700, fontSize:15}}>Set up a scene</p>
+          <p style={{color:C.muted, fontSize:12}}>Choose a setting, tone, and who's there</p>
+        </div>
 
-          <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>WHERE</p>
-          <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
-            {SCENE_SETTINGS.map(s => (
-              <button key={s.id} onClick={() => setSetting(s)} style={{
-                display:'flex', alignItems:'center', gap:12, background: setting?.id===s.id ? `${C.blue}18` : C.card2,
-                border:`1.5px solid ${setting?.id===s.id ? C.blue : C.border}`, borderRadius:12,
-                padding:'10px 14px', cursor:'pointer', textAlign:'left', transition:'all 0.15s',
-              }}>
-                <span style={{fontSize:20}}>{s.emoji}</span>
-                <div>
-                  <p style={{color:C.text, fontSize:13, fontWeight:600}}>{s.label}</p>
-                  <p style={{color:C.muted, fontSize:11}}>{s.sub}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>VIBE</p>
-          <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:24}}>
-            {SCENE_VIBES.map(v => (
-              <button key={v.id} onClick={() => setVibe(v)} style={{
-                display:'flex', alignItems:'center', gap:6,
-                background: vibe?.id===v.id ? `${v.color}20` : C.card2,
-                border:`1.5px solid ${vibe?.id===v.id ? v.color : C.border}`,
-                borderRadius:20, padding:'7px 14px', cursor:'pointer', transition:'all 0.15s',
-              }}>
-                <span style={{fontSize:14}}>{v.emoji}</span>
-                <span style={{color: vibe?.id===v.id ? v.color : C.text, fontSize:13, fontWeight:600}}>{v.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>WHO</p>
-          <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
-            {sceneChoices.map(c => {
-              const active = selectedIds.includes(c.id);
-              const locked = c.id === char.id;
-              return (
-                <button key={c.id} onClick={() => toggleSceneChar(c.id)} style={{
-                  display:'flex', alignItems:'center', gap:10,
-                  background: active ? `${C.blue}18` : C.card2,
-                  border:`1.5px solid ${active ? C.blue : C.border}`,
-                  borderRadius:12, padding:'9px 12px', cursor: locked ? 'default' : 'pointer',
-                  textAlign:'left',
-                }}>
-                  <Avatar char={c} size={30}/>
-                  <div style={{flex:1, minWidth:0}}>
-                    <p style={{color:C.text, fontSize:13, fontWeight:700}}>{c.name}</p>
-                    <p style={{color:C.muted, fontSize:11}}>@{c.handle}</p>
-                  </div>
-                  <span style={{color:active ? C.blue : C.muted, fontSize:18}}>{active ? '✓' : '+'}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <button onClick={sendInvite} disabled={!setting || !vibe || selectedChars.length === 0} style={{
-            width:'100%', background: (setting && vibe && selectedChars.length) ? C.text : C.card2,
-            color: (setting && vibe && selectedChars.length) ? C.bg : C.muted,
-            border:'none', borderRadius:14, padding:'14px', fontSize:15, fontWeight:700,
-            cursor: (setting && vibe && selectedChars.length) ? 'pointer' : 'default', transition:'all 0.2s',
-          }}>Send invite</button>
-        </>}
-
-        {step === 'invite' && inviteLoading && (
-          <div style={{textAlign:'center', padding:'40px 0'}}>
-            <div style={{display:'flex', justifyContent:'center'}}>
-              {selectedChars.slice(0,4).map((c,i) => <div key={c.id} style={{marginLeft:i ? -12 : 0}}><Avatar char={c} size={54}/></div>)}
-            </div>
-            <p style={{color:C.muted, fontSize:14, marginTop:16}}>Waiting to hear back…</p>
-          </div>
-        )}
-
-        {(step === 'accepted' || step === 'declined') && inviteResponse && (
-          <div>
-            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:20}}>
-              <div style={{display:'flex'}}>
-                {selectedChars.slice(0,3).map((c,i) => <div key={c.id} style={{marginLeft:i ? -10 : 0}}><Avatar char={c} size={40}/></div>)}
-              </div>
+        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>WHERE</p>
+        <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
+          {SCENE_SETTINGS.map(s => (
+            <button key={s.id} onClick={() => setSetting(s)} style={{
+              display:'flex', alignItems:'center', gap:12, background: setting?.id===s.id ? `${C.blue}18` : C.card2,
+              border:`1.5px solid ${setting?.id===s.id ? C.blue : C.border}`, borderRadius:12,
+              padding:'10px 14px', cursor:'pointer', textAlign:'left', transition:'all 0.15s',
+            }}>
+              <span style={{fontSize:20}}>{s.emoji}</span>
               <div>
-                <p style={{color:C.text, fontWeight:700}}>{selectedChars.map(c => c.name.split(' ')[0]).join(', ')}</p>
-                <p style={{color:C.muted, fontSize:12}}>{selectedChars.length} invited</p>
+                <p style={{color:C.text, fontSize:13, fontWeight:600}}>{s.label}</p>
+                <p style={{color:C.muted, fontSize:11}}>{s.sub}</p>
               </div>
-            </div>
-            <div style={{background:C.card2, borderRadius:14, padding:'14px 16px', marginBottom:20}}>
-              <p style={{color:C.text, fontSize:15, lineHeight:1.65, fontStyle:'italic'}}>"{inviteResponse}"</p>
-            </div>
-            {step === 'accepted' ? (
-              <button onClick={() => onStart(selectedChars, setting, vibe)} style={{
-                width:'100%', background:C.blue, color:'#fff', border:'none',
-                borderRadius:14, padding:'14px', fontSize:15, fontWeight:700, cursor:'pointer',
-              }}>Start the scene →</button>
-            ) : (
-              <button onClick={onClose} style={{
-                width:'100%', background:C.card2, color:C.muted, border:`1px solid ${C.border}`,
-                borderRadius:14, padding:'14px', fontSize:15, fontWeight:600, cursor:'pointer',
-              }}>Maybe another time</button>
-            )}
-          </div>
-        )}
+            </button>
+          ))}
+        </div>
+
+        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>TONE</p>
+        <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:20}}>
+          {SCENE_VIBES.map(v => (
+            <button key={v.id} onClick={() => setVibe(v)} style={{
+              display:'flex', alignItems:'center', gap:6,
+              background: vibe?.id===v.id ? `${v.color}20` : C.card2,
+              border:`1.5px solid ${vibe?.id===v.id ? v.color : C.border}`,
+              borderRadius:20, padding:'7px 14px', cursor:'pointer', transition:'all 0.15s',
+            }}>
+              <span style={{fontSize:14}}>{v.emoji}</span>
+              <span style={{color: vibe?.id===v.id ? v.color : C.text, fontSize:13, fontWeight:600}}>{v.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>WHO</p>
+        <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:20}}>
+          {sceneChoices.map(c => {
+            const active = selectedIds.includes(c.id);
+            const locked = c.id === char.id;
+            return (
+              <button key={c.id} onClick={() => toggleSceneChar(c.id)} style={{
+                display:'flex', alignItems:'center', gap:10,
+                background: active ? `${C.blue}18` : C.card2,
+                border:`1.5px solid ${active ? C.blue : C.border}`,
+                borderRadius:12, padding:'9px 12px', cursor: locked ? 'default' : 'pointer',
+                textAlign:'left',
+              }}>
+                <Avatar char={c} size={30}/>
+                <div style={{flex:1, minWidth:0}}>
+                  <p style={{color:C.text, fontSize:13, fontWeight:700}}>{c.name}</p>
+                  <p style={{color:C.muted, fontSize:11}}>@{c.handle}</p>
+                </div>
+                <span style={{color:active ? C.blue : C.muted, fontSize:18}}>{active ? '✓' : '+'}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:8}}>CONTEXT <span style={{color:C.muted, fontWeight:400, textTransform:'none', letterSpacing:0}}>(optional)</span></p>
+        <textarea
+          value={context}
+          onChange={e => setContext(e.target.value)}
+          placeholder="What's already happened, what's the mood, any details that matter…"
+          rows={3}
+          style={{
+            width:'100%', background:C.card2, border:`1.5px solid ${C.border}`, borderRadius:12,
+            padding:'10px 12px', color:C.text, fontSize:13, resize:'vertical', outline:'none',
+            fontFamily:'inherit', lineHeight:1.5, marginBottom:20, boxSizing:'border-box',
+          }}
+        />
+
+        <button onClick={() => canStart && onStart(selectedChars, setting, vibe, context.trim())} disabled={!canStart} style={{
+          width:'100%', background: canStart ? C.text : C.card2,
+          color: canStart ? C.bg : C.muted,
+          border:'none', borderRadius:14, padding:'14px', fontSize:15, fontWeight:700,
+          cursor: canStart ? 'pointer' : 'default', transition:'all 0.2s',
+        }}>Start scene</button>
       </div>
     </div>
   );
 }
 
-function SceneChatScreen({ char, sceneChars, player, setting, vibe, onClose, onEnd }) {
+function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = '', onClose, onEnd }) {
   const participants = (sceneChars && sceneChars.length ? sceneChars : [char]).filter(Boolean);
   const primaryChar = participants[0];
   const [msgs, setMsgs] = useState([]);
@@ -6170,8 +6116,9 @@ ${threadPatternVarietyGuard(history ? [history] : [])}
 ${latestText ? directResponseRoutingLine(latestText, participants, player) : ''}
 
 SCENE: ${setting.label} — ${setting.sub}
-VIBE: ${vibe.label} ${vibe.emoji}
+TONE: ${vibe.label} ${vibe.emoji}
 OTHER PERSON: ${player.name} (@${player.handle}) — ${player.bio}
+${context ? `SCENE CONTEXT: ${context}` : ''}
 
 RESPONSE FORMAT — follow this exactly:
 - Actions go in italics asterisks, third person: *She glances up slowly, saying nothing at first.*
@@ -6415,9 +6362,15 @@ function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats =
           return `@${poster?.handle||p.charId}: "${p.text}"`;
         }).join('\n');
         const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
-        const logContext = (eventLog || [])
-          .filter(e => e && e.type !== 'dm' && canUseMemoryEntry(e, char, player, { channel:'profile' }))
-          .slice(0,8)
+        const filteredLog = (eventLog || []).filter(e => e && e.type !== 'dm' && canUseMemoryEntry(e, char, player, { channel:'profile' }));
+        const sceneContext = filteredLog
+          .filter(e => e.type === 'scene' || !!e.sceneMemory)
+          .slice(0, 4)
+          .map(e => `Scene — ${e.title || 'Completed scene'}: ${e.sceneMemory || e.text || e.outcome || ''}`)
+          .join('\n');
+        const eventContext = filteredLog
+          .filter(e => e.type !== 'scene' && !e.sceneMemory)
+          .slice(0, 4)
           .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
           .join('\n');
         const f = await window.claude.complete({
@@ -6431,11 +6384,18 @@ ${playerStance(char, player, rel)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'profile' })}
 ${BANNED_PHRASES_RULE}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
-Recent campus posts:\n${recentContext}
-${dmContext ? `\nRecent private DMs with ${player.name}:\n${dmContext}` : ''}
-${logContext ? `\nRecent action/scene memory:\n${logContext}` : ''}
 
-In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name} or the current campus drama. If DMs or scenes show trust, alliance, flirting, attraction, or honesty, reflect that instead of resetting to neutral. If context is thin, make a guarded in-character observation based on the relationship score. Never ask for more context. First person, in character. Use the pronouns listed above exactly. Return ONLY the sentence.` }]
+CONTEXT PRIORITY — use whichever tier has the most recent relevant information, in this order:
+1. SCENES (strongest signal — what happened in private, what was said, how it felt):
+${sceneContext || 'None yet.'}
+2. PRIVATE DMs (second strongest — what was said directly):
+${dmContext || 'None yet.'}
+3. PUBLIC FEED / TIMELINE behavior (third — what they posted, how they acted publicly):
+${recentContext || 'None yet.'}
+4. EVENTS (weakest — general campus events, not directly personal):
+${eventContext || 'None yet.'}
+
+In 1 punchy sentence (under 20 words), describe your current feeling right now specifically in relation to ${player.name}. Use the highest-priority tier that has real content — scenes and DMs override feed behavior and events. If a scene or DM established warmth, tension, attraction, honesty, or conflict, reflect THAT, not a vague public post. If context is thin across all tiers, make a guarded in-character observation based on the relationship score. Never ask for more context. First person, in character. Use the pronouns listed above exactly. Return ONLY the sentence.` }]
         });
         setFeeling(cleanProfileFeelingText(f, char, rel));
       } catch(e) {
@@ -6452,9 +6412,15 @@ In 1 punchy sentence (under 20 words), describe your current feeling right now s
           return `@${poster?.handle||p.charId}: "${p.text}"`;
         }).join('\n');
         const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
-        const logContext = (eventLog || [])
-          .filter(e => e && e.type !== 'dm' && canUseMemoryEntry(e, char, player, { channel:'profile' }))
-          .slice(0,8)
+        const filteredLogV = (eventLog || []).filter(e => e && e.type !== 'dm' && canUseMemoryEntry(e, char, player, { channel:'profile' }));
+        const sceneContextV = filteredLogV
+          .filter(e => e.type === 'scene' || !!e.sceneMemory)
+          .slice(0, 4)
+          .map(e => `Scene — ${e.title || 'Completed scene'}: ${e.sceneMemory || e.text || e.outcome || ''}`)
+          .join('\n');
+        const eventContextV = filteredLogV
+          .filter(e => e.type !== 'scene' && !e.sceneMemory)
+          .slice(0, 4)
           .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
           .join('\n');
         const res = await window.claude.complete({
@@ -6466,14 +6432,20 @@ ${playerStance(char, player, rel)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'profile' })}
 ${BANNED_PHRASES_RULE}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
-
 Voice cues for ${char.name}: ${char.personality}
 Profile context for ${char.name}: ${char.description?.slice(0,200)||char.bio}
-Recent campus posts:\n${recentContext}
-${dmContext ? `\nRecent private DMs with ${player.name}:\n${dmContext}` : ''}
-${logContext ? `\nRecent action/scene memory:\n${logContext}` : ''}
 
-Return ONLY a JSON array of 2-4 vibe objects, each with:
+CONTEXT PRIORITY — use whichever tier has the most recent relevant information, in this order:
+1. SCENES (strongest signal — what happened in private, what was said, how it felt):
+${sceneContextV || 'None yet.'}
+2. PRIVATE DMs (second strongest — what was said directly):
+${dmContext || 'None yet.'}
+3. PUBLIC FEED / TIMELINE behavior (third — what they posted, how they acted publicly):
+${recentContext || 'None yet.'}
+4. EVENTS (weakest — general campus events, not directly personal):
+${eventContextV || 'None yet.'}
+
+Return ONLY a JSON array of 2-4 vibe objects reflecting the HIGHEST-priority tier with real content. Scenes and DMs override feed behavior and events. Each object:
 - "label": short phrase (2-4 words, e.g. "lowkey obsessed", "genuinely irritated", "pretending not to care", "slightly jealous", "grudging respect", "chaotic energy", "watching closely")
 - "color": one of "blue", "green", "red", "purple", "yellow", "orange"
 - "emoji": single relevant emoji
@@ -6628,7 +6600,7 @@ Only output the JSON array, nothing else.` }]
         <SceneSetupModal
           char={char} chars={allChars} player={player}
           onClose={() => setShowSceneSetup(false)}
-          onStart={(sceneChars, setting, vibe) => { setShowSceneSetup(false); setActiveScene({ chars: sceneChars, setting, vibe }); }}
+          onStart={(sceneChars, setting, vibe, ctx) => { setShowSceneSetup(false); setActiveScene({ chars: sceneChars, setting, vibe, context: ctx }); }}
         />
       )}
 
@@ -6636,7 +6608,7 @@ Only output the JSON array, nothing else.` }]
       {activeScene && (
         <SceneChatScreen
           char={char} sceneChars={activeScene.chars} player={player}
-          setting={activeScene.setting} vibe={activeScene.vibe}
+          setting={activeScene.setting} vibe={activeScene.vibe} context={activeScene.context || ''}
           onClose={() => setActiveScene(null)}
           onEnd={(participants, messages, sceneVibe) => onSceneEnd && onSceneEnd(participants, messages, sceneVibe)}
         />

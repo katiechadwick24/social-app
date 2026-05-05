@@ -3964,10 +3964,15 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     weighted.sort((a,b) => b.w - a.w);
 
     // Pick a smaller main-cast set so the thread can breathe as a campus comment section.
-    const broadSocialThread = isKeresPost || isGMZThread || (post.likes || 0) > 50000 || /keres|gmz|rumou?r|photo|practice|quidditch|potions|house feud|screenshot/i.test(postText);
+    const postTagsNamedChar = chars.some(c => new RegExp(`@${c.handle}\\b`, 'i').test(postText));
+    const authorHighFollowers = (author?.followers || 0) > 2000000;
+    const hasRelationshipLanguage = /flirt|kiss|caught|deleted|screenshot|hooked|sneak|dorm|jealous|date|together/i.test(postText);
+    const broadSocialThread = isKeresPost || isGMZThread || (post.likes || 0) > 50000 || postTagsNamedChar || authorHighFollowers || hasRelationshipLanguage || /keres|gmz|rumou?r|photo|practice|quidditch|potions|house feud|screenshot/i.test(postText);
+    const isHighStakesThread = isGMZThread || (post.likes || 0) > 100000 || postTagsNamedChar || isKeresPost;
     const targetBase = isPlayerPost ? 2 : (isGMZThread ? 2 : (embarrassmentContext ? 2 : 1));
     const targetCount = Math.min(isPlayerPost ? 3 : 3, Math.max(targetBase, directlyMentioned.length + (broadSocialThread && Math.random() < 0.35 ? 1 : 0)));
-    const targetLimit = Math.min(isPlayerPost ? 4 : 4, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
+    const targetCeiling = isHighStakesThread ? 6 : 4;
+    const targetLimit = Math.min(isPlayerPost ? targetCeiling : targetCeiling, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
     let picked = [
       ...directlyMentioned,
       ...keresSparkResponders,
@@ -4080,12 +4085,30 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ].join('\n');
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
-      const botCount = isGMZThread
-        ? 3 + (Math.random() < 0.45 ? 1 : 0)
+      const botCount = isHighStakesThread
+        ? 5 + Math.floor(Math.random() * 3)        // 5-7 for viral/callout/GMZ/Keres posts
         : broadSocialThread
-        ? 3 + (Math.random() < 0.55 ? 1 : 0)
-        : 2 + (Math.random() < 0.35 ? 1 : 0);
-      const botsPicked = [...pool].sort(() => Math.random()-0.5).slice(0, botCount);
+        ? 4 + (Math.random() < 0.6 ? 1 : 0)        // 4-5 for broad social threads
+        : 2 + (Math.random() < 0.5 ? 1 : 0);        // 2-3 for quiet posts
+
+      // Content-based bot weighting: route thirst bots to appearance posts,
+      // sports bots to Quidditch posts, gossip bots to drama posts.
+      const isAppearancePost = /photo|look|fit|attractive|hot|pretty|thirst|distract|caught looking|staring|eyes/i.test(postText);
+      const isQuidditchPost = /quidditch|match|practice|beater|chaser|keeper|seeker|pitch|broom|quaffle|snitch|tactics|formation|score/i.test(postText);
+      const isDramaPost = /gmz|rumou?r|drama|receipts|screenshot|deleted|caught|source|tea|expose|alibi|leaked/i.test(postText);
+      function botContentScore(bot) {
+        const id = bot.id;
+        if (isAppearancePost && ['gobletoffire','mothballin','broombroke'].includes(id)) return 3;
+        if (isQuidditchPost && ['quafflewasted','quafflequeen85','slytherinsmirk'].includes(id)) return 3;
+        if (isDramaPost && ['libraryghoul','witchweekly','spellboundscribbler'].includes(id)) return 3;
+        if (isAppearancePost && id === 'dormfridge') return -2;
+        return 0;
+      }
+      const botsPicked = [...pool]
+        .map(b => ({ b, score: botContentScore(b) + Math.random() * 2 }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, botCount)
+        .map(x => x.b);
       const botRoster = botsPicked.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}. ${botGroundingRule(b)}`).join('\n');
 
       let bots = [];
@@ -4115,7 +4138,7 @@ Write replies from random anonymous student accounts joining the comment thread.
 - interject with original opinions, questions, fan behavior, tactical reads, rumors, side-eye, admiration, or warnings
 - on GMZ threads, at least one account should speculate, question the alibi, infer a motive, or float a messy theory with uncertainty
 - fangirl/fanboy naturally when someone is hot, impressive, or messy
-- can call out specific @handles
+- MANDATORY: at least 1–2 accounts in this batch must directly @mention a specific named character from the thread (not just the original poster). Pick the character who earned it — whoever got roasted, said something wild, got exposed, or is being thirsted over. This is what creates pile-on energy. Do not float as a general reaction.
 - keep it readable and not maximum-volume chaos. This is a small slice of the campus, with different motives and levels of investment.
 - do not call people "she", "girl", "mother", "queen", etc. unless the pronoun roster supports it and that exact account would say it
 - most accounts should use @handles or names instead of gendered labels
@@ -4160,17 +4183,23 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           const ci = allChars.find(x => x.id === charR1[i].charId);
           const cj = allChars.find(x => x.id === charR1[j].charId);
           const rel = ci?.relationships?.[cj?.id];
-          if (rel !== undefined && (rel < 10 || (rel < 35 && Math.random() < 0.35))) {
+          const isConflict = rel !== undefined && (rel < 10 || (rel < 35 && Math.random() < 0.35));
+          const isWarmExchange = rel !== undefined && rel > 65 && Math.random() < 0.25;
+          if (isConflict || isWarmExchange) {
             if (authorId === 'havoc' && new Set([ci?.id, cj?.id]).has('silas') && new Set([ci?.id, cj?.id]).has('callum') && Math.random() < 0.82) continue;
             if (ci?.id === 'silas' && isKeresPost && Math.random() < 0.7) continue;
-            pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel });
+            pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel, warmExchange: isWarmExchange && !isConflict });
           }
         }
       }
 
       if (pairs.length > 0) {
-        // Pick the most charged pair (lowest rel)
-        pairs.sort((a,b) => a.rel - b.rel);
+        // Conflict pairs first (lowest rel), then warm pairs (highest rel)
+        pairs.sort((a,b) => {
+          if (!a.warmExchange && b.warmExchange) return -1;
+          if (a.warmExchange && !b.warmExchange) return 1;
+          return a.warmExchange ? b.rel - a.rel : a.rel - b.rel;
+        });
         const fight = pairs[0];
         try {
           const res = await window.claude.complete({
@@ -4197,9 +4226,9 @@ ${gmzSpeculationRule}
 Write as ${fight.replier.name}, and output only the public reply text.
 ${identityPromptFor(fight.replier)}
 Other person facts: ${identityFactsFor(fight.target)}.
-Your relationship with @${fight.target.handle} is charged (${fight.rel}/100). You see what they just said and you can't help yourself. You reply to THEM, not to the original post. Voice cues: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
+Your relationship with @${fight.target.handle} is ${fight.warmExchange ? `close and easy (${fight.rel}/100). You see what they said and want to jump in — warmly, playfully, or with the easy familiarity of someone who knows them well` : `charged (${fight.rel}/100). You see what they just said and you can't help yourself`}. You reply to THEM, not to the original post. Voice cues: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
-Write ONE reply (8-26 words). It can be a tease, joke, flirt, smug correction, playful shove, dry observation, rumor theory, alibi math, or actual clapback only if the character would truly go there. It should clearly answer @${fight.target.handle}. Keep the thread roles straight if the exchange mentions rumors, alibis, witnesses, or tagged handles. On GMZ threads, speculation is welcome if marked as rumor/theory/question. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
+Write ONE reply (8-26 words). ${fight.warmExchange ? 'It should feel natural between two people who actually like each other — back them up, add a side comment, tease them affectionately, or riff on what they said. No conflict, no edge unless the edge is clearly playful.' : 'It can be a tease, joke, flirt, smug correction, playful shove, dry observation, rumor theory, alibi math, or actual clapback only if the character would truly go there.'} It should clearly answer @${fight.target.handle}. Keep the thread roles straight if the exchange mentions rumors, alibis, witnesses, or tagged handles. On GMZ threads, speculation is welcome if marked as rumor/theory/question. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
 ${THREAD_MENTION_RULE}
 ${THREAD_DIRECT_ADDRESS_RULE}
 ${BANNED_PHRASES_RULE}
@@ -8497,10 +8526,21 @@ ${BANNED_PHRASES_RULE}` }]
         'weather, uniforms, bruises, or bad sleep',
         'crushes, flirting, jealousy, or pretending not to stare',
       ];
+      // ~30% chance to continue an ongoing feed drama instead of picking a generic topic
+      const dramaTopicCandidates = !elaraHavocKeresHeat && !tamsinRowanKeresHeat && Math.random() < 0.30
+        ? feed.slice(0, 5)
+            .map(p => {
+              const poster = [...chars, player].find(c => c.id === p.charId);
+              return poster && p.text ? `${poster.name} (@${poster.handle}) recently posted: "${p.text.slice(0, 90)}"` : null;
+            })
+            .filter(Boolean)
+        : [];
       const campusTopic = elaraHavocKeresHeat
         ? 'an ex-adjacent subtweet about public rumors, old history, and someone new getting attention'
         : tamsinRowanKeresHeat
         ? 'older-sister side-eye about Rowan, Havoc, Keres, public interest, and everyone pretending the pattern is subtle'
+        : dramaTopicCandidates.length
+        ? `a reaction to or indirect continuation of this recent campus moment — ${dramaTopicCandidates[Math.floor(Math.random() * Math.min(3, dramaTopicCandidates.length))]}`
         : campusTopics[Math.floor(Math.random() * campusTopics.length)];
 
       // Occasional directed callout. Most posts should be normal campus life.

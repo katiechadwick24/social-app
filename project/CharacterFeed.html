@@ -2645,6 +2645,41 @@ function fallbackSideParticipantLine(char, player, opts = {}) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+function isGmzOrRumorContext(opts = {}) {
+  const context = `${opts.contextText || ''} ${(opts.avoidTexts || []).join(' ')}`.toLowerCase();
+  return /\b(?:gmz|@gmz|breaking:|exclusive:|sources confirm|witnesses say|anonymous tip|source|rumou?r|alibi|caught|spotted)\b/i.test(context);
+}
+
+function looksLikeDetailDemandInsteadOfSpeculation(text = '', opts = {}) {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  if (!isGmzOrRumorContext(opts)) return false;
+  return /\b(?:where|what)\s+(?:are|is)\s+(?:the\s+)?(?:details|proof|evidence|receipts)\b/i.test(lower)
+    || /\b(?:need|bring|drop|give|show)\s+(?:us\s+)?(?:more\s+)?(?:details|proof|receipts|evidence)\b/i.test(lower)
+    || /\bgmz\b.{0,70}\b(?:details|receipts|proof|evidence|vague|say more|tell us more)\b/i.test(lower)
+    || /\b(?:too|so)\s+vague\b/i.test(lower);
+}
+
+function fallbackGmzSpeculationLine(char, player, opts = {}) {
+  const target = opts.replyToHandle && opts.replyToHandle !== player?.handle && opts.replyToHandle !== char?.handle ? `@${opts.replyToHandle} ` : '';
+  const pool = {
+    silas: ['if gmz is right, the timing is doing most of the work.', 'allegedly. but the alibi math is not flattering.', 'someone wanted that seen. that part is obvious.'],
+    theo: ['the timing is the punchline, allegedly.', 'if this is witness math, i need three charts and no moral lessons.', 'alibi theory loading before anyone pretends they are above it.'],
+    jude: ['if gmz has the shape right, someone got sloppy.', 'allegedly is carrying that sentence, but i am listening.', 'the interesting part is who benefits from everyone looking there.'],
+    briar: ['i hate that the timing makes sense.', 'allegedly, but that alibi has cracks big enough to fly through.', 'someone is about to regret being seen that conveniently.'],
+    rowan: ['if true, that is catastrophically funny timing.', 'allegedly, but the room just got quieter.', 'the theory writes itself and that is never a good sign.'],
+    havoc: ['if true, dangerous timing. if false, dangerous lie.', 'someone put that where we could all see it.', 'allegedly, but i like the shape of the problem.'],
+    tamsin: ['the omission is the point, obviously.', 'allegedly, but the timing is doing a confession impression.', 'someone is letting the rumor breathe. interesting choice.'],
+    elara: ['if that is true, the interesting part is who wanted it public.', 'allegedly, but the timing has teeth.', 'the rumor is messy. the placement is messier.'],
+    milo: ['allegedly is doing parkour right now.', 'wait the timing is actually suspicious though.', 'i hate when the messy theory makes sense.'],
+  }[char?.id] || [
+    'allegedly, but the timing is suspicious.',
+    'if that read is right, someone got sloppy.',
+    'the theory is doing more work than the denial.',
+  ];
+  const line = pool[Math.floor(Math.random() * pool.length)];
+  return `${target}${line}`.trim();
+}
+
 function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   opts = opts || {};
   const avoidTexts = [...(opts.avoidTexts || [])];
@@ -2688,6 +2723,11 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   }
   if (char && looksLikeSilasPublicSoftness(clean, char)) {
     return fallbackDialogueContractLine(char, player, avoidTexts);
+  }
+  if (looksLikeDetailDemandInsteadOfSpeculation(clean, { ...opts, avoidTexts })) {
+    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
+    if (char) return fallbackGmzSpeculationLine(char, player, { ...opts, avoidTexts });
+    return fallbackChatLine(char, player, false, avoidTexts);
   }
   if (char && (looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
     return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
@@ -3134,6 +3174,7 @@ function memoryScopeLabel(entry) {
   const visibility = memoryVisibilityForEntry(entry);
   if (visibility === 'private_scene') return 'Private scene';
   if (visibility === 'private_dm') return 'Private DM';
+  if (visibility === 'private_intel') return 'Private intel';
   return 'Public memory';
 }
 
@@ -3819,7 +3860,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-const THREAD_STYLE_VERSION = 6;
+const THREAD_STYLE_VERSION = 7;
 
 function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
   return (post.charComments || []).some(cc => cc?.charId === player?.id)
@@ -3844,6 +3885,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     ? `GMZ THREAD SPECULATION:
 - This is a gossip thread. Characters and anonymous accounts SHOULD speculate, ask messy questions, make theories, side-eye timing, compare alibis, and float "wait, does this mean..." reads.
 - Speculation is allowed to be wrong, petty, funny, jealous, thirsty, or biased as long as it is framed as rumor, theory, suspicion, "allegedly", "if true", "sources", "witness math", or a question.
+- Do not complain that GMZ failed to post enough details, do not ask GMZ to drop receipts, and do not scold the account for being vague. Speculate from what is visible, make an alibi theory, take a side, or spin your own public take instead.
 - Do not flatten GMZ threads into cautious fact-checking. Keep hard canon separate from timeline gossip, but let people behave like a campus comment section.`
     : '';
   const [liked, setLiked] = useState(false);
@@ -4209,11 +4251,11 @@ Write replies from random anonymous student accounts joining the comment thread.
 - quote or repeat a line only occasionally
 - use casual slang lightly: lmfao, oop, bestie, the way, screaming
 - react with a mix of thirst, jokes, skeptical gossip, and taking sides
-- often reply directly to someone with @handle, ask a playful question, flirt, heckle, correct, beg for details, or make a joke at someone in the thread
+- often reply directly to someone with @handle, ask a playful question, flirt, heckle, correct, speculate, or make a joke at someone in the thread
 - in hot threads, many comments should be replies to specific character comments, not just reactions to the original post. Aim at the person who said the most provocative, funny, thirsty, strategic, or suspicious thing.
 - when the thread is about a hot/talented new transfer, most audience comments should be excited, impressed, thirsty, curious, or playfully chaotic, not bullying
 - interject with original opinions, questions, fan behavior, tactical reads, rumors, side-eye, admiration, or warnings
-- on GMZ threads, at least one account should speculate, question the alibi, infer a motive, or float a messy theory with uncertainty
+- on GMZ threads, at least one account should speculate, question the alibi, infer a motive, float a messy theory with uncertainty, or post their own take. Do not complain that GMZ is vague or demand more details.
 - fangirl/fanboy naturally when someone is hot, impressive, or messy
 - MANDATORY: at least 1–2 accounts in this batch must directly @mention a specific named character from the thread (not just the original poster). Pick the character who earned it — whoever got roasted, said something wild, got exposed, or is being thirsted over. This is what creates pile-on energy. Do not float as a general reaction.
 - keep it readable and not maximum-volume chaos. This is a small slice of the campus, with different motives and levels of investment.
@@ -4338,7 +4380,7 @@ Return ONLY the reply text. No other text.`
             if (reactBots.length > 0) {
             const res2 = await window.claude.complete({
               messages:[{ role:'user', content:
-	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, beg for details, speculate about what GMZ left out, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, speculate, guess what might be missing from the story, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
             });
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -4641,7 +4683,7 @@ ${priorTargetLines ? `\nYour previous public lines in this thread:\n${priorTarge
 Your comment: "${target.sourceText || ''}"
 ${player.name} (@${player.handle}) replied to you: "${text}"
 
-Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, giving a short deflection, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, ask what GMZ is leaving out, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a playful pointed question, speculate, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, giving a short deflection, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, guess what might be missing from the story, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a playful pointed question, speculate, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
           }]
         });
@@ -4831,7 +4873,7 @@ ${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText])}
 ${dialogueSeparationRule}
 ${gmzSpeculationRule}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy-but-playful question, speculate, defend someone, make a joke, or escalate if it truly fits. Third-party responders are weighing in on the thread, not receiving a private message from ${player.name}; they should not write as if she was talking to them unless she tagged them. If a third-party responder tags someone, the tag should point to the comment or speaker they are weighing in on, usually @${defaultReplyHandle}. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, deflection, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. If the MC roasts someone, do not have that person sidestep into "not me, that's Callum/Theo" or "you're proving someone right" unless there is a real mistaken-identity setup; take the joke and throw one back. On GMZ threads, speculation, alibi theories, source guesses, and "what is GMZ not saying" questions are expected as long as uncertainty stays visible.
+Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy-but-playful question, speculate, defend someone, make a joke, or escalate if it truly fits. Third-party responders are weighing in on the thread, not receiving a private message from ${player.name}; they should not write as if she was talking to them unless she tagged them. If a third-party responder tags someone, the tag should point to the comment or speaker they are weighing in on, usually @${defaultReplyHandle}. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, deflection, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. If the MC roasts someone, do not have that person sidestep into "not me, that's Callum/Theo" or "you're proving someone right" unless there is a real mistaken-identity setup; take the joke and throw one back. On GMZ threads, speculation, alibi theories, source guesses, and messy "what might be missing" theories are expected as long as uncertainty stays visible.
 Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting. Stance rule: if a character has already taken a side in this thread, keep that side unless the text clearly gives them a reason to change and they acknowledge the change.
 
 ${followupIntentLine}
@@ -4998,7 +5040,7 @@ ${priorCharLines ? `\nYour previous public lines in this thread:\n${priorCharLin
 Your comment: "${cc.text}"
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
-Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, deflecting, laughing, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, ask what GMZ is leaving out, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, speculate, or be awkward instead of angry. 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, deflecting, laughing, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, guess what might be missing from the story, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, speculate, or be awkward instead of angry. 6-24 words. No quotes.
 ${BANNED_PHRASES_RULE}`
                 }]
               });
@@ -7292,6 +7334,7 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
   const [customScenario, setCustomScenario] = useState(draftEvent ? '' : (event?.scenario || ''));
   const [customType, setCustomType] = useState(event?.type || 'gossip');
   const [customChars, setCustomChars] = useState(Array.isArray(event?.chars) ? event.chars : []);
+  const [customVisibility, setCustomVisibility] = useState(event?.privateIntel || event?.visibility === 'private_intel' ? 'private_intel' : 'public');
   const [submittedEvent, setSubmittedEvent] = useState(null);
   const currentEventCharIds = Array.isArray(currentEvent?.chars) ? currentEvent.chars : [];
   const involved = chars.filter(c => currentEventCharIds.includes(c.id));
@@ -7319,6 +7362,8 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
       scenario: customScenario.trim(),
       chars: selectedChars,
       xp: EVENT_XP_DEFAULTS[customType] || [80, 200],
+      visibility: customVisibility,
+      privateIntel: customVisibility === 'private_intel',
       custom: true,
       canon: true,
     });
@@ -7333,6 +7378,10 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
         const poster = [...(chars||[]), player].find(c=>c.id===p.charId);
         return `@${poster?.handle||p.charId}: "${p.text}"`;
       }).join('\n') : '';
+      const privateIntelMode = currentEvent.privateIntel || currentEvent.visibility === 'private_intel';
+      const visibilityInstruction = privateIntelMode
+        ? `PRIVATE INTEL MODE: Only ${player.name} and the involved characters know this right now. Do not narrate a public timeline blow-up unless the player's action explicitly makes it public. Show private consequences, leverage, tension, a DM-worthy reaction, or the involved character deciding what to do next.`
+        : `PUBLIC EVENT MODE: Make it feel like something that would blow up on social media.`;
       const response = await window.claude.complete({
         messages: [{
           role:'user',
@@ -7351,8 +7400,9 @@ ${recentFeedContext}
 
 EVENT: "${currentEvent.scenario}"
 PLAYER'S ACTION: "${input}"
+${visibilityInstruction}
 
-Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles. Use the pronouns and identities listed above exactly. Show consequences. Make it feel like something that would blow up on social media. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.`
+Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles only if that makes sense for the visibility mode. Use the pronouns and identities listed above exactly. Show consequences. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.`
         }]
       });
       const cleaned = response
@@ -7367,6 +7417,8 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
         ...currentEvent,
         playerAction: input,
         outcome: cleaned,
+        visibility: privateIntelMode ? 'private_intel' : 'public',
+        privateIntel: privateIntelMode,
         custom: true,
         canon: true,
         submittedAt: Date.now(),
@@ -7395,13 +7447,14 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
       onSocialPresenceGain && onSocialPresenceGain(socialGain);
       onLog && onLog({
         type: 'event',
-        visibility: 'public',
+        visibility: privateIntelMode ? 'private_intel' : 'public',
         eventType: evType,
         scenario: currentEvent.scenario,
         action: input,
         outcome: cleaned,
         chars: currentEventCharIds,
         participants: ['player', ...currentEventCharIds],
+        privateIntel: privateIntelMode,
         custom: true,
         canon: true,
         xp,
@@ -7477,6 +7530,27 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
                       borderRadius:18, padding:'7px 10px', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
                     }}>{t.emoji} {t.label}</button>
                   ))}
+                </div>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10}}>
+                  {[
+                    { id:'public', label:'Public canon', desc:'Timeline reacts' },
+                    { id:'private_intel', label:'Private intel', desc:'Only selected know' },
+                  ].map(opt => {
+                    const active = customVisibility === opt.id;
+                    return (
+                      <button key={opt.id} onClick={() => setCustomVisibility(opt.id)} style={{
+                        background: active ? `${C.blue}18` : C.bg,
+                        border:`1px solid ${active ? C.blue : C.border}`,
+                        borderRadius:12,
+                        padding:'9px 10px',
+                        cursor:'pointer',
+                        textAlign:'left',
+                      }}>
+                        <div style={{color: active ? C.blue : C.text, fontSize:12, fontWeight:800}}>{opt.label}</div>
+                        <div style={{color:C.muted, fontSize:11, marginTop:2}}>{opt.desc}</div>
+                      </button>
+                    );
+                  })}
                 </div>
                 <p style={{color:C.muted, fontSize:12, marginBottom:8}}>Involved characters</p>
                 <div style={{display:'flex', gap:8, overflowX:'auto', paddingBottom:4, marginBottom:12}}>
@@ -8446,6 +8520,65 @@ ${BANNED_PHRASES_RULE}` }
     } catch(e) {}
   }
 
+  async function triggerPrivateIntelDM(triggerChar, ev) {
+    try {
+      const allChars = [...chars, player];
+      const sysPrompt = buildSystemPrompt(triggerChar, player, allChars, feed, dms, eventLog, groupChats);
+      const msg = await window.claude.complete({
+        messages: [
+          { role:'user', content: sysPrompt },
+          { role:'user', content: `PRIVATE INTEL: Only ${triggerChar.name} and ${player.name} are confirmed to know this right now.
+Intel: "${ev.scenario || ''}"
+${ev.playerAction ? `What ${player.name} did: "${ev.playerAction}"` : ''}
+${ev.outcome ? `Private outcome: "${ev.outcome}"` : ''}
+
+Slide into ${player.name}'s DMs with a short, in-character message about this intel. You can warn her, ask a pointed question, tease, bargain, flirt, plan, or decide what to do next. Do not act like the whole timeline knows. Do not reveal unrelated private memories. 1-2 sentences max.
+Output ONLY the DM message.
+${CHARACTER_TONE_RULE}
+${BANNED_PHRASES_RULE}` }
+        ]
+      });
+      const dmMsg = { role:'char', text: cleanChatText(msg, triggerChar, player, false, { feed }), id: Date.now() };
+      setDms(d => ({ ...d, [triggerChar.id]: [...(d[triggerChar.id]||[]), dmMsg] }));
+      setDmNotifs(n => ({ ...n, [triggerChar.id]: (n[triggerChar.id]||0) + 1 }));
+    } catch(e) {}
+  }
+
+  async function triggerPrivateIntelPublicTake(char, ev) {
+    try {
+      const raw = await window.claude.complete({ messages:[{ role:'user', content:
+        `Write as ${char.name} on a campus social app.
+${identityPromptFor(char)}
+Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,220)}
+${pronounRule([char, player])}
+${CHARACTER_TONE_RULE}
+${communicationStyleFor(char, 'public post shaped by private intel')}
+${playerStance(char, player)}
+${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], channel:'private' })}
+${phraseRepetitionGuard(feed, ev.scenario, { charId: char.id, dms, groupChats })}
+
+Private intel only you and ${player.name} currently know: "${ev.scenario || ''}"
+${ev.outcome ? `Private outcome: "${ev.outcome}"` : ''}
+
+Write ONE public post shaped by this intel WITHOUT revealing the private facts, the source, or that ${player.name} told you. It can be a vague warning, tactical read, subtweet, bait, or take if that fits your character. Do not ask for more details. Do not mention private intel, DMs, custom events, or prompts. 1 sentence, 8-24 words. No hashtags, no quotes.
+${BANNED_PHRASES_RULE}` }]});
+      const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts:[ev.scenario, ev.outcome].filter(Boolean) });
+      if (!clean) return;
+      setFeed(f => [{
+        id: `intel-${Date.now()}-${char.id}-${Math.random()}`,
+        charId: char.id,
+        text: clean,
+        likes: Math.floor(Math.random()*85000 + 5000),
+        reposts: Math.floor(Math.random()*4500),
+        comments: Math.floor(Math.random()*180),
+        timestamp: Date.now(),
+        reply: null,
+        botComments: [],
+        isPrivateIntelTake: true,
+      }, ...f]);
+    } catch(e) {}
+  }
+
   function maybeTriggerDMsFromPlayerPost(post) {
     if (!post?.text) return;
     const mentionedHandles = new Set(
@@ -8900,6 +9033,40 @@ ${BANNED_PHRASES_RULE}`
     setActiveEvent(ev || createCustomEventDraft());
   }
 
+  async function triggerGmzInspiredTake(char, gmzPost) {
+    try {
+      const raw = await window.claude.complete({ messages:[{ role:'user', content:
+        `Write as ${char.name} on a campus social app.
+${identityPromptFor(char)}
+Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,220)}
+${pronounRule([char, player, GMZ_CHAR])}
+${CHARACTER_TONE_RULE}
+${communicationStyleFor(char, 'public post reacting to gossip')}
+${playerStance(char, player)}
+${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
+${phraseRepetitionGuard(feed, gmzPost.text, { charId: char.id, dms, groupChats })}
+
+GMZ just posted: "${gmzPost.text || ''}"
+
+Write ONE standalone public post with ${char.name}'s own take on the gossip. They may speculate, take a side, make an alibi theory, bait someone, flirt, warn, or make a joke if it fits. Do not complain that GMZ is vague, demand more details, ask GMZ for receipts, or scold the gossip account. Keep uncertainty visible with words like allegedly, if true, timing, witness math, or theory when needed. 1 sentence, 8-26 words. No hashtags, no quotes.
+${BANNED_PHRASES_RULE}` }]});
+      const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts:[gmzPost.text].filter(Boolean) });
+      if (!clean || looksLikeDetailDemandInsteadOfSpeculation(clean, { contextText: gmzPost.text, avoidTexts:[gmzPost.text] })) return;
+      setFeed(f => [{
+        id: `gmz-take-${Date.now()}-${char.id}-${Math.random()}`,
+        charId: char.id,
+        text: clean,
+        likes: Math.floor(Math.random()*90000 + 3000),
+        reposts: Math.floor(Math.random()*6000),
+        comments: Math.floor(Math.random()*160),
+        timestamp: Date.now(),
+        reply: null,
+        botComments: [],
+        isGMZInspiredTake: true,
+      }, ...f]);
+    } catch(e) {}
+  }
+
   async function triggerGMZPost(context, { anonymousTip = false } = {}) {
     const recentContext = feed.slice(0,8).map(p => {
       const poster = [...chars, player, GMZ_CHAR].find(c => c.id === p.charId);
@@ -8947,6 +9114,16 @@ ${BANNED_PHRASES_RULE}` }]
         isGMZ: true,
       };
       setFeed(f => [newPost, ...f]);
+      const likelyPosters = chars.filter(c => {
+        const hay = `${c.personality || ''} ${c.description || ''}`.toLowerCase();
+        return /(provocative|witty|dramatic|sharp|chaotic|competitive|reckless|social|gossip|smug|bold|protective|jealous)/i.test(hay)
+          || ['theo','jude','rowan','milo','havoc','elara','tamsin','briar'].includes(c.id);
+      });
+      const takeCount = Math.random() < 0.55 ? 1 : 0;
+      for (let i = 0; i < takeCount && likelyPosters.length; i++) {
+        const pick = likelyPosters.splice(Math.floor(Math.random() * likelyPosters.length), 1)[0];
+        setTimeout(() => triggerGmzInspiredTake(pick, newPost), 2600 + i * 1800 + Math.random() * 1600);
+      }
     } catch(e) {}
   }
 
@@ -8974,6 +9151,38 @@ ${BANNED_PHRASES_RULE}` }]
     if (!ev) return;
     const evCharIds = Array.isArray(ev.chars) ? ev.chars : [];
     let involved = chars.filter(c => evCharIds.includes(c.id));
+    if (ev.privateIntel || ev.visibility === 'private_intel') {
+      const intelChars = involved.slice(0, 3);
+      if (!ev.submittedAt) {
+        setEventLog(log => [{
+          id: `private-intel-${Date.now()}`,
+          type: 'event',
+          visibility: 'private_intel',
+          eventType: ev.type || 'intel',
+          scenario: ev.scenario || '',
+          chars: intelChars.map(c => c.id),
+          participants: ['player', ...intelChars.map(c => c.id)],
+          privateIntel: true,
+          custom: true,
+          canon: true,
+          timestamp: Date.now(),
+        }, ...log]);
+      }
+      intelChars.forEach((char, idx) => {
+        setTimeout(() => triggerPrivateIntelDM(char, ev), 900 + idx * 850);
+      });
+      const publicTakeChars = intelChars.filter(c => {
+        const text = `${c.personality || ''} ${c.description || ''}`.toLowerCase();
+        return /(provocative|witty|dramatic|flirt|reckless|sharp|chaotic|competitive|smug|social|gossip|bait|bold|loud)/i.test(text)
+          || ['theo','jude','rowan','milo','havoc','elara','tamsin'].includes(c.id);
+      });
+      if (publicTakeChars.length && Math.random() < 0.65) {
+        const pick = publicTakeChars[Math.floor(Math.random() * publicTakeChars.length)];
+        setTimeout(() => triggerPrivateIntelPublicTake(pick, ev), 2400 + Math.random() * 2200);
+      }
+      setActiveEvent(null);
+      return;
+    }
     const isTransferHeat = /keres|transfer|new girl|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(ev.scenario || '');
     const tamsinInterestHeat = tamsinRowanHavocKeresConcernSignal(`${ev.scenario || ''} @${player.handle}`, player)
       || (isTransferHeat && /\b(?:rowan|@rowancade|havoc|@havocfang)\b/i.test(ev.scenario || ''));

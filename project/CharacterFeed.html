@@ -8437,12 +8437,12 @@ ${BANNED_PHRASES_RULE}` }]
 
       const otherHandles = chars.filter(c => c.id !== char.id).map(c => `@${c.handle}`).join(', ');
       const promptPeople = [char, player, ...chars];
-      const recentContext = feed.slice(0,6).map(p => {
+      const recentContext = feed.slice(0,15).map(p => {
         const poster = [...chars, player].find(c => c.id === p.charId);
         return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
       }).join('\n');
       const repeatGuard = phraseRepetitionGuard(feed, recentContext, { charId: char.id, dms, groupChats });
-      const recentFeedRaw = feed.slice(0,8).map(p => {
+      const recentFeedRaw = feed.slice(0,15).map(p => {
         const poster = [...chars, player, GMZ_CHAR].find(c => c.id === p.charId);
         return `@${poster?.handle || '?'} ${p.text || ''}`;
       }).join('\n').toLowerCase();
@@ -8565,7 +8565,12 @@ ${BANNED_PHRASES_RULE}`;
 
         const raw = await window.claude.complete({ messages:[{ role:'user', content: prompt }] });
         if (!active) return;
-        const cleanText = cleanSocialPostText(raw, char, player, { feed, avoidTexts: [recentContext] });
+        const feedAvoidTexts = feed.slice(0,20).map(p => p.text).filter(Boolean);
+        let cleanText = cleanSocialPostText(raw, char, player, { feed, avoidTexts: [recentContext, ...feedAvoidTexts] });
+        // Hard duplicate guard: if this exact text already exists anywhere in the feed, use the fallback instead
+        if (feed.some(p => p.text && p.text.trim().toLowerCase() === cleanText.trim().toLowerCase())) {
+          cleanText = fallbackPostForChar(char, player, feedAvoidTexts);
+        }
         const newPost = {
           id: `auto-${Date.now()}-${char.id}`,
           charId: char.id,

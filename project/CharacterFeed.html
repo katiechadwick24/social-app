@@ -2607,7 +2607,11 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   opts = opts || {};
   const avoidTexts = [...(opts.avoidTexts || [])];
   if (opts.feed) avoidTexts.push(recentFeedDialogueText(opts.feed, { limit: opts.feedAvoidLimit || 8 }));
-  const clean = stripLeadingSelfMention(cleanSelfNarration(cleanGeneratedText(raw).replace(stripSpeakerLabelRegex(char), ''), char), char)
+  const botHandle = opts.bot?.handle ? escapeRegExp(opts.bot.handle.replace(/^@/, '')) : null;
+  const botStripped = botHandle
+    ? cleanGeneratedText(raw).replace(new RegExp(`^\\s*@?${botHandle}\\s*(?::|[-–—])?\\s*`, 'i'), '')
+    : cleanGeneratedText(raw);
+  const clean = stripLeadingSelfMention(cleanSelfNarration(botStripped.replace(stripSpeakerLabelRegex(char), ''), char), char)
     .replace(/^reply:\s*/i, '')
     .replace(/^comment:\s*/i, '')
     .trim();
@@ -8589,8 +8593,17 @@ ${BANNED_PHRASES_RULE}`;
         const tamsinShouldAnswerInterest = ['rowan','havoc'].includes(char.id)
           && tamsinRowanHavocKeresConcernSignal(`${char.name} @${char.handle} ${cleanText}`, player)
           && chars.some(c => c.id === 'tamsin');
+        // Elara reacts when anyone publicly admits Keres is distracting them
+        const elaraShouldCallOutKeresFan = !elaraShouldAnswerHavoc
+          && char.id !== 'elara'
+          && /keres|@keresvalen/.test(cleanText.toLowerCase())
+          && /distract|almost miss|couldn't focus|can't focus|wasn't paying|not paying|unfair|hard to ignore|hard to look away|can't look away|cannot look away|keep staring|keep looking|noticed|attractive|too pretty|too hot/.test(cleanText.toLowerCase())
+          && chars.some(c => c.id === 'elara');
         const embarrassingPost = doCallout || /embarrass|humiliat|fumble|awkward|cringe|caught|fell|tripped|missed|dropped|failed|mistake|bad look|everyone saw|got exposed|exposed|apologize|sorry|regret|disaster/i.test(cleanText);
-        const replyChance = (elaraShouldAnswerHavoc || tamsinShouldAnswerInterest) ? 1 : (embarrassingPost ? 0.46 : 0.15);
+        const mentionedChar = !elaraShouldAnswerHavoc && !tamsinShouldAnswerInterest && !elaraShouldCallOutKeresFan
+          ? chars.find(c => c.id !== char.id && characterMentionedInText(cleanText, c))
+          : null;
+        const replyChance = (elaraShouldAnswerHavoc || tamsinShouldAnswerInterest || elaraShouldCallOutKeresFan) ? 1 : mentionedChar ? 0.85 : (embarrassingPost ? 0.46 : 0.15);
         // A second char may reply after a short beat. Public embarrassment gets noticed, but not always angrily.
         if (Math.random() < replyChance) {
           const others = chars.filter(c => c.id !== char.id);
@@ -8599,12 +8612,17 @@ ${BANNED_PHRASES_RULE}`;
               ? (others.find(c => c.id === 'elara') || others[0])
               : tamsinShouldAnswerInterest
               ? (others.find(c => c.id === 'tamsin') || others[0])
+              : elaraShouldCallOutKeresFan
+              ? (others.find(c => c.id === 'elara') || others[0])
+              : mentionedChar
+              ? mentionedChar
               : embarrassingPost
               ? [...others].sort((a,b) => {
                   const score = c => /snark|sharp|blunt|funny|observant|gossip|shameless|rude|cutting|chaotic|provocative/i.test(c.personality || '') ? 2 : 0;
                   return score(b) - score(a) || Math.random() - 0.5;
                 })[0]
               : others[Math.floor(Math.random()*others.length)];
+            const replierIsMentioned = characterMentionedInText(cleanText, replier);
             setTimeout(async () => {
               if (!active) return;
               try {
@@ -8625,13 +8643,15 @@ ${recentMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, 
 @${char.handle} just posted: "${cleanText}"
 ${phraseRepetitionGuard(feed, `${recentContext}\n${cleanText}`, { charId: replier.id, dms, groupChats })}
 ${threadPatternVarietyGuard([recentContext, cleanText])}
+${replierIsMentioned ? `IMPORTANT: This post is about YOU (${replier.name}). You are not an observer — you are the subject. Respond in the first person. Do NOT refer to yourself by name. Address @${char.handle} directly using "you". React to what was said about you: push back, correct it, own it, or flip it — but do it as yourself, not as a commentator.` : ''}
 ${elaraShouldAnswerHavoc && replier.id === 'elara' ? 'Havoc just gave Keres public attention. Elara should be a little displeased and should not ignore it. React with jealous dignity, old-history pressure, dangerous humor, or a sharp social jab. Do not sound wounded, needy, or like she is begging for him back.' : ''}
+${elaraShouldCallOutKeresFan && replier.id === 'elara' ? `@${char.handle} just publicly announced they were distracted by Keres. Elara finds this mildly pathetic and a little funny. Address @${char.handle} directly. Tell them they're embarrassing themselves, or point out that announcing your distraction in public doesn't help your case. Sharp, slightly contemptuous, maybe a little amused. Do NOT be vague or philosophical — speak directly to them.` : ''}
 ${tamsinShouldAnswerInterest && replier.id === 'tamsin' ? tamsinKeresConcernNote(`${char.name} @${char.handle} ${cleanText}`, player) : ''}
 ${embarrassingPost ? 'This is a public embarrassment, bad look, messy callout, or obvious fumble. If your character would tease, expose, correct, flirt through it, make a stupid joke, or make the social consequence worse, do that. Do not let it pass politely, but do not default to rage.' : ''}
-Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} if natural. No quotes, just the reply text.
+Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} directly. No quotes, just the reply text.
 ${BANNED_PHRASES_RULE}` }]
                 });
-                const replyText = cleanSocialReplyText(replyRaw, replier, player, { feed, avoidTexts: [recentContext, cleanText], selfSubject: characterMentionedInText(cleanText || '', replier), contextText: cleanText || '', roster: [player, ...chars, GMZ_CHAR] });
+                const replyText = cleanSocialReplyText(replyRaw, replier, player, { feed, avoidTexts: [recentContext, cleanText], selfSubject: replierIsMentioned, contextText: cleanText || '', roster: [player, ...chars, GMZ_CHAR] });
                 setFeed(f => f.map(p => p.id === newPost.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
               } catch(e) {}
             }, 12000 + Math.random()*13000);

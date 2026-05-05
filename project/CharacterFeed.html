@@ -4409,6 +4409,24 @@ Return ONLY SILENCE or the reply text.`
       .join('\n');
   }
 
+  // Returns the original post prepended to the character's prior replies, if they are the OP.
+  function speakerHistoryWithPost(charId, limit = 4) {
+    const isOP = charId === post.charId;
+    const replyLines = mergedReplies
+      .filter(item => item.kind === 'char' && item.data.charId === charId && item.data.text)
+      .slice(-limit)
+      .map((item, idx) => `${isOP ? idx + 2 : idx + 1}. "${item.data.text}"`);
+    if (isOP && post.text) {
+      return [`1. "${post.text}" (this is your original post)`, ...replyLines].join('\n');
+    }
+    return replyLines.join('\n');
+  }
+
+  function characterKnowledgeStateNote(charId) {
+    if (charId !== post.charId) return '';
+    return `KNOWLEDGE STATE: You are the original poster of this thread. Everything in the original post above is YOUR statement — your claim, your information, your offer. You are not an outside observer who learned this from the thread. Do not ask others to explain, verify, or repeat back what you yourself already said or offered. Respond from your established position: you hold the information, you choose how much more to share.`;
+  }
+
   async function submitPostReply() {
     const text = replyText.trim();
     if (!text) return;
@@ -4484,7 +4502,7 @@ Return ONLY the reply text. Do not explain the task.`
     if (target.kind === 'char' && target.targetChar) {
       const targetChar = target.targetChar;
       const currentTranscript = chronologicalTranscript(12);
-      const priorTargetLines = speakerThreadHistory(targetChar.id, 5);
+      const priorTargetLines = speakerHistoryWithPost(targetChar.id, 5);
       const playfulThreadRule = !isGMZThread && (isKeresThread || targetChar?.id === player?.id || looksLikePlayfulBanterText(`${post.text || ''} ${target.sourceText || ''} ${text || ''}`)) ? PLAYFUL_PUBLIC_THREAD_RULE : '';
       try {
         const res = await window.claude.complete({
@@ -4501,6 +4519,7 @@ ${PRACTICE_TRASH_TALK_RULE}
 ${communicationStyleFor(targetChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(targetChar)}
+${characterKnowledgeStateNote(targetChar.id)}
 ${threadRoleContext(post.text || '', char, [player, ...chars, GMZ_CHAR])}
 ${gmzSpeculationRule}
 ${threadPatternVarietyGuard([post.text, currentTranscript, priorTargetLines, target.sourceText, text])}
@@ -4652,7 +4671,7 @@ ${BANNED_PHRASES_RULE}`
         const assignedMove = assignment?.assignedMove || '';
         const rel = playerRelFor(c);
         const relMode = relationshipBehaviorMode(rel);
-        const priorLines = speakerThreadHistory(c.id, 4);
+        const priorLines = speakerHistoryWithPost(c.id, 4);
         const isDirectResponder = taggedIds.has(c.id) || target.some(t => t.id === c.id) || c.id === post.charId;
         const replyRoleNote = isDirectResponder
           ? ` DIRECT RESPONSE ROLE: this character was directly addressed, tagged, or owns the post being answered. They may answer @${player.handle} or the thread from their own stake.`
@@ -4666,11 +4685,12 @@ ${BANNED_PHRASES_RULE}`
         const continuityNote = priorLines
           ? ` PREVIOUS LINES BY THIS CHARACTER IN THIS THREAD: ${priorLines.replace(/\n/g, ' ')} Keep their stance consistent; do not flip sides unless the flip is intentional and acknowledged.`
           : '';
+        const knowledgeNote = characterKnowledgeStateNote(c.id) ? ` ${characterKnowledgeStateNote(c.id)}` : '';
         const tamsinProtectiveNote = c.id === 'tamsin' && tamsinFollowupPressure ? ` ${tamsinKeresConcernNote(tamsinFollowupText, player)}` : '';
         const callumKeresRivalNote = c.id === 'callum' && isKeresThread ? ' KERES RIVALRY: Callum and Keres do not like each other. If he answers, keep it exacting, irritated, petty, or competitive; no friendly support and no soft concession.' : '';
         const keresSparkNote = isKeresThread && ['havoc','rowan'].includes(c.id) ? ` KERES THREAD SPARK: Keres is active in this exchange. ${c.name} should often add appetite, mischief, flirtation, a dare, a sly read, or a sharp joke instead of a bland acknowledgment.` : '';
         const charPhraseGuard = phraseRepetitionGuard(feed, `${post?.text || ''}\n${sourceText || ''}\n${playerText || ''}`, { charId: c.id, dms, groupChats });
-        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Behavioral mode: ${relMode.behavioral} ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${callumKeresRivalNote}${keresSparkNote}${tamsinProtectiveNote} ${charPhraseGuard} ASSIGNED MOVE FOR THIS REPLY: ${assignedMove}. This is the one social action this character must perform. Secondary moves from their usual list are allowed only if they serve the assigned move.`;
+        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Behavioral mode: ${relMode.behavioral} ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${knowledgeNote}${callumKeresRivalNote}${keresSparkNote}${tamsinProtectiveNote} ${charPhraseGuard} ASSIGNED MOVE FOR THIS REPLY: ${assignedMove}. This is the one social action this character must perform. Secondary moves from their usual list are allowed only if they serve the assigned move.`;
       }).join('\n');
       const res = await window.claude.complete({
         messages:[{ role:'user', content:
@@ -4839,7 +4859,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
               return next;
             });
             try {
-              const priorCharLines = speakerThreadHistory(cChar.id, 5);
+              const priorCharLines = speakerHistoryWithPost(cChar.id, 5);
               const playfulThreadRule = !isGMZThread && (isKeresThread || looksLikePlayfulBanterText(`${post.text || ''} ${cc.text || ''} ${playerReply || ''}`)) ? PLAYFUL_PUBLIC_THREAD_RULE : '';
               const res = await window.claude.complete({
                 messages:[{ role:'user', content:
@@ -4855,6 +4875,7 @@ ${PRACTICE_TRASH_TALK_RULE}
 ${communicationStyleFor(cChar, 'public reply to player')}
 ${playfulThreadRule}
 ${stanceFor(cChar)}
+${characterKnowledgeStateNote(cChar.id)}
 ${threadRoleContext(post.text || '', char, [player, ...chars, GMZ_CHAR])}
 ${gmzSpeculationRule}
 ${threadPatternVarietyGuard([post.text, chronologicalTranscript(12), priorCharLines, cc.text, playerReply])}

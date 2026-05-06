@@ -5782,6 +5782,7 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
   const privateCanon = isKeresContext ? KERES_HAVOC_ROWAN_CANON : '';
 
   const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'dm' });
+  const sceneContinuity = recentSceneContinuityForDM(char, player, eventLog);
 
   return `Write as ${char.name} (@${char.handle}), a real person with a social media presence.
 
@@ -5801,6 +5802,7 @@ ${situationLine}
 ${playerStance(char, player, effectiveRel)}
 Relationship behavior mode with ${player.name}: ${effectiveRelMode.label}. Behavioral mode: ${effectiveRelMode.behavioral}
 Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%. Keep that relationship level consistent without mentioning the number.
+${sceneContinuity}
 ${appMemory}
 ${relLines ? `\nYOUR RELATIONSHIPS WITH OTHERS:\n${relLines}` : ''}
 ${recentPosts ? `\nWHAT'S BEEN HAPPENING ON THE FEED RECENTLY:\n${recentPosts}` : ''}
@@ -5846,6 +5848,26 @@ function gmzTipReceiptText() {
 }
 
 const DM_MAX_MESSAGES = 50;
+
+function recentSceneContinuityForDM(char, player, eventLog = []) {
+  if (!char?.id) return '';
+  const scenes = (eventLog || [])
+    .filter(entry => (entry?.type === 'scene' || entry?.sceneMemory) && canUseMemoryEntry(entry, char, player, { channel:'dm' }))
+    .slice(0, 3);
+  if (!scenes.length) return '';
+  const lines = scenes.map((entry, idx) => {
+    const title = entry.title || 'Completed scene';
+    const text = String(entry.sceneMemory || entry.text || entry.outcome || '').replace(/\s+/g, ' ').slice(0, 360);
+    const changes = (entry.scoreChanges || [])
+      .filter(ch => ch?.avatar === char.id)
+      .map(ch => `${ch.value > 0 ? '+' : ''}${ch.value}`)
+      .join(', ');
+    return `${idx + 1}. ${title}: ${text}${changes ? ` (relationship shift with you: ${changes})` : ''}`;
+  }).join('\n');
+  return `RECENT COMPLETED SCENE WITH ${char.name.toUpperCase()}:
+${lines}
+Scene continuity is high priority in this DM. Treat these scenes as already happened between you and ${player.name}; do not ask what happened, do not behave like you are still before the scene, and do not wait for ${player.name} to recap it before acting on the emotional fallout. If you were involved, you remember your own words, the last beat, and the relationship shift.`;
+}
 
 function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupChats = [], setDms, onBack, onGMZTipSubmit }) {
   const [input, setInput] = useState('');

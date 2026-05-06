@@ -7382,7 +7382,7 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
       }).join('\n') : '';
       const privateIntelMode = currentEvent.privateIntel || currentEvent.visibility === 'private_intel';
       const visibilityInstruction = privateIntelMode
-        ? `PRIVATE INTEL MODE: Only ${player.name} and the involved characters know this right now. Do not narrate a public timeline blow-up unless the player's action explicitly makes it public. Show private consequences, leverage, tension, a DM-worthy reaction, or the involved character deciding what to do next.`
+        ? `PRIVATE INTEL MODE: The involved characters learn this as intel: something they witnessed, overheard, inferred, were tipped about, or heard in whispers. Do not frame it as ${player.name} telling them unless the player's action explicitly says she does. Do not make them wait for ${player.name} to explain or respond. Do not narrate a public timeline blow-up unless the player's action explicitly makes it public. Show private consequences, leverage, tension, a self-directed reaction, or the involved character deciding what to do next.`
         : `PUBLIC EVENT MODE: Make it feel like something that would blow up on social media.`;
       const actionInstruction = isDoingNothing
         ? `${player.name} explicitly chooses to do nothing: she does not post, reply, intervene, explain, chase, confess, deny, or make a move. Resolve what happens because she stays silent/absent/passive, and let other people fill the space if that fits. Do not secretly turn this into her taking action.`
@@ -8540,12 +8540,12 @@ ${BANNED_PHRASES_RULE}` }
       const msg = await window.claude.complete({
         messages: [
           { role:'user', content: sysPrompt },
-          { role:'user', content: `PRIVATE INTEL: Only ${triggerChar.name} and ${player.name} are confirmed to know this right now.
+          { role:'user', content: `PRIVATE INTEL: ${triggerChar.name} has learned this privately by witnessing it, overhearing it, inferring it, being tipped off, or catching whispers. Do not assume ${player.name} told them unless the intel explicitly says that.
 Intel: "${ev.scenario || ''}"
-${ev.playerAction ? `What ${player.name} did: "${ev.playerAction}"` : ''}
+${ev.playerAction ? `Player choice during the event: "${ev.playerAction}"` : ''}
 ${ev.outcome ? `Private outcome: "${ev.outcome}"` : ''}
 
-Slide into ${player.name}'s DMs with a short, in-character message about this intel. You can warn her, ask a pointed question, tease, bargain, flirt, plan, or decide what to do next. Do not act like the whole timeline knows. Do not reveal unrelated private memories. 1-2 sentences max.
+Slide into ${player.name}'s DMs with a short, in-character message only if that is how ${triggerChar.name} would act on the intel. Treat the DM as their own move, not a request for her to explain the setup. They can warn her, state what they saw, make a pointed observation, tease, bargain, flirt, plan, or decide what they are doing next. Do not ask her to confirm, explain, respond, or provide details unless the intel explicitly says she is the source. Do not act like the whole timeline knows. Do not reveal unrelated private memories. 1-2 sentences max.
 Output ONLY the DM message.
 ${CHARACTER_TONE_RULE}
 ${BANNED_PHRASES_RULE}` }
@@ -8570,10 +8570,10 @@ ${playerStance(char, player)}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], channel:'private' })}
 ${phraseRepetitionGuard(feed, ev.scenario, { charId: char.id, dms, groupChats })}
 
-Private intel only you and ${player.name} currently know: "${ev.scenario || ''}"
+Private intel ${char.name} learned independently by witnessing, overhearing, inferring, being tipped off, or catching whispers: "${ev.scenario || ''}"
 ${ev.outcome ? `Private outcome: "${ev.outcome}"` : ''}
 
-Write ONE public post shaped by this intel WITHOUT revealing the private facts, the source, or that ${player.name} told you. It can be a vague warning, tactical read, subtweet, bait, or take if that fits your character. Do not ask for more details. Do not mention private intel, DMs, custom events, or prompts. 1 sentence, 8-24 words. No hashtags, no quotes.
+Write ONE public post shaped by this intel WITHOUT revealing the private facts, the source, or implying ${player.name} told you. It can be a vague warning, tactical read, subtweet, bait, or take if that fits your character. Do not ask for more details. Do not mention private intel, DMs, custom events, or prompts. 1 sentence, 8-24 words. No hashtags, no quotes.
 ${BANNED_PHRASES_RULE}` }]});
       const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts:[ev.scenario, ev.outcome].filter(Boolean) });
       if (!clean) return;

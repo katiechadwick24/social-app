@@ -5834,6 +5834,47 @@ function MessagesScreen({ chars, player, dms, onOpenChat, dmNotifs = {}, setDmNo
 }
 
 // ─── Chat Screen ──────────────────────────────────────────────────
+// Stable, cacheable character context. Sent as a separate user message with
+// cache_control: ephemeral so subsequent calls in the same conversation hit
+// the cache. Variable content (feed, memory, current relationships, scene
+// state) stays in buildSystemPrompt and is NOT cached.
+function buildStableCharacterPreamble(char, allChars, player) {
+  return `You are ${char.name} (@${char.handle}), a real person on a social media app at a wizarding university. Stay completely in character at all times.
+
+CHARACTER IDENTITY:
+${identityPromptFor(char)}
+Pronouns: ${pronounsFor(char)}
+Voice cues: ${char.personality}
+Profile bio: ${char.bio}
+Full character description: ${char.description || ''}
+
+${pronounRule(allChars)}
+
+${CHARACTER_TONE_RULE}
+
+${COMMUNICATION_PATTERN_RULE}
+
+${communicationStyleFor(char, 'private DM')}
+
+${relationshipLogicFor(char)}
+
+${BANNED_PHRASES_RULE}
+
+PERMANENT RULES (these never change):
+- Stay completely in character. Never break the fourth wall or mention being an AI.
+- Output ONLY the message you would send. Do not say "I'm ready", "Understood", "I know the rules", or describe the task.
+- Do not introduce yourself, list your traits, summarize continuity rules, or explain your relationship score.
+- Use the pronouns listed above exactly. Do not misgender anyone, including in gossip or third-person comments.
+- Treat house/team/player status like fixed identity. If you are talking about your own house or Quidditch team, use we/us/our. If you are not on a Quidditch team, do not speak as if you play.
+- Be brief: 1-3 sentences max unless pushed.
+- Reference the feed naturally if it's relevant — bring up posts, gossip, what others did.
+- Treat recent feed posts as visible evidence and rumor, not omniscient truth.
+- Your personality drives EVERYTHING: tone, vocabulary, what you care about, what you ignore.
+- React to ${player.name}'s messages the way YOUR character would — not generically.
+
+The conversation that follows is a private DM with ${player.name} (@${player.handle}). Subsequent messages in this prompt will provide variable context (recent feed, current relationships, scene memory) followed by the actual conversation history.`;
+}
+
 function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], groupChats = [], latestUserText = '', dmIntent = '', dmSituation = '') {
   // Recent feed posts — trimmed to 6 to reduce noise
   const recentPosts = [...feed].slice(0, 6).map(p => {
@@ -6036,8 +6077,17 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
       // so the character identity stays prominent at the bottom of the context window.
       const priorHistory = newMsgs.slice(0, -1).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
       const anchoredMessage = buildDMCharacterAnchor(char) + '\n\n' + outgoingText;
+      const stablePreamble = buildStableCharacterPreamble(char, allChars, player);
       const reply = await window.claude.complete({
         messages: [
+          {
+            role: 'user',
+            content: [{
+              type: 'text',
+              text: stablePreamble,
+              cache_control: { type: 'ephemeral' }
+            }]
+          },
           { role:'user', content: systemPrompt },
           ...priorHistory,
           { role:'user', content: anchoredMessage },

@@ -3915,7 +3915,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-const THREAD_STYLE_VERSION = 7;
+const THREAD_STYLE_VERSION = 8;
 
 function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
   return (post.charComments || []).some(cc => cc?.charId === player?.id)
@@ -4231,11 +4231,15 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ].join('\n');
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
-      const botCount = isHighStakesThread
-        ? 5 + Math.floor(Math.random() * 3)        // 5-7 for viral/callout/GMZ/Keres posts
+      const botCount = isKeresPost
+        ? (isHighStakesThread ? 5 + Math.floor(Math.random() * 3) : 3 + Math.floor(Math.random() * 3))
+        : isGMZThread
+        ? 3 + Math.floor(Math.random() * 2)
+        : isHighStakesThread
+        ? 1 + (Math.random() < 0.45 ? 1 : 0)
         : broadSocialThread
-        ? 4 + (Math.random() < 0.6 ? 1 : 0)        // 4-5 for broad social threads
-        : 2 + (Math.random() < 0.5 ? 1 : 0);        // 2-3 for quiet posts
+        ? (Math.random() < 0.55 ? 1 : 0)
+        : (Math.random() < 0.25 ? 1 : 0);
 
       // Content-based bot weighting: route thirst bots to appearance posts,
       // sports bots to Quidditch posts, gossip bots to drama posts.
@@ -5905,6 +5909,19 @@ function gmzTipReceiptText() {
 }
 
 const DM_MAX_MESSAGES = 50;
+const FEED_VISIBLE_CAP = 80;
+const PLAYER_POST_ARCHIVE_CAP = 50;
+
+function trimFeedPreservingPlayerPosts(nextFeed = []) {
+  const feed = Array.isArray(nextFeed) ? nextFeed.filter(Boolean) : [];
+  const head = feed.slice(0, FEED_VISIBLE_CAP);
+  const headIds = new Set(head.map(p => p?.id).filter(Boolean));
+  const olderPlayerPosts = feed
+    .slice(FEED_VISIBLE_CAP)
+    .filter(p => (p?.charId === 'player' || p?.isPlayerPost) && p?.id && !headIds.has(p.id))
+    .slice(0, PLAYER_POST_ARCHIVE_CAP);
+  return [...head, ...olderPlayerPosts];
+}
 
 function recentSceneContinuityForDM(char, player, eventLog = []) {
   if (!char?.id) return '';
@@ -8344,7 +8361,7 @@ function App() {
   // assembled current state after React applies all updates.
   function setChars(v)      { setCharsRaw(prev      => normalizeCharactersIdentity(typeof v==='function'?v(prev):v)); }
   function setPlayer(v)     { setPlayerRaw(prev     => normalizeCharacterIdentity(typeof v==='function'?v(prev):v)); }
-  function setFeed(v)       { setFeedRaw(prev       => (typeof v==='function'?v(prev):v).slice(0,60)); }
+  function setFeed(v)       { setFeedRaw(prev       => trimFeedPreservingPlayerPosts(typeof v==='function'?v(prev):v)); }
   function setDms(v)        { setDmsRaw(prev        => typeof v==='function'?v(prev):v); }
   function setGroupChats(v) { setGroupChatsRaw(prev => typeof v==='function'?v(prev):v); }
   function setEventLog(v)   { setEventLogRaw(prev   => (typeof v==='function'?v(prev):v).slice(0,30)); }
@@ -8372,7 +8389,7 @@ function App() {
     const scan = scanFeedRelationshipInteractions(feed, chars, player, feedRelationshipKeysRef.current);
     if (!scan.changedFeed && !scan.changes.length) return;
     scan.trackedKeys.forEach(key => feedRelationshipKeysRef.current.add(key));
-    if (scan.changedFeed) setFeedRaw(scan.feed.slice(0, 60));
+    if (scan.changedFeed) setFeedRaw(trimFeedPreservingPlayerPosts(scan.feed));
     if (scan.changes.length) {
       const logEntry = feedRelationshipLogEntry(scan.changes, chars, player);
       setCharsRaw(prev => applyFeedRelationshipChanges(prev, scan.changes, player));

@@ -7369,8 +7369,10 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
     });
   }
 
-  async function handleSubmit() {
-    if (!currentEvent?.scenario || !input.trim() || loading) return;
+  async function handleSubmit(actionOverride = null) {
+    const actionText = typeof actionOverride === 'string' ? actionOverride.trim() : input.trim();
+    const isDoingNothing = actionText === 'Do nothing.';
+    if (!currentEvent?.scenario || !actionText || loading) return;
     setLoading(true);
     try {
       const charDescs = involved.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description}`).join('\n');
@@ -7382,6 +7384,9 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
       const visibilityInstruction = privateIntelMode
         ? `PRIVATE INTEL MODE: Only ${player.name} and the involved characters know this right now. Do not narrate a public timeline blow-up unless the player's action explicitly makes it public. Show private consequences, leverage, tension, a DM-worthy reaction, or the involved character deciding what to do next.`
         : `PUBLIC EVENT MODE: Make it feel like something that would blow up on social media.`;
+      const actionInstruction = isDoingNothing
+        ? `${player.name} explicitly chooses to do nothing: she does not post, reply, intervene, explain, chase, confess, deny, or make a move. Resolve what happens because she stays silent/absent/passive, and let other people fill the space if that fits. Do not secretly turn this into her taking action.`
+        : '';
       const response = await window.claude.complete({
         messages: [{
           role:'user',
@@ -7399,8 +7404,9 @@ RECENT FEED CONTEXT:
 ${recentFeedContext}
 
 EVENT: "${currentEvent.scenario}"
-PLAYER'S ACTION: "${input}"
+PLAYER'S ACTION: "${actionText}"
 ${visibilityInstruction}
+${actionInstruction}
 
 Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles only if that makes sense for the visibility mode. Use the pronouns and identities listed above exactly. Show consequences. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.`
         }]
@@ -7415,7 +7421,7 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
       setResult(cleaned);
       setSubmittedEvent({
         ...currentEvent,
-        playerAction: input,
+        playerAction: actionText,
         outcome: cleaned,
         visibility: privateIntelMode ? 'private_intel' : 'public',
         privateIntel: privateIntelMode,
@@ -7450,7 +7456,7 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
         visibility: privateIntelMode ? 'private_intel' : 'public',
         eventType: evType,
         scenario: currentEvent.scenario,
-        action: input,
+        action: actionText,
         outcome: cleaned,
         chars: currentEventCharIds,
         participants: ['player', ...currentEventCharIds],
@@ -7519,7 +7525,7 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
                   value={customScenario}
                   onChange={e => setCustomScenario(e.target.value)}
                   placeholder="GMZ posts that a new Slytherin transfer was seen at the pitch before official tryouts..."
-                  style={{width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 12px', color:C.text, fontSize:13, outline:'none', resize:'none', minHeight:84, lineHeight:1.5, marginBottom:10}}
+                  style={{width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 12px', color:C.text, fontSize:16, outline:'none', resize:'none', minHeight:84, lineHeight:1.5, marginBottom:10}}
                 />
                 <div style={{display:'flex', gap:8, overflowX:'auto', marginBottom:10}}>
                   {Object.entries(EVENT_TYPES).map(([id,t]) => (
@@ -7578,14 +7584,21 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
               {/* Input */}
               <textarea value={input} onChange={e => setInput(e.target.value)}
                 placeholder="What do you do?"
-                style={{width:'100%', background:C.card2, border:`1px solid ${input.trim() ? C.blue+'66' : C.border}`, borderRadius:14, padding:'12px 14px', color:C.text, fontSize:14, outline:'none', resize:'none', minHeight:100, marginBottom:14, transition:'border-color 0.2s'}}
+                style={{width:'100%', background:C.card2, border:`1px solid ${input.trim() ? C.blue+'66' : C.border}`, borderRadius:14, padding:'12px 14px', color:C.text, fontSize:16, outline:'none', resize:'none', minHeight:100, marginBottom:14, transition:'border-color 0.2s'}}
               />
 
-              <button onClick={handleSubmit} disabled={!input.trim() || loading} style={{
-                width:'100%', background: input.trim() ? C.text : C.card2, color: input.trim() ? C.bg : C.muted,
-                border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700,
-                cursor: input.trim() ? 'pointer' : 'default', transition:'background 0.2s, color 0.2s',
-              }}>{loading ? 'Playing out…' : 'Submit'}</button>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+                <button onClick={() => handleSubmit('Do nothing.')} disabled={loading} style={{
+                  width:'100%', background:C.card2, color:C.text,
+                  border:`1px solid ${C.border}`, borderRadius:14, padding:'13px', fontSize:15, fontWeight:700,
+                  cursor: loading ? 'default' : 'pointer', transition:'background 0.2s, color 0.2s',
+                }}>{loading ? 'Playing out…' : 'Do Nothing'}</button>
+                <button onClick={() => handleSubmit()} disabled={!input.trim() || loading} style={{
+                  width:'100%', background: input.trim() ? C.text : C.card2, color: input.trim() ? C.bg : C.muted,
+                  border:'none', borderRadius:14, padding:'13px', fontSize:15, fontWeight:700,
+                  cursor: input.trim() ? 'pointer' : 'default', transition:'background 0.2s, color 0.2s',
+                }}>{loading ? 'Playing out…' : 'Submit'}</button>
+              </div>
             </>}
           </>
         ) : (
@@ -7603,7 +7616,7 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
             {/* Quoted action */}
             <div style={{borderLeft:`3px solid ${C.border}`, paddingLeft:12, marginBottom:14}}>
               <p style={{color:C.muted, fontSize:12, marginBottom:4}}>YOUR MOVE</p>
-              <p style={{color:C.text, fontSize:13, lineHeight:1.5, fontStyle:'italic'}}>"{input}"</p>
+              <p style={{color:C.text, fontSize:14, lineHeight:1.5, fontStyle:'italic'}}>"{submittedEvent?.playerAction || input}"</p>
             </div>
 
             <div style={{background:C.card2, borderRadius:14, padding:'14px', marginBottom:14}}>

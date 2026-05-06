@@ -1533,7 +1533,7 @@ function fallbackChatLine(char, player, group = false, avoidTexts = []) {
   const name = player?.name?.split(' ')[0] || 'you';
   const pool = {
     havoc: group
-      ? ['wait, that was the sane version of the thought.', 'that plan has terrible survival instincts.', 'someone say less before i start helping.']
+      ? ['wait, that was the sane version of the thought.', 'that plan has terrible survival instincts.', 'okay, i am listening before i make this worse.']
       : [`you say that like i was supposed to behave, ${name}.`, 'i was being helpful. badly, maybe, but helpful.', 'that depends. are we calling this a warning or an invitation?'],
     rowan: group
       ? ['bad plan. annoyingly good timing though.', 'i would like my objections noted and ignored.', 'this chat is one bad decision from becoming evidence.']
@@ -1571,6 +1571,44 @@ function fallbackChatLine(char, player, group = false, avoidTexts = []) {
   return pool[start];
 }
 
+function looksLikeSeriousKeresGroupDrop(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\b(?:didn'?t\s+tell|did\s+not\s+tell|i\s+didn'?t|not\s+justified|innocence|bomb\s+drop|big\s+bomb|check(?:ing)?\s+my\s+exits|dm'?d\s+me|dm(?:ed)?\s+me|not\s+my\s+fault|not\s+my\s+problem|you\s+jumped|y'?all\s+just\s+jumped|annoying|you'?re\s+doing\s+it\s+again|being\s+a\s+dick|absolute\s+freak\s+of\s+nature|silas\s+knows)\b/i.test(lower);
+}
+
+function havocRowanPrivateGroupLine(char, player, latestText = '') {
+  if (!['havoc','rowan'].includes(char?.id)) return '';
+  const lower = String(latestText || '').toLowerCase().replace(/[’]/g, "'");
+  if (/\b(?:didn'?t\s+tell|did\s+not\s+tell|not\s+justified|innocence|you\s+jumped|y'?all\s+just\s+jumped)\b/i.test(lower)) {
+    return char.id === 'havoc'
+      ? 'yeah, okay. that part is on us, not you.'
+      : 'you are right. we jumped the wrong premise.';
+  }
+  if (/\b(?:check(?:ing)?\s+my\s+exits|dm'?d\s+me|dm(?:ed)?\s+me|silas)\b/i.test(lower)) {
+    return char.id === 'havoc'
+      ? 'silas clocking the exits is weirdly useful. not your fault he moves like a curse warning.'
+      : 'that is silas being impossible, not you leaking anything.';
+  }
+  if (/\b(?:being\s+a\s+dick|doing\s+it\s+again|annoying)\b/i.test(lower)) {
+    return char.id === 'havoc'
+      ? 'fine. dick move logged. i am recalibrating.'
+      : 'noted. we can be less awful for one minute.';
+  }
+  return char.id === 'havoc'
+    ? 'okay. i am listening properly now.'
+    : 'okay. that changes the read.';
+}
+
+function looksLikeHavocRowanPrivateGroupFailure(text = '', char = null, opts = {}) {
+  if (!opts.group || !['havoc','rowan'].includes(char?.id)) return false;
+  const clean = String(text || '').toLowerCase().replace(/[’]/g, "'").trim();
+  const latest = String(opts.latestUserText || '').toLowerCase().replace(/[’]/g, "'");
+  const serious = looksLikeSeriousKeresGroupDrop(latest);
+  return /\bstart\s+helping\b/i.test(clean)
+    || /^(?:interesting|noted|okay|sure|fine)\.?$/i.test(clean)
+    || (serious && /\b(?:you\s+literally\s+told|telling\s+slytherin'?s\s+entire\s+roster|entire\s+roster|no\s+chill|your\s+problem|sounds\s+like\s+you)\b/i.test(clean));
+}
+
 function directlyAddressedMembers(text = '', members = [], player = null) {
   const raw = String(text || '');
   return (members || []).filter(member => {
@@ -1596,10 +1634,21 @@ function groupConversationGroundingLine(latestText = '', member = null, members 
   const lines = [];
   const directTargets = directlyAddressedMembers(latestText, members, player);
   const targetHandles = directTargets.map(c => `@${c.handle}`).join(', ');
+  const isHavocRowanKeresChat = ['havoc','rowan'].includes(member?.id)
+    && (members || []).some(m => m?.id === 'havoc')
+    && (members || []).some(m => m?.id === 'rowan')
+    && (members || []).some(m => m?.id === player?.id);
+  const seriousKeresDrop = looksLikeSeriousKeresGroupDrop(latestText);
   if (directTargets.some(c => c.id === member?.id)) {
     lines.push(`DIRECT TURN: ${player?.name || 'The player'} directly addressed you in the latest message. Answer the literal question or premise first, then add your joke, dodge, or jab.`);
   } else if (directTargets.length) {
     lines.push(`DIRECT TURN: The latest message is addressed to ${targetHandles}. Do not answer as them or steal their answer. If you speak, react after their answer from your own angle.`);
+  }
+  if (isHavocRowanKeresChat) {
+    lines.push(`PRIVATE-GROUP DYNAMIC: This is the Keres/Havoc/Rowan private orbit, not a public pile-on. Havoc and Rowan are involved with Keres and should sound like decent humans underneath the teasing: protective, amused, attracted, and willing to correct themselves. They can be idiots, but not cruel strangers.`);
+  }
+  if (isHavocRowanKeresChat && seriousKeresDrop) {
+    lines.push(`SERIOUS KERES DROP: ${player?.name || 'Keres'} is correcting a false premise, dropping sensitive information, or saying she was hurt/annoyed. Do not leave her hanging, do not answer with a clipped "interesting", and do not double down on accusing her. Acknowledge the correction first, then react in-character. If you say you will help, say concretely what that means: warning someone off, watching exits, backing her, or shutting down the bad read.`);
   }
   const lower = String(latestText || '').toLowerCase().replace(/[’]/g, "'");
   const teamContext = /\b(?:we|us|our)\b/i.test(lower)
@@ -1710,6 +1759,7 @@ function looksLikeCatchphraseSlop(text = '') {
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
   return /\bi\s+can\s+make\s+that\s+worse\b/i.test(lower)
     || /\bthat\s+helped\s+nobody\b/i.test(lower)
+    || /\bstart\s+helping\b/i.test(lower)
     || /\bbeautiful\.?\s+no\s+notes\b/i.test(lower)
     || /\bno\s+notes\s+except\b/i.test(lower)
     || /\bbeautifully\s+helpful\b/i.test(lower)
@@ -1991,6 +2041,9 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
   }
   if (group && char && looksLikeGroupDirectQuestionDodge(clean, opts)) {
     return fallbackGroupQuestionLine(char, player, { ...opts, avoidTexts });
+  }
+  if (group && char && looksLikeHavocRowanPrivateGroupFailure(clean, char, opts)) {
+    return havocRowanPrivateGroupLine(char, player, opts.latestUserText || '') || fallbackChatLine(char, player, group, avoidTexts);
   }
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
     return fallbackUnsupportedBlameLine(char, player, group, avoidTexts);
@@ -2414,7 +2467,7 @@ function looksLikeBannedFlatPhrase(text = '') {
     || /\bbeautifully\s+helpful\b/i.test(lower)
     || /\bthat'?s\s+just\s+called\s+having\s+standards\b/i.test(lower)
     || /\bcould\s+be\s+entertaining\.?$/i.test(lower)
-    || /^(?:fine|valid|noted|correct)\.?$/i.test(lower);
+    || /^(?:fine|valid|noted|correct|interesting)\.?$/i.test(lower);
 }
 
 function looksLikeRecapThenFlatVerdict(text = '', opts = {}) {
@@ -3335,11 +3388,13 @@ function dmNeedsReply(userText = '', char = null, eventLog = [], player = null) 
   const substantive = text.length > 80;
   const directQuestion = /\?|\b(?:why|what|how|has|did|do|are|is|should|can|will)\b/i.test(userText);
   const postScene = /\b(?:scene|debrief|made out|kissed|kiss|astrology tower|tower|hair|gmz|saw|posted|post|caught|havoc|tamsin|on read|left me on read|read huh)\b/i.test(userText);
+  const seriousPrivateMoment = looksLikeSeriousKeresGroupDrop(userText) || /\b(?:hurt|scared|afraid|upset|angry|not okay|big deal|bombshell|serious|please don'?t|don'?t be mean|you were mean|that was mean)\b/i.test(text);
   const recentSceneWithChar = (eventLog || []).slice(0, 5).some(entry =>
     (entry?.type === 'scene' || entry?.sceneMemory) &&
     canUseMemoryEntry(entry, char, player, { channel:'dm' })
   );
-  return substantive || directQuestion || postScene || recentSceneWithChar;
+  if (['havoc','rowan'].includes(char?.id) && seriousPrivateMoment) return true;
+  return substantive || directQuestion || postScene || seriousPrivateMoment || recentSceneWithChar;
 }
 
 // ─── Bot pool ─────────────────────────────────────────────────────
@@ -5783,6 +5838,7 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
 
   const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'dm' });
   const sceneContinuity = recentSceneContinuityForDM(char, player, eventLog);
+  const privateOrbitRule = privateOrbitRelationshipRule(char, player, effectiveRel, 'private DM');
 
   return `Write as ${char.name} (@${char.handle}), a real person with a social media presence.
 
@@ -5802,6 +5858,7 @@ ${situationLine}
 ${playerStance(char, player, effectiveRel)}
 Relationship behavior mode with ${player.name}: ${effectiveRelMode.label}. Behavioral mode: ${effectiveRelMode.behavioral}
 Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%. Keep that relationship level consistent without mentioning the number.
+${privateOrbitRule}
 ${sceneContinuity}
 ${appMemory}
 ${relLines ? `\nYOUR RELATIONSHIPS WITH OTHERS:\n${relLines}` : ''}
@@ -5867,6 +5924,19 @@ function recentSceneContinuityForDM(char, player, eventLog = []) {
   return `RECENT COMPLETED SCENE WITH ${char.name.toUpperCase()}:
 ${lines}
 Scene continuity is high priority in this DM. Treat these scenes as already happened between you and ${player.name}; do not ask what happened, do not behave like you are still before the scene, and do not wait for ${player.name} to recap it before acting on the emotional fallout. If you were involved, you remember your own words, the last beat, and the relationship shift.`;
+}
+
+function privateOrbitRelationshipRule(char, player, rel = 0, mode = 'private chat') {
+  if (!['havoc','rowan'].includes(char?.id)) return '';
+  const label = rel >= 65 ? 'close orbit' : rel >= 45 ? 'warm interest' : rel >= 25 ? 'interested' : 'developing interest';
+  const flavor = char.id === 'havoc'
+    ? 'Havoc can still be blunt, stupid, smug, and physical, but with Keres at this relationship level his private baseline is protective warmth under the bite. His teasing should feel like rough affection, not contempt. If he got the premise wrong, he should own it fast and redirect into backing her, checking exits, warning someone off, or making the situation safer/messier for her side.'
+    : 'Rowan can still be sly, slippery, and amused, but with Keres at this relationship level his private baseline is warm attention under the cleverness. His teasing should feel intimate and observant, not cold dismissal. If he got the premise wrong, he should correct the read, show he is listening, and turn the charm toward reassurance or a useful next move.';
+  return `PRIVATE ORBIT RELATIONSHIP RULE (${mode}, ${label}, ${rel > 0 ? '+' : ''}${rel}% with ${player?.name || 'Keres'}):
+${flavor}
+- Do not write them like a hostile public commenter in private. Snark is seasoning, not the meal.
+- Big corrections, fear, vulnerability, or "you hurt/annoyed me" moments require a real response. Do not leave her on read, do not answer with one-word coolness, and do not keep accusing her after she corrects the premise.
+- If using "help", name the concrete help or make the intent obvious. Avoid vague threats like "before I start helping."`;
 }
 
 function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupChats = [], setDms, onBack, onGMZTipSubmit }) {
@@ -7083,6 +7153,8 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
     const groupIntentLine = dmIntentLine(outgoingText);
     const directTargets = directlyAddressedMembers(outgoingText, members, player);
     const directTargetIds = new Set(directTargets.map(c => c.id));
+    const isHavocRowanKeresChat = (group.members || []).includes('player') && (group.members || []).includes('havoc') && (group.members || []).includes('rowan');
+    const seriousKeresDrop = isHavocRowanKeresChat && looksLikeSeriousKeresGroupDrop(outgoingText);
     const responderOrder = orderedGroupResponders(aiMembers, outgoingText, members, player);
 
     let updatedMsgs = [...newMsgs];
@@ -7091,7 +7163,8 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
       const quietTypes = ['reserved','quiet','deadpan','minimal'];
       const isQuiet = quietTypes.some(q => (member.personality||'').includes(q));
       const isDirectTarget = directTargetIds.has(member.id);
-      const silenceChance = isDirectTarget ? 0 : directTargets.length ? (isQuiet ? 0.65 : 0.45) : (isQuiet ? 0.4 : 0.15);
+      const mustAnswerSeriousDrop = seriousKeresDrop && ['havoc','rowan'].includes(member.id);
+      const silenceChance = mustAnswerSeriousDrop ? 0 : isDirectTarget ? 0 : directTargets.length ? (isQuiet ? 0.65 : 0.45) : (isQuiet ? 0.4 : 0.15);
       if (Math.random() < silenceChance) continue; // sometimes they don't respond
 
       try {
@@ -7110,6 +7183,8 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
           : '';
         const groupAvoidTexts = [historyStr, outgoingText, generatedThisTurn].filter(Boolean);
         const groundingLine = groupConversationGroundingLine(outgoingText, member, members, player);
+        const memberEffectiveRel = effectivePlayerRelationship(member, eventLog, dms, groupChats).value;
+        const privateOrbitRule = isHavocRowanKeresChat ? privateOrbitRelationshipRule(member, player, memberEffectiveRel, 'private group chat') : '';
         const reply = await window.claude.complete({ messages:[{ role:'user', content:
           `Write as ${member.name} in a group chat called "${group.name}".
 ${identityPromptFor(member)}
@@ -7120,6 +7195,7 @@ ${CHARACTER_TONE_RULE}
 ${communicationStyleFor(member, 'group chat')}
 ${multiSpeakerDialogueSeparationRule(aiMembers, 'group chat')}
 ${playerStance(member, player)}
+${privateOrbitRule}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars, channel:'group', audienceIds: group.members || [] })}
 Recent campus feed:\n${recentFeed}
 Chat history:\n${historyStr}
@@ -7132,7 +7208,7 @@ ${threadPatternVarietyGuard(groupAvoidTexts)}
 ${player.name} just said: "${outgoingText}"
 Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound. Teammate loyalty still matters: if someone outside the team swings at one of your people, the usual move is to back your teammate first, then roast them privately or as "our mess."
 ${groupIntentLine}
-Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Everyone listed as present can see this message. If the latest message directly asks you something, answer the actual question before any tangent. If it directly asks someone else something, do not answer for them. If you mean someone in the chat, talk to them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. Be natural.
+Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Everyone listed as present can see this message. If the latest message directly asks you something, answer the actual question before any tangent. If ${player.name} corrects your premise or says she did not do something, accept that correction before joking; do not double down unless there is visible evidence in chat. If it directly asks someone else something, do not answer for them. If you mean someone in the chat, talk to them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. Be natural.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
 ${BANNED_PHRASES_RULE}` }]
         });
@@ -8684,6 +8760,9 @@ ${BANNED_PHRASES_RULE}` }]});
     const otherMembers = members.filter(m => m.id !== member.id).map(m => identityFactsFor(m)).join('; ');
     const popInAvoidTexts = [recentFeed, historyStr, context].filter(Boolean);
     const groundingLine = groupConversationGroundingLine(latestUserText, member, members, player);
+    const isHavocRowanKeresChat = (group.members || []).includes('player') && (group.members || []).includes('havoc') && (group.members || []).includes('rowan');
+    const memberEffectiveRel = effectivePlayerRelationship(member, eventLog, dms, groupChats).value;
+    const privateOrbitRule = isHavocRowanKeresChat ? privateOrbitRelationshipRule(member, player, memberEffectiveRel, 'private group chat pop-in') : '';
 
     try {
       const reply = await window.claude.complete({ messages:[{ role:'user', content:
@@ -8696,6 +8775,7 @@ ${CHARACTER_TONE_RULE}
 ${communicationStyleFor(member, 'group chat pop-in')}
 ${multiSpeakerDialogueSeparationRule(members.filter(m => m.id !== player.id), 'group chat pop-in')}
 ${playerStance(member, player)}
+${privateOrbitRule}
 ${recentMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars, channel:'group', audienceIds: group.members || [] })}
 Recent campus feed:
 ${recentFeed || '(quiet feed)'}

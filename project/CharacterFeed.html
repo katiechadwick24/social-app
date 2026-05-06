@@ -2277,7 +2277,13 @@ function stripLeadingSelfMention(text = '', char) {
   if (!char?.handle || !text) return text;
   const handle = escapeRegExp(char.handle.replace(/^@/, ''));
   return String(text)
-    .replace(new RegExp(`^\\s*@${handle}\\s*:?\\s*`, 'i'), '')
+    // Strip @selfhandle anywhere in the text, plus any trailing separator
+    // (handles consecutive self-mentions, mid-text mentions, leading-period mentions)
+    .replace(new RegExp(`\\.?@${handle}\\b[\\s,;:]*`, 'gi'), '')
+    // Collapse any double spaces left behind by mid-text removal
+    .replace(/\s{2,}/g, ' ')
+    // Clean up any orphaned leading punctuation/whitespace
+    .replace(/^[\s,;:]+/, '')
     .trim();
 }
 

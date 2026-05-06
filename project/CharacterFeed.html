@@ -4232,7 +4232,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
       const botCount = isKeresPost
-        ? (isHighStakesThread ? 5 + Math.floor(Math.random() * 3) : 3 + Math.floor(Math.random() * 3))
+        ? (isHighStakesThread ? 4 + Math.floor(Math.random() * 2) : 3 + (Math.random() < 0.45 ? 1 : 0))
         : isGMZThread
         ? 3 + Math.floor(Math.random() * 2)
         : isHighStakesThread
@@ -4248,6 +4248,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const isDramaPost = /gmz|rumou?r|drama|receipts|screenshot|deleted|caught|source|tea|expose|alibi|leaked/i.test(postText);
       function botContentScore(bot) {
         const id = bot.id;
+        if (isKeresPost && ['gobletoffire','mothballin','broombroke','pumpkinjuiced','wetcatlooks'].includes(id)) return 4;
         if (isAppearancePost && ['gobletoffire','mothballin','broombroke'].includes(id)) return 3;
         if (isQuidditchPost && ['quafflewasted','quafflequeen85','slytherinsmirk'].includes(id)) return 3;
         if (isDramaPost && ['libraryghoul','witchweekly','spellboundscribbler'].includes(id)) return 3;
@@ -4302,8 +4303,13 @@ ${transcript}
 	${TEAM_RIVALRY_CANON_RULE}
 	${PRACTICE_TRASH_TALK_RULE}
 	${BOT_REALITY_RULE}
-	${playfulThreadRule}
-	${gmzSpeculationRule}
+${playfulThreadRule}
+${gmzSpeculationRule}
+${isKeresPost ? `KERES AUDIENCE MODE:
+- This is Keres's thread. Audience accounts should mostly simp, thirst, hype her up, act impressed, cheer the mess, or be playfully overwhelmed.
+- Do not make the anonymous accounts scold, moralize, call her a problem, or criticize her for other people's reactions.
+- Skepticism is allowed only as playful "i fear she ate" / "this is dangerous for my attention span" energy, not mean pile-on.
+- Medium swarm only: each comment should feel like a distinct little campus reaction, not a wall of criticism.` : ''}
 
 Write replies from random anonymous student accounts joining the comment thread. They are part of the conversation, not a recap channel. They:
 - pick teams sometimes ("team @whoever", "@xxx ate this")

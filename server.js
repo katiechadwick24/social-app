@@ -97,6 +97,13 @@ function callClaude(messages) {
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) return reject(new Error(parsed.error.message));
+          const usage = parsed.usage || {};
+          console.log('[Claude usage]',
+            'in:', usage.input_tokens || 0,
+            '| cache_write:', usage.cache_creation_input_tokens || 0,
+            '| cache_read:', usage.cache_read_input_tokens || 0,
+            '| out:', usage.output_tokens || 0
+          );
           resolve(parsed.content?.[0]?.text || '');
         } catch(e) { reject(e); }
       });

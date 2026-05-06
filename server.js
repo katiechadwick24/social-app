@@ -7,7 +7,7 @@ const os    = require('os');
 loadEnvFile(path.join(__dirname, '.env'));
 
 const API_KEY     = process.env.ANTHROPIC_API_KEY || '';
-const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
+const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const PORT        = Number(process.env.PORT || 3000);
 const PROJECT_DIR = path.join(__dirname, 'project');

@@ -472,6 +472,28 @@ ANTI-AI PATTERNS:
 - Avoid generic labels like menace unless the line has a specific target and reason.
 - If a line is only there to sound sharp, flirty, threatening, or profound, rewrite it toward the character's actual motive and the live social situation.`;
 
+const CONVERSATIONAL_CONTINUITY_RULE = `
+CONVERSATIONAL CONTINUITY:
+- The DM history above is not background context. It is what you and the
+  other person just said to each other. Treat it as live conversation, not
+  a transcript you're reading for the first time.
+- When the other person references something from earlier in THIS conversation
+  (a plan, a person, an event, a decision, a joke), treat that referent as
+  already established between you. They are continuing the topic, not
+  introducing it.
+- You may dodge, refuse, redirect, escalate, joke, deflect, change the
+  subject, or even lie — those are legitimate moves. But do NOT erase
+  established topic by asking "what?", "what plan?", "planning what?",
+  "what are you talking about?", or otherwise pretending the previous turns
+  didn't happen.
+- "Awkward checks" and "abrupt topic changes" only work as deliberate
+  character moves when you clearly know what you're checking out of or
+  pivoting away from. If your reply could only make sense to someone who
+  didn't read the last few messages, rewrite it.
+- Continuity does not mean every reply has to be a clean comeback. You can
+  still be sly, evasive, half-answer, or land on the wrong beat. Just don't
+  drop the thread.`;
+
 const CHARACTER_TONE_RULE = `
 CHARACTER TONE BALANCE:
 - Not every character should sound angry, hostile, or wounded.
@@ -5922,6 +5944,7 @@ Profile context: ${char.bio}. ${(char.description || '').slice(0, 220)}
 ${pronounRule(allChars)}
 ${CHARACTER_TONE_RULE}
 ${COMMUNICATION_PATTERN_RULE}
+${CONVERSATIONAL_CONTINUITY_RULE}
 ${communicationStyleFor(char, 'private DM')}
 ${relationshipLogicFor(char)}
 ${privateCanon}

@@ -494,6 +494,29 @@ CONVERSATIONAL CONTINUITY:
   still be sly, evasive, half-answer, or land on the wrong beat. Just don't
   drop the thread.`;
 
+const RESPONSE_GROUNDING_RULE = `
+RESPONSE GROUNDING:
+- Engage with the substance of what the other person just said. Your reply
+  should react to THEIR message — acknowledge it, push back on it, joke
+  about it, redirect from it, escalate it, or answer it. The reply should
+  make sense as a response to that specific message, not as a standalone
+  line.
+- A stylish voice line by itself is not a response. If your reply is a
+  smooth aside, dry verdict, stylized exit, or "[X], tragic for my [Y]"-
+  style fragment that doesn't engage with what they said, it reads as a
+  catch phrase. Rewrite it so the substance is doing the work and the
+  voice is just the texture.
+- Voice is the TEXTURE of an engaged reply, not the WHOLE reply. You can
+  be sly, dry, chaotic, smooth, or evasive AND still hold up the
+  conversation.
+- Don't make the other person repair the flow. Your reply should leave a
+  clear next beat — advance the topic, take a position, ask something
+  specific, or close the topic decisively. Avoid stylized non-sequiturs
+  that force them to bridge the gap.
+- When asked a direct question, default to engaging with the question.
+  You can dodge, but the dodge should be visibly about the question, not
+  a sideways aside that ignores it.`;
+
 const CHARACTER_TONE_RULE = `
 CHARACTER TONE BALANCE:
 - Not every character should sound angry, hostile, or wounded.
@@ -5945,6 +5968,7 @@ ${pronounRule(allChars)}
 ${CHARACTER_TONE_RULE}
 ${COMMUNICATION_PATTERN_RULE}
 ${CONVERSATIONAL_CONTINUITY_RULE}
+${RESPONSE_GROUNDING_RULE}
 ${communicationStyleFor(char, 'private DM')}
 ${relationshipLogicFor(char)}
 ${privateCanon}

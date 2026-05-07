@@ -5961,21 +5961,7 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
   const sceneContinuity = recentSceneContinuityForDM(char, player, eventLog);
   const privateOrbitRule = privateOrbitRelationshipRule(char, player, effectiveRel, 'private DM');
 
-  return `Write as ${char.name} (@${char.handle}), a real person with a social media presence.
-
-${identityPromptFor(char)}
-Pronouns: ${pronounsFor(char)}
-Voice cues: ${char.personality}
-Profile context: ${char.bio}. ${(char.description || '').slice(0, 220)}
-
-${pronounRule(allChars)}
-${CHARACTER_TONE_RULE}
-${COMMUNICATION_PATTERN_RULE}
-${CONVERSATIONAL_CONTINUITY_RULE}
-${RESPONSE_GROUNDING_RULE}
-${communicationStyleFor(char, 'private DM')}
-${relationshipLogicFor(char)}
-${privateCanon}
+  return `${privateCanon}
 ${dmIntent}
 ${situationLine}
 ${playerStance(char, player, effectiveRel)}
@@ -5987,28 +5973,18 @@ ${appMemory}
 ${relLines ? `\nYOUR RELATIONSHIPS WITH OTHERS:\n${relLines}` : ''}
 ${recentPosts ? `\nWHAT'S BEEN HAPPENING ON THE FEED RECENTLY:\n${recentPosts}` : ''}
 
-This is a private DM with ${player.name} (@${player.handle}).
+${CONVERSATIONAL_CONTINUITY_RULE}
+${RESPONSE_GROUNDING_RULE}
 
-RULES:
-- Stay completely in character. Never break the fourth wall or mention being an AI.
-- Output ONLY the DM message you would send. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
-- Do not introduce yourself, list your traits, summarize continuity rules, or explain your relationship score.
-- Use the pronouns listed above exactly. Do not misgender anyone, including in gossip or third-person comments.
-- Treat house/team/player status like fixed identity. If you are talking about your own house or Quidditch team, use we/us/our. If you are not on a Quidditch team, do not speak as if you play.
-- Be brief: 1-3 sentences max unless pushed.
-- Reference the feed naturally if it's relevant — bring up posts, gossip, what others did.
+DM-SPECIFIC BEHAVIOR (your character preamble has the general rules; these handle situations particular to this private conversation with ${player.name}):
 - Treat recent feed posts as visible evidence and rumor, not omniscient truth. If a post says "someone" liked, unliked, deleted, rewrote, screenshotted, or reposted something, do not decide that "someone" was ${player.name} unless she was explicitly named/tagged or she says so.
 - Do not claim ${player.name} liked, unliked, deleted, rewrote, screenshotted, reposted, or performed any other app action unless it appears in the current prompt, app memory, visible feed with her handle/name, or her own DM message.
 - If ${player.name} denies doing a concrete action, asks what evidence exists, or says everyone else is reacting, accept that correction and pivot. Do not restate the accusation as if repetition makes it true.
 - Do not scold ${player.name} for someone else's attraction, attention, likes, screenshots, jealousy, or audience reaction. You can tease her effect on the room, but the other person still owns their reaction.
-- Remember prior events, scenes, DMs, and group chats from app memory when they are relevant to your character. Do not borrow another character's concerns, priorities, or relationships as your own.
+- Do not borrow another character's concerns, priorities, or relationships as your own.
 - If ${player.name} tells you what happened in a completed scene, accept it as the current shared reality and move forward from it. Do not remain in a pre-scene "are you okay / what happened" mentality after she has recapped the scene.
 - Do not ask whether you should understand an obvious relationship consequence. If someone mentions your sister, best friend, ex, captain, or teammate reacting to gossip about you, reason from what you know about that person only if that relationship is actually yours.
-- Remember what ${player.name} has told you in this conversation.
-- Your personality drives EVERYTHING: tone, vocabulary, what you care about, what you ignore.
-- React to ${player.name}'s messages the way YOUR character would — not generically.
-- If ${player.name} makes a playful private bid like "I can fix that" or "I can be more annoying", treat it as banter. Do not turn it into "prove it", "do it on the feed", or a public challenge unless she explicitly asks for one.
-${BANNED_PHRASES_RULE}`;
+- If ${player.name} makes a playful private bid like "I can fix that" or "I can be more annoying", treat it as banter. Do not turn it into "prove it", "do it on the feed", or a public challenge unless she explicitly asks for one.`;
 }
 
 // Compact identity block injected right before the latest user message so the

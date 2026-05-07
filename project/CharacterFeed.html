@@ -658,14 +658,14 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
   havoc: {
     lane: 'physical instigator and bad influence',
     moves: [
-      'dare someone',
+      'bait someone without always phrasing it as a dare',
       'shove the bit forward',
       'back a teammate with action',
       'confidently misread on purpose',
       'make the wrong idea sound fun',
     ],
     shapes: [
-      'imperative or dare',
+      'blunt physical instigator line',
       'short verdict plus action',
       'direct @handle challenge',
       'bad idea framed as help',
@@ -675,8 +675,9 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'dry spectator captions that could belong to Jude',
       'polished thread recap or moral analysis',
       'flat concession after a flirt opening',
+      'repeating "dare you to..." as a default opener',
     ],
-    reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|caption is writing|caption writes|discourse|narrative|exhibit a|camera roll|clip dealer|detention energy|someone else'?s problem|almost useful|go\s+off|useful,\s*if\s+accidentally|going\s+for\s+the\s+hard\s+no|doesn'?t\s+want\s+the\s+distraction|that's\s+just\s+tactical|that\s+is\s+just\s+tactical|i\s+can\s+make\s+that\s+worse)\b|beautiful\.?\s+no notes|no notes except/i,
+    reject: /\b(?:analytics?|engagement|metrics?|ranking|ranked|poll|headline|spreadsheet|documentation|documenting|for documentation|thread loading|caption is writing|caption writes|discourse|narrative|exhibit a|camera roll|clip dealer|detention energy|someone else'?s problem|almost useful|go\s+off|useful,\s*if\s+accidentally|going\s+for\s+the\s+hard\s+no|doesn'?t\s+want\s+the\s+distraction|that's\s+just\s+tactical|that\s+is\s+just\s+tactical|i\s+can\s+make\s+that\s+worse|dare\s+you\s+to)\b|beautiful\.?\s+no notes|no notes except/i,
     publicFallbacks: [
       'noted.',
       'okay.',
@@ -3549,11 +3550,6 @@ Under the charm is a dangerous hunger to be chosen before he is ready. Milo will
 She and Havoc Fang were never soft, never simple, and maybe never official enough to give people clean language for it. Still, everyone knew the shape of them: heat, history, insults that landed because they had earned the right, and a public rhythm that made sense until it did not. Elara liked being the girl who could stand in that fire. She liked being impossible to pity.
 
 Her real problem is not losing Havoc. It is being edited out of the story as if she was only a phase before the interesting part began. Elara has ambitions beyond old romance: dueling club influence, post-Hogwarts plans, favors owed by half the right people. But if someone treats her history like a footnote, she will remind them that old flames still know where everything burns.`, personality:'proud, sharp, physical, socially dangerous, ambitious, unsentimental, jealous with dignity, charismatic, reactive, hard to pity', relationships:{player: -6, havoc: -8, briar: 22, rowan: -16, theo: 18} },
-  { id:'theo', name:'Theo Bell', handle:'theobell', pronouns:'he/him', house:'gryffindor', team:'', position:'Unofficial Quidditch commentator', bio:'Gryffindor commentator. Posts first.', followers:1600000, description:`Theo Bell is Gryffindor's unofficial commentator, clip dealer, and weekly reason someone threatens to confiscate a phone. He runs match threads, rankings, polls, edits, and rumor-laced breakdowns with the confidence of a journalist and the ethics of a bored seventeen-year-old with good timing. He insists it is for morale. Nobody believes him, but everyone checks the posts.
-
-Theo is not on the starting Quidditch lineup, which somehow makes him more dangerous to the team. He turns practices into narratives, mistakes into clips, and private tension into public weather. Briar Rowe hates how useful his hype can be. Callum Pike hates being analyzed mid-failure. Havoc Fang pretends not to care until a caption is funny enough. Rowan Cade knows better than to give him a clean quote.
-
-Theo is not cruel by default. He is worse: entertained, persuasive, and very good at pretending visibility is the same thing as truth. When feelings get caught in the machinery, he looks guilty for almost long enough to count. Then the replies start moving, and Theo has to decide whether he is reporting the mess or feeding it.`, personality:'entertaining, persuasive, nosy, shameless, funny, opportunistic, socially fluent, reactive, media-brained, guilt-prone but distractible', relationships:{player: 34, briar: -10, callum: -28, havoc: 24, rowan: 18, milo: 44} },
   { id:'jude', name:'Jude Warrington', handle:'judewarrington', pronouns:'he/him', house:'slytherin', team:'Slytherin', position:'Beater', bio:'Slytherin Beater. Snark over ceremony.', followers:1700000, description:`Jude Warrington has the relaxed posture of someone who refuses to look invested, which is infuriating because he keeps being useful anyway. He is a Slytherin Beater with a dry mouth, lazy smile, and a gift for saying the worst possible thing at the most useful possible time. He does not do inspirational speeches. He does not do team bonding. He barely does posture.
 
 On the pitch, Jude plays like effort is embarrassing but humiliation is funny. He is loose, mean, quick enough to punish arrogance, and much better than his attitude suggests. Silas Montague hates relying on him because Jude treats discipline like a personal rumor. Teammates like him when he is funny, resent him when he is right, and trust him most when he looks least interested.
@@ -8363,7 +8359,7 @@ function App() {
   }
 
   function applySavedState(saved) {
-    const savedChars = normalizeCharactersIdentity(saved.chars || chars);
+    const savedChars = normalizeCharactersIdentity(saved.chars || chars).filter(c => c?.id !== 'theo');
     const savedPlayer = normalizeCharacterIdentity(saved.player || player);
     if (saved.chars)      setCharsRaw(savedChars);
     if (saved.player)     setPlayerRaw(savedPlayer);

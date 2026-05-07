@@ -13,11 +13,11 @@
 <script>
   // Wire up window.claude to the local server proxy
   window.claude = {
-    complete: async function({ messages }) {
+    complete: async function({ messages, model }) {
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({ messages, model }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -4486,7 +4486,8 @@ ${THREAD_MENTION_RULE}
 ${THREAD_DIRECT_ADDRESS_RULE}
 ${BANNED_PHRASES_RULE}
 Return ONLY the reply text. No other text.`
-            }]
+            }],
+            model: 'fast'
           });
           if (cancelled) return;
           const clapback = {
@@ -4511,7 +4512,8 @@ Return ONLY the reply text. No other text.`
             if (reactBots.length > 0) {
             const res2 = await window.claude.complete({
               messages:[{ role:'user', content:
-	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, speculate, guess what might be missing from the story, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }]
+	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, speculate, guess what might be missing from the story, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }],
+              model: 'fast'
             });
             if (cancelled) return;
             const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -4542,7 +4544,8 @@ Return ONLY the reply text. No other text.`
                   const bot = pool.find(b => b.id === botTarget.bot);
                   const resBot = await window.claude.complete({
                     messages:[{ role:'user', content:
-                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }]
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }],
+                    model: 'fast'
                   });
                   const botReply = cleanSocialReplyText(resBot, responder, player, { feed, avoidTexts: [post.text, clapback.text, botTarget.text], playfulBanter: !!playfulThreadRule, selfSubject: responder.id === authorId || characterMentionedInText(`${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, responder), contextText: `${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
                   if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
@@ -4598,7 +4601,8 @@ Decide if you would answer or leave it on read. If silence is more in-character,
 Otherwise write ONE counter-reply (8-24 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, speculative, or sharp. Only twist the knife if that truly fits. Keep rumor/alibi/mentioned-handle roles straight. On GMZ threads, theories and alibi reads are normal as long as uncertainty stays visible. No hashtags. No quotes around the reply.
 ${BANNED_PHRASES_RULE}
 Return ONLY SILENCE or the reply text.`
-                  }]
+                  }],
+                  model: 'fast'
                 });
                 const counterText = cleanSocialReplyText(res3, fight.target, player, { feed, avoidTexts: [post.text, fight.targetReply.text, clapback.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.target.id === authorId || characterMentionedInText(`${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, fight.target), contextText: `${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
                 if (!cancelled && counterText && counterText.toUpperCase() !== 'SILENCE') {

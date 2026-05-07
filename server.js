@@ -8,6 +8,7 @@ loadEnvFile(path.join(__dirname, '.env'));
 
 const API_KEY     = process.env.ANTHROPIC_API_KEY || '';
 const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
+const CLAUDE_MODEL_FAST = process.env.ANTHROPIC_MODEL_FAST || 'claude-haiku-4-5-20251001';
 const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const PORT        = Number(process.env.PORT || 3000);
 const PROJECT_DIR = path.join(__dirname, 'project');
@@ -72,10 +73,11 @@ function askForPassword(res) {
 }
 
 // ── Claude API proxy ──────────────────────────────────────────────
-function callClaude(messages) {
+function callClaude(messages, modelTier) {
   return new Promise((resolve, reject) => {
+    const model = modelTier === 'fast' ? CLAUDE_MODEL_FAST : CLAUDE_MODEL;
     const body = JSON.stringify({
-      model: CLAUDE_MODEL,
+      model,
       max_tokens: 1024,
       messages,
     });
@@ -159,8 +161,8 @@ const server = http.createServer(async (req, res) => {
           res.end(JSON.stringify({ error: 'No ANTHROPIC_API_KEY environment variable set.' }));
           return;
         }
-        const { messages } = JSON.parse(raw);
-        const text = await callClaude(messages);
+        const { messages, model } = JSON.parse(raw);
+        const text = await callClaude(messages, model);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ text }));
       } catch(e) {

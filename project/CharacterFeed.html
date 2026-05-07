@@ -8713,8 +8713,17 @@ ${BANNED_PHRASES_RULE}` }] });
     try {
       const allChars = [...chars, player];
       const sysPrompt = buildSystemPrompt(triggerChar, player, allChars, feed, dms, eventLog, groupChats);
+      const stablePreamble = buildStableCharacterPreamble(triggerChar, allChars, player);
       const msg = await window.claude.complete({
         messages: [
+          {
+            role: 'user',
+            content: [{
+              type: 'text',
+              text: stablePreamble,
+              cache_control: { type: 'ephemeral' }
+            }]
+          },
           { role:'user', content: sysPrompt },
           { role:'user', content: `You just saw something happen (${context}). Slide into ${player.name}'s DMs with a short, in-character opening message. Something you'd actually say given your personality. Do not default to anger; teasing, flirting, checking in, joking, or being nosy can fit better. 1-2 sentences max.
 Do not turn ambiguous public gossip into a hard accusation against ${player.name}. If the context is about what other people did, react to their behavior or ask what happened instead of blaming her for the reaction.
@@ -8733,8 +8742,17 @@ ${BANNED_PHRASES_RULE}` }
     try {
       const allChars = [...chars, player];
       const sysPrompt = buildSystemPrompt(triggerChar, player, allChars, feed, dms, eventLog, groupChats);
+      const stablePreamble = buildStableCharacterPreamble(triggerChar, allChars, player);
       const msg = await window.claude.complete({
         messages: [
+          {
+            role: 'user',
+            content: [{
+              type: 'text',
+              text: stablePreamble,
+              cache_control: { type: 'ephemeral' }
+            }]
+          },
           { role:'user', content: sysPrompt },
           { role:'user', content: `PRIVATE INTEL: ${triggerChar.name} has learned this privately by witnessing it, overhearing it, inferring it, being tipped off, or catching whispers. Do not assume ${player.name} told them unless the intel explicitly says that.
 Intel: "${ev.scenario || ''}"

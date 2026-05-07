@@ -6,9 +6,10 @@ const os    = require('os');
 
 loadEnvFile(path.join(__dirname, '.env'));
 
-const API_KEY     = process.env.ANTHROPIC_API_KEY || '';
-const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
-const CLAUDE_MODEL_FAST = process.env.ANTHROPIC_MODEL_FAST || 'claude-haiku-4-5-20251001';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5-mini';
+const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || 'gpt-5-nano';
+const OPENAI_MAX_OUTPUT_TOKENS = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 700);
 const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const PORT        = Number(process.env.PORT || 3000);
 const PROJECT_DIR = path.join(__dirname, 'project');
@@ -72,48 +73,92 @@ function askForPassword(res) {
   res.end('Password required');
 }
 
-// ── Claude API proxy ──────────────────────────────────────────────
-function callClaude(messages, modelTier) {
+// ── OpenAI API proxy ──────────────────────────────────────────────
+function callOpenAI(messages, modelTier) {
   return new Promise((resolve, reject) => {
-    const model = modelTier === 'fast' ? CLAUDE_MODEL_FAST : CLAUDE_MODEL;
+    const selectedModel = modelTier === 'fast' ? OPENAI_MODEL_FAST : OPENAI_MODEL;
+    const maxOutputTokens = Number.isFinite(OPENAI_MAX_OUTPUT_TOKENS)
+      ? OPENAI_MAX_OUTPUT_TOKENS
+      : 700;
     const body = JSON.stringify({
-      model,
-      max_tokens: 1024,
-      messages,
+      model: selectedModel,
+      input: messages,
+      max_output_tokens: maxOutputTokens,
     });
 
     const req = https.request({
-      hostname: 'api.anthropic.com',
-      path:     '/v1/messages',
+      hostname: 'api.openai.com',
+      path:     '/v1/responses',
       method:   'POST',
       headers: {
-        'x-api-key':         API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type':      'application/json',
-        'content-length':    Buffer.byteLength(body),
+        'Authorization':  `Bearer ${OPENAI_API_KEY}`,
+        'content-type':   'application/json',
+        'content-length': Buffer.byteLength(body),
       },
     }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         try {
-          const parsed = JSON.parse(data);
-          if (parsed.error) return reject(new Error(parsed.error.message));
-          const usage = parsed.usage || {};
-          console.log('[Claude usage]',
-            'in:', usage.input_tokens || 0,
-            '| cache_write:', usage.cache_creation_input_tokens || 0,
-            '| cache_read:', usage.cache_read_input_tokens || 0,
-            '| out:', usage.output_tokens || 0
-          );
-          resolve(parsed.content?.[0]?.text || '');
-        } catch(e) { reject(e); }
+          const parsed = data ? JSON.parse(data) : {};
+          if (parsed.error) {
+            return reject(new Error(parsed.error.message || `OpenAI API returned ${res.statusCode}`));
+          }
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            return reject(new Error(`OpenAI API returned ${res.statusCode}`));
+          }
+          if (parsed.usage) {
+            const cachedInputTokens = parsed.usage.input_tokens_details?.cached_tokens || 0;
+            console.log('[OpenAI usage]',
+              'in:', parsed.usage.input_tokens || 0,
+              '| cached_in:', cachedInputTokens,
+              '| out:', parsed.usage.output_tokens || 0,
+              '| total:', parsed.usage.total_tokens || 0
+            );
+          }
+          resolve(extractOpenAIText(parsed));
+        } catch(e) {
+          reject(new Error(`OpenAI API response could not be parsed: ${e.message}`));
+        }
       });
     });
 
     req.on('error', reject);
     req.write(body);
     req.end();
+  });
+}
+
+function extractOpenAIText(response) {
+  if (typeof response.output_text === 'string') return response.output_text;
+  const parts = [];
+  for (const item of response.output || []) {
+    for (const content of item.content || []) {
+      if (typeof content.text === 'string') parts.push(content.text);
+    }
+  }
+  return parts.join('');
+}
+
+function handleOpenAIProxy(req, res) {
+  let raw = '';
+  req.on('data', c => raw += c);
+  req.on('end', async () => {
+    try {
+      if (!OPENAI_API_KEY || OPENAI_API_KEY === 'YOUR_API_KEY_HERE') {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No OPENAI_API_KEY environment variable set.' }));
+        return;
+      }
+      const { messages, model } = JSON.parse(raw);
+      const text = await callOpenAI(messages, model);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ text }));
+    } catch(e) {
+      console.error('OpenAI API error:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
   });
 }
 
@@ -150,27 +195,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ── Claude proxy ──────────────────────────────────────────────
+  // ── OpenAI proxy. Keep /api/claude for the existing frontend. ──
   if (req.url === '/api/claude' && req.method === 'POST') {
-    let raw = '';
-    req.on('data', c => raw += c);
-    req.on('end', async () => {
-      try {
-        if (!API_KEY || API_KEY === 'YOUR_API_KEY_HERE') {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'No ANTHROPIC_API_KEY environment variable set.' }));
-          return;
-        }
-        const { messages, model } = JSON.parse(raw);
-        const text = await callClaude(messages, model);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ text }));
-      } catch(e) {
-        console.error('Claude API error:', e.message);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
-      }
-    });
+    handleOpenAIProxy(req, res);
+    return;
+  }
+
+  if (req.url === '/api/openai' && req.method === 'POST') {
+    handleOpenAIProxy(req, res);
     return;
   }
 

@@ -1519,6 +1519,18 @@ function threadPatternVarietyGuard(lines = []) {
 ${recent.length ? `RECENT LINE SHAPES TO AVOID ECHOING:\n${recent.map((line, i) => `${i + 1}. ${line.slice(0, 160)}`).join('\n')}` : 'No recent line shapes are available yet, so make each speaker choose a different move.'}`;
 }
 
+// When a character is replying to a thread they already replied to,
+// surface their previous reply explicitly so the model varies structure
+// instead of producing a near-duplicate template with different filler.
+function priorReplyVariationRule(charId, charR1) {
+  const prev = (charR1 || []).find(cc => cc?.charId === charId);
+  if (!prev || !prev.text) return '';
+  return `PRIOR REPLY VARIATION:
+- You already replied earlier in this thread with: "${String(prev.text).replace(/"/g, '\\"')}"
+- Your new reply MUST use a different opening, different sentence shape, and avoid echoing the same phrases, rhythm, or template.
+- The substance can build on your earlier point, but the framing should feel like a fresh beat — not the same template with different filler words at the end.`;
+}
+
 function cleanGeneratedText(text = '') {
   return String(text)
     .trim()
@@ -4474,6 +4486,7 @@ ${roleContext}
 ${SIDE_PARTICIPANT_CONTEXT_RULE}
 ${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, ...charR1.map(cc => cc.text), fight.targetReply.text])}
+${priorReplyVariationRule(fight.replier.id, charR1)}
 ${gmzSpeculationRule}
 
 Write as ${fight.replier.name}, and output only the public reply text.
@@ -4590,6 +4603,7 @@ ${roleContext}
 ${SIDE_PARTICIPANT_CONTEXT_RULE}
 ${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}
+${priorReplyVariationRule(fight.target.id, charR1)}
 ${gmzSpeculationRule}
 
 Write as ${fight.target.name}, and output only the reply text.

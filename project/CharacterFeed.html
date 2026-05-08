@@ -83,7 +83,7 @@
     'group chat reply': 5000,
     'scene opening': 8000,
     'scene reply': 8000,
-    'fly-on-the-wall scene': 8000,
+    'meanwhile cutaway scene': 8000,
     'repair/regeneration': 7000,
     'fallback rewrite': 4000,
     'profile feeling': 3000,
@@ -7242,7 +7242,7 @@ function buildFlyOnWallScenePrompt({ presentChars, topic, location, tone, length
   const privateCanonAllowed = playerRelevant && chars.length > 0 && chars.every(c => ['havoc', 'rowan'].includes(c.id));
   const includePrivateCanon = privateCanonAllowed && shouldIncludeKeresHavocRowanCanon('scene', [...chars, player]);
   const timelineContext = buildFlyOnWallTimelineContext({ presentChars: chars, topic, location, tone, player, feed, dms, groupChats, eventLog });
-  return `Write a private fly-on-the-wall scene.
+  return `Write a private character cutaway scene.
 
 ${buildCoreRules()}
 ${buildSceneRules(includePrivateCanon)}
@@ -7252,10 +7252,13 @@ ${roster}
 
 ${playerRelevant ? `ABSENT TOPIC PERSON:\n${compactPlayerCard(player)}` : `ABSENT PLAYER:\n${player?.name || 'Keres'} (@${player?.handle || 'keresvalen'}) is not present and should not be centered unless the topic naturally calls for it.`}
 
-FLY-ON-THE-WALL MODE:
+MEANWHILE CUTAWAY MODE:
+- This is a story-camera cutaway to the present characters, like a show moving elsewhere for a private scene.
 - The player/Keres is absent and cannot speak.
 - Do not write "you".
 - Do not address the user.
+- Do not frame Keres/the user as spying, listening from a hallway, overhearing, watching through a door, or physically present.
+- Do not describe hidden observation, surveillance, eavesdropping, or anyone noticing they are being watched.
 - Write in third-person limited/neutral scene narration.
 - Only present characters can speak.
 - Present characters can discuss absent people, including Keres, if relevant.
@@ -7282,7 +7285,7 @@ ${timelineContext}
 Return ONLY a JSON array of beat objects like:
 [{"handle":"havocfang","action":"He leans back against the bedframe, jaw working once.","dialogue":"say the actual thing, rowan."}]
 
-Use exact handles from the present-character roster. No notes. No explanations. No second-person narration.`;
+Use exact handles from the present-character roster. No notes. No explanations. No second-person narration. No spying/listening frame.`;
 }
 
 function scoreSceneRelationshipForChar(char, sceneMessages = [], vibe) {
@@ -7372,7 +7375,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
           }}
         >
           <option value="participant">Roleplay as Keres</option>
-          <option value="fly_on_wall">Fly on the wall</option>
+          <option value="fly_on_wall">Meanwhile</option>
         </select>
 
         {isFlyOnWall && (
@@ -7380,7 +7383,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
             <div style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 12px', marginBottom:14}}>
               <label style={{display:'flex', alignItems:'center', gap:8, color:C.text, fontSize:13, fontWeight:700}}>
                 <input type="checkbox" checked readOnly />
-                Keres/player is absent and cannot speak
+                Private cutaway: Keres/player is absent and cannot speak
               </label>
             </div>
 
@@ -7510,7 +7513,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
           color: canStart ? C.bg : C.muted,
           border:'none', borderRadius:14, padding:'14px', fontSize:15, fontWeight:700,
           cursor: canStart ? 'pointer' : 'default', transition:'all 0.2s',
-        }}>Start scene</button>
+        }}>{isFlyOnWall ? 'Start meanwhile' : 'Start scene'}</button>
       </div>
     </div>
   );
@@ -7520,7 +7523,7 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
   const participants = (sceneChars && sceneChars.length ? sceneChars : [char]).filter(Boolean);
   const primaryChar = participants[0];
   const isFlyOnWall = sceneMode === 'fly_on_wall';
-  const displaySetting = setting || { label: location || 'Private scene', sub: isFlyOnWall ? 'Fly-on-the-wall observation' : '', emoji: isFlyOnWall ? '👁️' : '🎭' };
+  const displaySetting = setting || { label: location || 'Private scene', sub: isFlyOnWall ? 'Private character cutaway' : '', emoji: isFlyOnWall ? '👁️' : '🎭' };
   const displayVibe = vibe || { label: tone || 'Private tension', emoji: isFlyOnWall ? '👁️' : '💬', color:C.purple };
   const SCENE_MAX_MESSAGES = 60;
   const [msgs, setMsgs] = useState([]);
@@ -7536,13 +7539,13 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
     scrollToLatest(messagesRef, endRef);
   }, [msgs.length, loading]);
 
-  // Opening line from character, or full observed vignette for fly-on-the-wall mode.
+  // Opening line from character, or full private cutaway for meanwhile mode.
   useEffect(() => {
     async function openingLine() {
       setLoading(true);
       setFlyError('');
       if (isFlyOnWall) {
-        console.log('[FlyOnWall] start', {
+        console.log('[Meanwhile] start', {
           presentChars: participants.map(c => ({ id: c.id, handle: c.handle, name: c.name })),
           topic: topic || context,
           location: location || displaySetting.label,
@@ -7568,26 +7571,26 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
             groupChats,
             eventLog,
           }) }];
-          warnPromptBudget("fly-on-the-wall scene", messages, 8000);
-          console.log('[FlyOnWall] before API call', {
-            label: 'fly-on-the-wall scene',
+          warnPromptBudget("meanwhile cutaway scene", messages, 8000);
+          console.log('[Meanwhile] before API call', {
+            label: 'meanwhile cutaway scene',
             messageCount: messages.length,
             promptChars: String(messages[0]?.content || '').length,
           });
           const res = await window.claude.complete({
-            label: 'fly-on-the-wall scene',
+            label: 'meanwhile cutaway scene',
             messages,
           });
-          console.log('[FlyOnWall] AI returned', res);
+          console.log('[Meanwhile] AI returned', res);
           const normalized = normalizeFlyOnWallBeats(res, participants);
-          console.log('[FlyOnWall] normalized messages', normalized);
+          console.log('[Meanwhile] normalized messages', normalized);
           setMsgs(prev => {
             const next = [...prev, ...normalized].slice(-SCENE_MAX_MESSAGES);
-            console.log('[FlyOnWall] appended', { added: normalized.length, total: next.length });
+            console.log('[Meanwhile] appended', { added: normalized.length, total: next.length });
             return next;
           });
           setLoading(false);
-          console.log('[FlyOnWall] loading false');
+          console.log('[Meanwhile] loading false');
           return;
         }
         const res = await window.claude.complete({
@@ -7605,13 +7608,13 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
         setMsgs(openers.length ? openers : [{ role:'char', charId:primaryChar.id, text:'*glances over, saying nothing for a moment.*', id: Date.now(), ts: Date.now() }]);
       } catch(e) {
         if (isFlyOnWall) {
-          console.error('[FlyOnWall] error', e);
+          console.error('[Meanwhile] error', e);
           setFlyError('Could not load the scene. Try starting it again.');
           const t = Date.now();
           setMsgs(prev => [...prev, {
             role: 'scene',
             charId: null,
-            text: 'The hallway goes quiet. Something failed before the scene could settle.',
+            text: 'The cutaway stalls. Something failed before the scene could settle.',
             isNarration: true,
             mode: 'fly_on_wall',
             id: t,
@@ -7619,7 +7622,7 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
             ts: t,
           }].slice(-SCENE_MAX_MESSAGES));
           setLoading(false);
-          console.log('[FlyOnWall] loading false');
+          console.log('[Meanwhile] loading false');
           return;
         }
         setMsgs([{ role:'char', charId:primaryChar.id, text: '*glances over, saying nothing for a moment.*', id: Date.now(), ts: Date.now() }]);
@@ -7722,14 +7725,14 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
         </div>
         <div style={{background:`${vibeColor}18`, border:`1px solid ${vibeColor}44`, borderRadius:20, padding:'4px 10px', display:'flex', alignItems:'center', gap:4}}>
           <span style={{fontSize:12}}>{displayVibe.emoji}</span>
-          <span style={{color:vibeColor, fontSize:11, fontWeight:600}}>{isFlyOnWall ? 'Fly on the wall' : displayVibe.label}</span>
+          <span style={{color:vibeColor, fontSize:11, fontWeight:600}}>{isFlyOnWall ? 'Meanwhile' : displayVibe.label}</span>
         </div>
         <button onClick={endScene} style={{background:C.card2, color:C.text, border:`1px solid ${C.border}`, borderRadius:18, padding:'7px 12px', fontSize:12, fontWeight:700, cursor:'pointer'}}>End</button>
       </div>
 
       {/* Scene setting banner */}
       <div style={{padding:'10px 16px', background:C.card2, borderBottom:`1px solid ${C.border}`}}>
-        <p style={{color:C.muted, fontSize:12, textAlign:'center'}}>{isFlyOnWall ? `${displayVibe.label} · canon impact: ${canonImpact}` : displaySetting.sub}</p>
+        <p style={{color:C.muted, fontSize:12, textAlign:'center'}}>{isFlyOnWall ? `${displayVibe.label} cutaway · canon impact: ${canonImpact}` : displaySetting.sub}</p>
       </div>
 
       {/* Messages */}
@@ -7781,7 +7784,7 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
         {loading && (
           isFlyOnWall ? (
             <div style={{alignSelf:'stretch', background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:'13px 15px', color:C.muted, fontSize:13, lineHeight:1.5}}>
-              Listening from the hallway...
+              Cutting away...
             </div>
           ) : (
             <div style={{display:'flex', gap:8, alignItems:'flex-end'}}>
@@ -9843,8 +9846,8 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
           type: 'scene',
           visibility: 'private_scene',
           participants: participants.map(c => c.id).filter(Boolean),
-          title: `Fly-on-the-wall scene: ${label}`,
-          text: `${sceneMeta.tone || vibe?.label || 'Observed scene'} at ${sceneMeta.location || 'a private location'}. Canon impact: ${sceneMeta.canonImpact}. Last beat: ${sceneMemory}`,
+          title: `Meanwhile cutaway: ${label}`,
+          text: `${sceneMeta.tone || vibe?.label || 'Private cutaway'} at ${sceneMeta.location || 'a private location'}. Canon impact: ${sceneMeta.canonImpact}. Last beat: ${sceneMemory}`,
           relationshipApplied: false,
           sceneMemory,
           sceneMode: 'fly_on_wall',

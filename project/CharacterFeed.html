@@ -4055,8 +4055,12 @@ function normalizeCharacterIdentity(char) {
   }
   const defaultChar = DEFAULT_CHARS.find(c => c.id === char.id);
   if (!defaultChar) return normalizePlayerRelationshipBaseline(char);
+  const relationships = defaultChar.relationships?.vesper !== undefined && char.relationships?.vesper === undefined
+    ? { ...(char.relationships || {}), vesper: defaultChar.relationships.vesper }
+    : char.relationships;
   return normalizePlayerRelationshipBaseline({
     ...char,
+    relationships,
     pronouns: defaultChar.pronouns || char.pronouns,
     house: defaultChar.house || char.house,
     team: isQuidditchPlayer(defaultChar) ? (defaultChar.team || defaultChar.house || char.team) : '',
@@ -4065,7 +4069,12 @@ function normalizeCharacterIdentity(char) {
 }
 
 function normalizeCharactersIdentity(chars = []) {
-  return (chars || []).map(normalizeCharacterIdentity);
+  const normalized = (chars || []).map(normalizeCharacterIdentity).filter(Boolean);
+  const ids = new Set(normalized.map(c => c.id));
+  const missingDefaults = DEFAULT_CHARS
+    .filter(c => c?.id && !ids.has(c.id))
+    .map(c => normalizeCharacterIdentity(JSON.parse(JSON.stringify(c))));
+  return [...normalized, ...missingDefaults];
 }
 const DEFAULT_DAY = 1;
 const SAVE_STATE_VERSION = 3;

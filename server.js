@@ -68,10 +68,45 @@ function isAuthorized(req) {
 
 function askForPassword(res) {
   res.writeHead(401, {
-    'Content-Type': 'text/plain',
+    'Content-Type': 'text/html; charset=utf-8',
     'WWW-Authenticate': 'Basic realm="Socials App"',
   });
-  res.end('Password required');
+  res.end(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Password required</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #0f0f10;
+      color: #f4f4f5;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(88vw, 420px);
+      padding: 28px;
+      border: 1px solid #2b2b30;
+      border-radius: 18px;
+      background: #17171a;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      text-align: center;
+    }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    p { margin: 0; color: #a1a1aa; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Password required</h1>
+    <p>Use the browser password prompt to unlock the Socials app. The username can be anything.</p>
+  </main>
+</body>
+</html>`);
 }
 
 let aiRequestTracker = {

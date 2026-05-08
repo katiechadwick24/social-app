@@ -9802,7 +9802,7 @@ ${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, al
 ${matchReactionTexts.length ? `Earlier match reactions already posted:\n${matchReactionTexts.join('\n')}\nDo not echo their key verb, punchline scaffold, or social move.` : ''}
 ${threadPatternVarietyGuard(matchReactionTexts)}
 Write ONE punchy social media post reaction. Use insider language for your own team (we/us/our) and rival language for the opponent (they/them). In character. No hashtags. 1 sentence. Do not explain your reasoning or mention prompts/context/rules.
-        }]});
+` }]});
         const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts: matchReactionTexts });
         matchReactionTexts.push(`@${char.handle}: "${clean}"`);
         handleMatchPost(clean, char.id);
@@ -10038,7 +10038,7 @@ ${isTransferHeat && char.id === 'elara' ? `Elara has history with Havoc. If the 
 ${tamsinInterestHeat && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
 
 Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
-          }]});
+` }]});
           const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts: eventAvoidTexts });
           if (!clean) return;
           setFeed(f => f.map(p => p.id === basePosts[idx].id ? {...p, text: clean} : p));

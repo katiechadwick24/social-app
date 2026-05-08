@@ -4566,16 +4566,9 @@ function RelBar({ value }) {
 
 // ─── Bottom Nav ───────────────────────────────────────────────────
 function BottomNav({ tab, setTab, dmNotifs = {} }) {
-  const totalDmNotifs = Object.values(dmNotifs).reduce((a,b) => a+b, 0);
   const tabs = [
     { id:'feed', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></svg> },
     { id:'activity', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="currentColor"/></svg> },
-    { id:'messages', icon: (
-      <div style={{position:'relative', display:'inline-flex'}}>
-        <svg viewBox="0 0 24 24" width="26" height="26"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>
-        {totalDmNotifs > 0 && <div style={{position:'absolute', top:-4, right:-6, background:'#e91e8c', borderRadius:'50%', width:16, height:16, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:'#fff', border:`1.5px solid ${C.bg}`}}>{totalDmNotifs}</div>}
-      </div>
-    )},
     { id:'notifications', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/></svg> },
     { id:'profile', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg> },
   ];
@@ -8067,17 +8060,13 @@ Only output the JSON array, nothing else.` }]
         <p style={{color:C.text, fontSize:14, marginTop:6, lineHeight:1.5}}>{char.bio}</p>
         <p style={{marginTop:6, fontSize:14}}><strong style={{color:C.text}}>{fmt(char.followers)}</strong> <span style={{color:C.muted}}>Followers</span></p>
 
-        {/* Following / Message / Scene */}
+        {/* Following / Scene */}
         <div style={{display:'flex', gap:10, marginTop:14}}>
           <button onClick={() => setFollowing(f=>!f)} style={{
             flex:1, background: following ? C.card2 : 'none',
             border:`1.5px solid ${C.border}`, color:C.text,
             borderRadius:26, padding:'12px 10px', fontSize:15, fontWeight:700, cursor:'pointer',
           }}>{following ? 'Following ✓' : 'Follow'}</button>
-          <button onClick={() => onDM(char)} style={{
-            flex:1, background:C.blue, border:'none', color:'#fff',
-            borderRadius:26, padding:'12px 10px', fontSize:15, fontWeight:700, cursor:'pointer',
-          }}>Message</button>
           {isAIChar && (
             <button onClick={() => setShowSceneSetup(true)} style={{
               flex:1, background:`${C.purple}20`, border:`1.5px solid ${C.purple}44`, color:C.purple,
@@ -8817,11 +8806,6 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
         { icon:'😂', label:'Humor', value: `+${socialGain.humor}`, unit:'%', flavor: 'Your wit is showing.' },
         { icon:'⭐', label:'Aura', value: `+${socialGain.aura}`, unit:'%', flavor: 'Presence confirmed.' },
         { icon:'🔥', label:'Drama', value: `+${socialGain.drama}`, unit:'%', flavor: evType === 'scandal' ? 'Mess travels beautifully.' : 'The timeline noticed.' },
-        ...currentEventCharIds.map(cid => {
-          const delta = +(Math.random() * 1.2 - 0.3).toFixed(2);
-          const flavorMap = { scandal: delta > 0 ? 'Impressed by the chaos.' : 'Not thrilled about this.', gossip: 'Taking notes.', tag: delta > 0 ? 'Appreciated the response.' : 'Was not expecting that.', opportunity: delta > 0 ? 'Respects the move.' : 'Saw what you did there.' };
-          return { avatar: cid, label: `@${cid}`, value: delta, unit:'%', flavor: flavorMap[evType] || 'Watching closely.' };
-        }),
       ];
       onSocialPresenceGain && onSocialPresenceGain(socialGain);
       onLog && onLog({
@@ -9047,7 +9031,9 @@ function LogEntryCard({ entry, idx, allChars, collapsed, toggle }) {
     milestone: { color:C.green,  emoji:'🏆', label:'Milestone completed:' },
     autopost:  { color:C.muted,  emoji:'📝', label:'Posted to feed' },
   };
-  const header = entry.type === 'event'
+  const header = entry.type === 'scene'
+    ? { color: C.purple, emoji: '🎭', label: 'Scene saved' }
+    : entry.type === 'event'
     ? { color: typeInfo.color, emoji: typeInfo.emoji, label: typeInfo.label + ' event' }
     : (headerMap[entry.type] || { color:C.blue, emoji:'✦', label:'Action' });
 
@@ -9068,6 +9054,9 @@ function LogEntryCard({ entry, idx, allChars, collapsed, toggle }) {
             <p style={{color:C.text, fontSize:14, lineHeight:1.55, fontStyle:'italic'}}>"{entry.action}"</p>
           </div>
         </>}
+        {entry.type === 'scene' && (
+          <p style={{color:C.text, fontSize:13, lineHeight:1.6}}>{entry.text || entry.sceneMemory || entry.title || 'Scene saved.'}</p>
+        )}
         {entry.type === 'reply' && char && (
           <div style={{display:'flex', gap:10, alignItems:'flex-start'}}>
             <Avatar char={char} size={36}/>
@@ -9105,7 +9094,7 @@ function LogEntryCard({ entry, idx, allChars, collapsed, toggle }) {
         </div>
       )}
 
-      {entry.scoreChanges?.length > 0 && (
+      {entry.type === 'event' && entry.scoreChanges?.length > 0 && (
         <div style={{background:C.card2, borderRadius:12, padding:'12px 14px'}}>
           <button onClick={() => toggle(scoreKey)} style={{background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', width:'100%', padding:0, marginBottom: scoreCollapsed ? 0 : 14}}>
             <span style={{color:C.yellow, fontWeight:700, fontSize:13}}>Score Changes</span>
@@ -9232,15 +9221,12 @@ function NotificationsScreen({ chars, player, feed, onOpenThread, onCharClick })
 // ─── Activity Screen ──────────────────────────────────────────────
 function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenChat, onOpenThread, section, setSection }) {
   const allChars = [...chars, player];
-  const activeSection = section || 'posts';
+  const rawSection = section || 'posts';
+  const activeSection = ['posts', 'events', 'log'].includes(rawSection) ? rawSection : 'posts';
   const setActiveSection = setSection || (() => {});
 
   // My posts — anything posted by player
   const myPosts = feed.filter(p => p.charId === 'player');
-
-  // Recent DM previews — only convos with messages (include GMZ if active)
-  const charsForDms = (dms[GMZ_CHAR.id]||[]).length > 0 ? [GMZ_CHAR, ...chars] : chars;
-  const activeDMs = charsForDms.filter(c => (dms[c.id]||[]).length > 0);
 
   function timeAgo(ts) {
     const d = Math.max(0, (Date.now() - ts) / 1000);
@@ -9252,17 +9238,16 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
 
   const tabs = [
     { id:'posts', label:'My Posts' },
-    { id:'events', label:'Events' },
-    { id:'dms', label:'DMs' },
+    { id:'events', label:'Events & Scenes' },
     { id:'log', label:'Log' },
   ];
 
   // Log tab state
   const [logCollapsed, setLogCollapsed] = useState({});
-  const [logShowDMs, setLogShowDMs] = useState(false);
   const toggleLog = (key) => setLogCollapsed(c => ({...c, [key]: !c[key]}));
-  const filteredLog = logShowDMs ? eventLog : eventLog.filter(e => e.type !== 'dm');
-  const eventEntries = (eventLog || []).filter(e => e?.type === 'event' || e?.scenario || e?.action || e?.outcome || typeof e?.xp === 'number');
+  const isEventOrSceneEntry = (e) => e?.type === 'event' || e?.type === 'scene';
+  const filteredLog = (eventLog || []).filter(isEventOrSceneEntry);
+  const eventEntries = filteredLog;
 
   return (
     <div style={{flex:1, overflowY:'auto', display:'flex', flexDirection:'column'}}>
@@ -9335,20 +9320,28 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
           ) : eventEntries.map((ev, i) => (
             <div key={i} style={{padding:'16px', borderBottom:`1px solid ${C.border}`}}>
               <div style={{display:'flex', gap:10, alignItems:'flex-start'}}>
-                <div style={{width:38, height:38, borderRadius:'50%', background:'#1a1a3a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0}}>📣</div>
+                <div style={{width:38, height:38, borderRadius:'50%', background:'#1a1a3a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0}}>{ev.type === 'scene' ? '🎭' : '📣'}</div>
                 <div style={{flex:1}}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
-                    <span style={{color:C.muted, fontSize:12}}>Event · {timeAgo(ev.timestamp || Date.now())}</span>
-                    <span style={{color:C.yellow, fontSize:12, fontWeight:700}}>+{Number(ev.xp || 0)} XP</span>
+                    <span style={{color:C.muted, fontSize:12}}>{ev.type === 'scene' ? 'Scene' : 'Event'} · {timeAgo(ev.timestamp || Date.now())}</span>
+                    {ev.type === 'event' && <span style={{color:C.yellow, fontSize:12, fontWeight:700}}>+{Number(ev.xp || 0)} XP</span>}
                   </div>
-                  <p style={{color:C.muted, fontSize:13, lineHeight:1.5, marginBottom:8}}>{ev.scenario || ev.title || 'Custom event'}</p>
-                  <div style={{background:C.card2, borderRadius:10, padding:'10px 12px', marginBottom:6}}>
-                    <p style={{color:C.muted, fontSize:11, marginBottom:4}}>YOUR ACTION</p>
-                    <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{ev.action || 'Action logged.'}</p>
-                  </div>
-                  {ev.outcome && (
+                  <p style={{color:C.muted, fontSize:13, lineHeight:1.5, marginBottom:8}}>{ev.scenario || ev.title || (ev.type === 'scene' ? 'Completed scene' : 'Custom event')}</p>
+                  {ev.type === 'event' && (
+                    <div style={{background:C.card2, borderRadius:10, padding:'10px 12px', marginBottom:6}}>
+                      <p style={{color:C.muted, fontSize:11, marginBottom:4}}>KERES' ACTION</p>
+                      <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{ev.action || 'Action logged.'}</p>
+                    </div>
+                  )}
+                  {ev.type === 'scene' && (
+                    <div style={{background:C.card2, borderRadius:10, padding:'10px 12px', marginBottom:6}}>
+                      <p style={{color:C.muted, fontSize:11, marginBottom:4}}>SCENE MEMORY</p>
+                      <p style={{color:C.text, fontSize:13, lineHeight:1.5}}>{ev.sceneMemory || ev.text || 'Scene saved.'}</p>
+                    </div>
+                  )}
+                  {ev.type === 'event' && ev.outcome && (
                     <div style={{background:'#1a2e1a', borderRadius:10, padding:'10px 12px'}}>
-                      <p style={{color:C.muted, fontSize:11, marginBottom:4}}>OUTCOME</p>
+                      <p style={{color:C.muted, fontSize:11, marginBottom:4}}>KERES' OUTCOME</p>
                       <p style={{color:C.green, fontSize:13, lineHeight:1.5}}>{ev.outcome}</p>
                     </div>
                   )}
@@ -9366,75 +9359,15 @@ function ActivityScreen({ chars, player, onEvent, feed, dms, eventLog, onOpenCha
         </div>
       )}
 
-      {/* DMs */}
-      {activeSection === 'dms' && (
-        <div>
-          {activeDMs.length === 0 ? (
-            <div style={{padding:'40px 16px', textAlign:'center'}}>
-              <div style={{fontSize:36, marginBottom:12}}>💬</div>
-              <p style={{color:C.muted, fontSize:14}}>No DM history yet.</p>
-              <p style={{color:C.muted, fontSize:13, marginTop:4}}>Go to Messages to start a conversation.</p>
-            </div>
-          ) : activeDMs.map(char => {
-            const msgs = dms[char.id] || [];
-            const lastMsg = msgs[msgs.length - 1];
-            const prevMsg = msgs[msgs.length - 2];
-            return (
-              <div key={char.id} onClick={() => onOpenChat(char)} style={{padding:'14px 16px', borderBottom:`1px solid ${C.border}`, cursor:'pointer'}}>
-                <div style={{display:'flex', gap:10, alignItems:'flex-start'}}>
-                  <Avatar char={char} size={42}/>
-                  <div style={{flex:1, minWidth:0}}>
-                    <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:6}}>
-                      <span style={{fontWeight:700, fontSize:14, color:C.text}}>{char.name}</span>
-                      <Verified/>
-                      <span style={{color:C.muted, fontSize:12}}>@{char.handle}</span>
-                    </div>
-                    {/* Last 2 messages preview */}
-                    <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                      {[prevMsg, lastMsg].filter(Boolean).map((m,i) => {
-                        const isMe = m.role === 'user';
-                        return (
-                          <div key={i} style={{display:'flex', alignItems:'flex-start', gap:6}}>
-                            <div style={{width:22, height:22, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'}}>
-                              {isMe ? <Avatar char={player} size={20}/> : <Avatar char={char} size={20}/>}
-                            </div>
-                            <div style={{
-                              background: isMe ? C.blue+'33' : C.card2,
-                              borderRadius:10, padding:'6px 10px', flex:1,
-                            }}>
-                              <p style={{color: isMe ? C.blue : C.text, fontSize:13, lineHeight:1.4}}>{m.text}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <p style={{color:C.muted, fontSize:11, marginTop:6}}>{msgs.length} messages total</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* LOG */}
       {activeSection === 'log' && (
         <div>
-          {/* DM filter toggle */}
-          {eventLog.length > 0 && (
-            <div style={{display:'flex', justifyContent:'flex-end', padding:'10px 16px 0'}}>
-              <button onClick={() => setLogShowDMs(s=>!s)} style={{background:C.card2, border:`1px solid ${C.border}`, color:logShowDMs ? C.blue : C.muted, borderRadius:10, padding:'5px 12px', fontSize:12, cursor:'pointer'}}>
-                {logShowDMs ? 'Hide DMs' : 'Show DMs'}
-              </button>
-            </div>
-          )}
-
           <div style={{padding:'10px 14px'}}>
             {filteredLog.length === 0 ? (
               <div style={{textAlign:'center', color:C.muted, fontSize:14, marginTop:60}}>
                 <div style={{fontSize:44, marginBottom:14}}>📋</div>
                 <p style={{fontWeight:600, color:C.text}}>No activity yet</p>
-                <p style={{fontSize:12, marginTop:6}}>Respond to events, reply to posts, or slide into DMs.</p>
+                <p style={{fontSize:12, marginTop:6}}>Run events or finish scenes to build Keres' story log.</p>
               </div>
             ) : (
               [...filteredLog].reverse().map((entry, i) => (
@@ -9649,9 +9582,7 @@ function App() {
     scan.trackedKeys.forEach(key => feedRelationshipKeysRef.current.add(key));
     if (scan.changedFeed) setFeedRaw(trimFeedPreservingPlayerPosts(scan.feed));
     if (scan.changes.length) {
-      const logEntry = feedRelationshipLogEntry(scan.changes, chars, player);
       setCharsRaw(prev => applyFeedRelationshipChanges(prev, scan.changes, player));
-      if (logEntry) setEventLogRaw(prev => [logEntry, ...prev].slice(0, 30));
     }
   }, [stateLoaded, feed, chars, player]);
 
@@ -9684,10 +9615,8 @@ function App() {
   }
 
   function handleEventLog(entry) {
-    const nextChars = getCharsWithRelationshipLogChanges(chars, entry?.scoreChanges || []);
-    const loggedEntry = entry ? { ...entry, relationshipApplied: true } : entry;
+    const loggedEntry = entry ? { ...entry, relationshipApplied: false } : entry;
     const nextLog = [loggedEntry, ...eventLog].slice(0, 30);
-    setCharsRaw(nextChars);
     setEventLogRaw(nextLog);
   }
   const [activeGroupChat, setActiveGroupChat] = useState(null);
@@ -9826,10 +9755,7 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
     });
   }
   function handleOpenChat(char) {
-    pushNav();
-    setChatChar(char);
-    setTab('messages');
-    setDmNotifs(n => ({ ...n, [char.id]: 0 }));
+    // Messages tab is retired.
   }
   function handleViewChar(char) { pushNav(); setViewChar(char); }
   function handleEditChar(char) { pushNav(); setEditChar(char); }
@@ -9868,34 +9794,15 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
       }
       return;
     }
-    const changes = participants
-      .filter(c => c?.id && c.id !== 'player' && c.id !== '__gmz__')
-      .map(c => ({ id: c.id, value: scoreSceneRelationshipForChar(c, messages, vibe) }))
-      .filter(ch => ch.value !== 0);
-    if (changes.length) {
-      setChars(list => list.map(char => {
-        const change = changes.find(ch => ch.id === char.id);
-        if (!change) return char;
-        const current = Number(char.relationships?.player || 0);
-        return {
-          ...char,
-          relationships: {
-            ...(char.relationships || {}),
-            player: +clamp(current + change.value, -100, 100).toFixed(2),
-          },
-        };
-      }));
-    }
     setEventLog(log => [{
       id: `scene-${Date.now()}`,
       type: 'scene',
       visibility: 'private_scene',
       participants: ['player', ...participants.map(c => c.id).filter(Boolean)],
       title: `Scene ended: ${label}`,
-      text: `${vibe?.label || 'Scene'} with ${label}. ${changes.length ? 'Relationship shifts were applied.' : 'No relationship shift, but the scene was saved.'}${sceneMemory ? ` Last beat: ${sceneMemory}` : ''}`,
-      relationshipApplied: true,
+      text: `${vibe?.label || 'Scene'} with ${label}.${sceneMemory ? ` Last beat: ${sceneMemory}` : ''}`,
+      relationshipApplied: false,
       sceneMemory,
-      scoreChanges: changes.map(ch => ({ avatar: ch.id, value: ch.value })),
       timestamp: Date.now(),
     }, ...log]);
   }
@@ -10605,7 +10512,6 @@ Write ONE GMZ gossip post. Rules:
         }, ...log]);
       }
       intelChars.forEach((char, idx) => {
-        setTimeout(() => triggerPrivateIntelDM(char, ev), 900 + idx * 850);
       });
       const publicTakeChars = intelChars.filter(c => {
         const text = `${c.personality || ''} ${c.description || ''}`.toLowerCase();
@@ -10702,12 +10608,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
     });
 
     setActiveEvent(null);
-    // Proactive DM: only characters explicitly attached to the custom event can slide in.
-    const reactiveChars = involved.filter(c => !['reserved','quiet'].some(q => (c.personality||'').includes(q)));
-    if (reactiveChars.length && Math.random() < 0.4) {
-      const pick = reactiveChars[Math.floor(Math.random()*reactiveChars.length)];
-      setTimeout(() => triggerProactiveDM(pick, `the event: ${ev.scenario.slice(0,60)}`), 3000);
-    }
+    // DM tab is retired; custom events now resolve through feed/event log only.
     // GMZ only posts when the custom event explicitly names the gossip account.
     const shouldTriggerGMZ = /\b(?:gmz|@gmz|gossip account|anonymous tip)\b/i.test(`${ev.scenario || ''} ${ev.outcome || ''}`);
     if (shouldTriggerGMZ) {
@@ -10745,18 +10646,11 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
         <BottomNav tab={tab} setTab={t => { setTab(t); setActiveGroupChat(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );
-  } else if (chatChar && tab === 'messages') {
-    screenContent = (
-      <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <ChatScreen char={chatChar} player={player} allChars={[...chars, player, GMZ_CHAR]} feed={feed} dms={dms} eventLog={eventLog} groupChats={groupChats} setDms={setDms} onBack={goBack} onGMZTipSubmit={handleGMZTipSubmit} />
-        <BottomNav tab={tab} setTab={t => { setTab(t); setChatChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
-      </div>
-    );
   } else if (viewChar) {
     const liveViewChar = chars.find(c => c.id === viewChar.id) || (player.id === viewChar.id ? player : viewChar);
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} onBack={goBack} onDM={(c) => { handleOpenChat(c); setViewChar(null); }} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} onSceneEnd={handleSceneEnd} />
+        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} onBack={goBack} onDM={() => {}} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} onSceneEnd={handleSceneEnd} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setViewChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );
@@ -10771,11 +10665,10 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
     const mainScreen = (() => {
       switch(tab) {
         case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
-        case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={c => { handleOpenChat(c); setTab('messages'); }} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
-        case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} setGroupChats={setGroupChats} onOpenGroup={gc => { pushNav(); setActiveGroupChat(gc); }} />;
+        case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={() => {}} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
         case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} eventLog={eventLog} dms={dms} groupChats={groupChats} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
-        default: return null;
+        default: return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
       }
     })();
 
@@ -10803,7 +10696,6 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
             setComposing(false);
             // Player posts: simulate growing engagement
             if (post.charId === 'player') {
-              maybeTriggerDMsFromPlayerPost(post);
               const ticks = [
                 { delay: 1500,  l: 240,  r: 8,   c: 1 },
                 { delay: 4000,  l: 1200, r: 22,  c: 3 },

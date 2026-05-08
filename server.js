@@ -9,7 +9,8 @@ loadEnvFile(path.join(__dirname, '.env'));
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5-mini';
 const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || 'gpt-5-nano';
-const OPENAI_MAX_OUTPUT_TOKENS = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 700);
+const OPENAI_MAX_OUTPUT_TOKENS = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 300);
+const DAILY_AI_REQUEST_LIMIT = Number(process.env.DAILY_AI_REQUEST_LIMIT || 300);
 const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const PORT        = Number(process.env.PORT || 3000);
 const PROJECT_DIR = path.join(__dirname, 'project');
@@ -73,13 +74,61 @@ function askForPassword(res) {
   res.end('Password required');
 }
 
+let aiRequestTracker = {
+  date: new Date().toISOString().slice(0, 10),
+  count: 0,
+};
+
+function checkDailyAiLimit() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (aiRequestTracker.date !== today) {
+    aiRequestTracker = { date: today, count: 0 };
+  }
+  if (aiRequestTracker.count >= DAILY_AI_REQUEST_LIMIT) return false;
+  aiRequestTracker.count += 1;
+  return true;
+}
+
+function estimateTokensFromText(text) {
+  return Math.ceil(String(text || '').length / 4);
+}
+
+function flattenMessageContent(value) {
+  try {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+      return value.map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          return item.text || item.output_text || JSON.stringify(item);
+        }
+        return String(item || '');
+      }).join('\n');
+    }
+    if (value && typeof value === 'object') return JSON.stringify(value);
+    return String(value || '');
+  } catch(e) {
+    return '';
+  }
+}
+
+function estimateMessagesSize(messages) {
+  const combined = (messages || []).map(message => {
+    return `${message?.role || 'unknown'}:\n${flattenMessageContent(message?.content)}`;
+  }).join('\n\n');
+  return {
+    characters: combined.length,
+    estimatedTokens: estimateTokensFromText(combined),
+  };
+}
+
 // ── OpenAI API proxy ──────────────────────────────────────────────
 function callOpenAI(messages, modelTier) {
   return new Promise((resolve, reject) => {
     const selectedModel = modelTier === 'fast' ? OPENAI_MODEL_FAST : OPENAI_MODEL;
     const maxOutputTokens = Number.isFinite(OPENAI_MAX_OUTPUT_TOKENS)
       ? OPENAI_MAX_OUTPUT_TOKENS
-      : 700;
+      : 300;
     const body = JSON.stringify({
       model: selectedModel,
       input: messages,
@@ -102,18 +151,20 @@ function callOpenAI(messages, modelTier) {
         try {
           const parsed = data ? JSON.parse(data) : {};
           if (parsed.error) {
-            return reject(new Error(parsed.error.message || `OpenAI API returned ${res.statusCode}`));
+            return reject(new Error(parsed.error.message || JSON.stringify(parsed.error)));
           }
           if (res.statusCode < 200 || res.statusCode >= 300) {
             return reject(new Error(`OpenAI API returned ${res.statusCode}`));
           }
           if (parsed.usage) {
-            const cachedInputTokens = parsed.usage.input_tokens_details?.cached_tokens || 0;
+            const usage = parsed.usage;
+            const cachedInputTokens = usage.input_tokens_details?.cached_tokens || usage.cached_input_tokens || 0;
             console.log('[OpenAI usage]',
-              'in:', parsed.usage.input_tokens || 0,
+              'model:', selectedModel,
+              'in:', usage.input_tokens || 0,
               '| cached_in:', cachedInputTokens,
-              '| out:', parsed.usage.output_tokens || 0,
-              '| total:', parsed.usage.total_tokens || 0
+              '| out:', usage.output_tokens || 0,
+              '| total:', usage.total_tokens || 0
             );
           }
           resolve(extractOpenAIText(parsed));
@@ -133,14 +184,17 @@ function extractOpenAIText(response) {
   if (typeof response.output_text === 'string') return response.output_text;
   const parts = [];
   for (const item of response.output || []) {
+    if (typeof item.text === 'string') parts.push(item.text);
     for (const content of item.content || []) {
       if (typeof content.text === 'string') parts.push(content.text);
+      if (typeof content.output_text === 'string') parts.push(content.output_text);
+      if (typeof content.text?.value === 'string') parts.push(content.text.value);
     }
   }
-  return parts.join('');
+  return parts.join('\n');
 }
 
-function handleOpenAIProxy(req, res) {
+function handleAiProxy(req, res, routeLabel) {
   let raw = '';
   req.on('data', c => raw += c);
   req.on('end', async () => {
@@ -151,6 +205,25 @@ function handleOpenAIProxy(req, res) {
         return;
       }
       const { messages, model } = JSON.parse(raw);
+      if (!checkDailyAiLimit()) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Daily AI request limit reached. Try again tomorrow.' }));
+        return;
+      }
+      const inputSize = estimateMessagesSize(messages);
+      console.log('[AI request]',
+        'route:', routeLabel,
+        'modelTier:', model || 'default',
+        'requestCountToday:', aiRequestTracker.count,
+        'rawBodyChars:', raw.length,
+        'estimatedInputChars:', inputSize.characters,
+        'estimatedInputTokens:', inputSize.estimatedTokens
+      );
+      if (inputSize.estimatedTokens > 15000) {
+        console.warn(`[AI request BIG SPEND WARNING] ${routeLabel}: ~${inputSize.estimatedTokens} input tokens`);
+      } else if (inputSize.estimatedTokens > 8000) {
+        console.warn(`[AI request warning] ${routeLabel}: ~${inputSize.estimatedTokens} input tokens`);
+      }
       const text = await callOpenAI(messages, model);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ text }));
@@ -197,12 +270,12 @@ const server = http.createServer(async (req, res) => {
 
   // ── OpenAI proxy. Keep /api/claude for the existing frontend. ──
   if (req.url === '/api/claude' && req.method === 'POST') {
-    handleOpenAIProxy(req, res);
+    handleAiProxy(req, res, '/api/claude');
     return;
   }
 
   if (req.url === '/api/openai' && req.method === 'POST') {
-    handleOpenAIProxy(req, res);
+    handleAiProxy(req, res, '/api/openai');
     return;
   }
 

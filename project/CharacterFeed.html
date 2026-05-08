@@ -11,9 +11,60 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script>
+  function estimateTokensFromText(text) {
+    return Math.ceil(String(text || '').length / 4);
+  }
+
+  function flattenAiMessageContent(value) {
+    try {
+      if (typeof value === 'string') return value;
+      if (Array.isArray(value)) {
+        return value.map(item => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object') {
+            return item.text || item.output_text || JSON.stringify(item);
+          }
+          return String(item || '');
+        }).join('\n');
+      }
+      if (value && typeof value === 'object') return JSON.stringify(value);
+      return String(value || '');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function summarizeAiRequest(label, messages, model) {
+    try {
+      const combined = (messages || []).map(m => {
+        return `${m.role || 'unknown'}:\n${flattenAiMessageContent(m.content)}`;
+      }).join('\n\n');
+
+      const chars = combined.length;
+      const estTokens = estimateTokensFromText(combined);
+
+      console.log('[AI request]', {
+        label,
+        model: model || 'default',
+        charactersSent: chars,
+        estimatedInputTokens: estTokens,
+      });
+
+      if (estTokens > 15000) {
+        console.warn(`[AI request BIG SPEND WARNING] ${label}: ~${estTokens} input tokens`);
+      } else if (estTokens > 8000) {
+        console.warn(`[AI request warning] ${label}: ~${estTokens} input tokens`);
+      }
+    } catch (e) {
+      console.warn('[AI request] failed to summarize request', e);
+    }
+  }
+
   // Wire up window.claude to the local server proxy
   window.claude = {
-    complete: async function({ messages, model }) {
+    complete: async function({ messages, model, label }) {
+      summarizeAiRequest(label || 'unlabeled AI request', messages, model);
+      // /api/claude is a compatibility endpoint. The server now routes it to OpenAI.
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -21,7 +72,7 @@
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Claude API call failed');
+        throw new Error(err.error || 'AI API call failed');
       }
       const data = await res.json();
       return data.text;
@@ -4264,6 +4315,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       let charR1 = [];
       try {
         const res = await window.claude.complete({
+          label: 'character reply',
           messages:[{ role:'user', content:
             `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}${vaguePostRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\n${intentLine}\n\nCharacters (in order):\n${charRoster}\n\nSENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${THREAD_MENTION_RULE}\n${THREAD_DIRECT_ADDRESS_RULE}\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
           }]
@@ -4366,6 +4418,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       let bots = [];
       if (botCount > 0) try {
         const res = await window.claude.complete({
+          label: 'bot comment',
           messages:[{ role:'user', content:
             `Below is a thread on a college social media app. ${charR1.length > 0 ? "It's gotten spicy — characters have piled on." : ''}
 
@@ -4464,6 +4517,7 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
         const fight = pairs[0];
         try {
           const res = await window.claude.complete({
+            label: 'char-vs-char reply',
             messages:[{ role:'user', content:
               `On a college social media thread, ${fight.target.name} (@${fight.target.handle}) just replied: "${fight.targetReply.text}"
 
@@ -4520,6 +4574,7 @@ Return ONLY the reply text. No other text.`
             let reactComments = [];
             if (reactBots.length > 0) {
             const res2 = await window.claude.complete({
+              label: 'bot comment',
               messages:[{ role:'user', content:
 	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, speculate, guess what might be missing from the story, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }],
               model: 'fast'
@@ -4552,6 +4607,7 @@ Return ONLY the reply text. No other text.`
                 try {
                   const bot = pool.find(b => b.id === botTarget.bot);
                   const resBot = await window.claude.complete({
+                    label: 'character reply',
                     messages:[{ role:'user', content:
                       `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }],
                     model: 'fast'
@@ -4579,6 +4635,7 @@ Return ONLY the reply text. No other text.`
             if (Math.random() < counterChance) {
               try {
                 const res3 = await window.claude.complete({
+                  label: 'char-vs-char reply',
                   messages:[{ role:'user', content:
                     `A social media thread is getting attention.
 
@@ -4746,6 +4803,7 @@ Return ONLY SILENCE or the reply text.`
       setReplyTarget(null);
       try {
         const res = await window.claude.complete({
+          label: 'bot comment',
           messages: [{ role:'user', content:
             `Write as ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university. Voice cues: ${bot.bio || bot.type}.
 Original post: "${post.text}"
@@ -4802,6 +4860,7 @@ Return ONLY the reply text. Do not explain the task.`
       const playfulThreadRule = !isGMZThread && (isKeresThread || targetChar?.id === player?.id || looksLikePlayfulBanterText(`${post.text || ''} ${target.sourceText || ''} ${text || ''}`)) ? PLAYFUL_PUBLIC_THREAD_RULE : '';
       try {
         const res = await window.claude.complete({
+          label: 'character reply',
           messages:[{ role:'user', content:
             `Write as ${targetChar.name}, and output only the public reply text.
 ${identityPromptFor(targetChar)}
@@ -4989,6 +5048,7 @@ ${BANNED_PHRASES_RULE}`
         return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Behavioral mode: ${relMode.behavioral} ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${knowledgeNote}${callumKeresRivalNote}${keresSparkNote}${tamsinProtectiveNote} ${charPhraseGuard} ASSIGNED MOVE FOR THIS REPLY: ${assignedMove}. This is the one social action this character must perform. Secondary moves from their usual list are allowed only if they serve the assigned move.`;
       }).join('\n');
       const res = await window.claude.complete({
+        label: 'character reply',
         messages:[{ role:'user', content:
           `A social media thread is active at Merlin's College of Magic.
 
@@ -5159,6 +5219,7 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
               const priorCharLines = speakerHistoryWithPost(cChar.id, 5);
               const playfulThreadRule = !isGMZThread && (isKeresThread || looksLikePlayfulBanterText(`${post.text || ''} ${cc.text || ''} ${playerReply || ''}`)) ? PLAYFUL_PUBLIC_THREAD_RULE : '';
               const res = await window.claude.complete({
+                label: 'character reply',
                 messages:[{ role:'user', content:
                   `Write as ${cChar.name}, and output only the public reply text.
 ${identityPromptFor(cChar)}
@@ -5297,6 +5358,7 @@ ${BANNED_PHRASES_RULE}`
           });
           try {
             const res = await window.claude.complete({
+              label: 'bot comment',
               messages: [{ role:'user', content:
                 `Write as ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university.
 Voice cues: ${bot.bio || bot.type}.
@@ -6116,6 +6178,7 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
       const anchoredMessage = buildDMCharacterAnchor(char) + '\n\n' + outgoingText;
       const stablePreamble = buildStableCharacterPreamble(char, allChars, player);
       const reply = await window.claude.complete({
+        label: 'DM reply',
         messages: [
           {
             role: 'user',
@@ -6541,6 +6604,7 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
       await new Promise(res => setTimeout(res, 2000 + Math.random()*3000));
       try {
         const res = await window.claude.complete({
+          label: 'scene opening',
           messages:[{ role:'user', content: buildScenePrompt('') + '\n\nOpen the scene with 1-2 short lines from the invited character(s). Return ONLY a JSON array of objects like [{"handle":"havocfang","text":"*He leans against the wall.* You picked a dramatic spot."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. Hints at inner state through physical tells only. Short and atmospheric.' }]
         });
         const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
@@ -6606,6 +6670,7 @@ ${BANNED_PHRASES_RULE}`;
         m.role === 'user' ? `${player.name}: ${m.text}` : `${getSceneChar(m.charId)?.name}: ${m.text}`
       ).join('\n');
       const res = await window.claude.complete({
+        label: 'scene reply',
         messages:[{ role:'user', content: buildScenePrompt(history, userMsg.text) + `\n\nRespond to: ${userMsg.text}\nChoose the character or characters who would naturally answer. In a group scene, not everyone needs to speak every turn, but if the player directly names one participant, that participant answers first. More than one may jump in only if the moment invites it.\nReturn ONLY a JSON array of 1-3 objects like [{"handle":"rowancade","text":"..."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. No narration. No inner monologue spelled out.` }]
       });
       const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
@@ -6831,6 +6896,7 @@ function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats =
           .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
           .join('\n');
         const f = await window.claude.complete({
+          label: 'profile feeling',
           messages:[{ role:'user', content:`Write as ${char.name}.
 ${identityPromptFor(char)}
 Voice cues: ${char.personality}. Profile context: ${char.description?.slice(0,200)||''}.
@@ -6881,6 +6947,7 @@ In 1 punchy sentence (under 20 words), describe your current feeling right now s
           .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
           .join('\n');
         const res = await window.claude.complete({
+          label: 'profile analysis',
           messages:[{ role:'user', content:`Analyze ${char.name}'s current emotional state toward ${player.name} based on their personality and recent campus activity.
 ${identityPromptFor(char)}
 ${pronounRule([char, player, ...allChars])}
@@ -7319,7 +7386,7 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
         const groundingLine = groupConversationGroundingLine(outgoingText, member, members, player);
         const memberEffectiveRel = effectivePlayerRelationship(member, eventLog, dms, groupChats).value;
         const privateOrbitRule = isHavocRowanKeresChat ? privateOrbitRelationshipRule(member, player, memberEffectiveRel, 'private group chat') : '';
-        const reply = await window.claude.complete({ messages:[{ role:'user', content:
+        const reply = await window.claude.complete({ label: 'group chat reply', messages:[{ role:'user', content:
           `Write as ${member.name} in a group chat called "${group.name}".
 ${identityPromptFor(member)}
 Voice cues: ${member.personality}. ${member.description?.slice(0,200)}
@@ -7621,6 +7688,7 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
         ? `${player.name} explicitly chooses to do nothing: she does not post, reply, intervene, explain, chase, confess, deny, or make a move. Resolve what happens because she stays silent/absent/passive, and let other people fill the space if that fits. Do not secretly turn this into her taking action.`
         : '';
       const response = await window.claude.complete({
+        label: 'event outcome',
         messages: [{
           role:'user',
           content: `Narrate a social media event like a dramatic story beat.
@@ -8609,7 +8677,7 @@ function App() {
       : '';
 
     try {
-      const raw = await window.claude.complete({ messages:[{ role:'user', content:
+      const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
         `Write as ${char.name} on a campus social app.
 ${identityPromptFor(char)}
 Voice cues: ${char.personality}.
@@ -8752,6 +8820,7 @@ ${BANNED_PHRASES_RULE}` }] });
       const sysPrompt = buildSystemPrompt(triggerChar, player, allChars, feed, dms, eventLog, groupChats);
       const stablePreamble = buildStableCharacterPreamble(triggerChar, allChars, player);
       const msg = await window.claude.complete({
+        label: 'DM reply',
         messages: [
           {
             role: 'user',
@@ -8781,6 +8850,7 @@ ${BANNED_PHRASES_RULE}` }
       const sysPrompt = buildSystemPrompt(triggerChar, player, allChars, feed, dms, eventLog, groupChats);
       const stablePreamble = buildStableCharacterPreamble(triggerChar, allChars, player);
       const msg = await window.claude.complete({
+        label: 'DM reply',
         messages: [
           {
             role: 'user',
@@ -8810,7 +8880,7 @@ ${BANNED_PHRASES_RULE}` }
 
   async function triggerPrivateIntelPublicTake(char, ev) {
     try {
-      const raw = await window.claude.complete({ messages:[{ role:'user', content:
+      const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
         `Write as ${char.name} on a campus social app.
 ${identityPromptFor(char)}
 Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,220)}
@@ -8918,7 +8988,7 @@ ${BANNED_PHRASES_RULE}` }]});
     const privateOrbitRule = isHavocRowanKeresChat ? privateOrbitRelationshipRule(member, player, memberEffectiveRel, 'private group chat pop-in') : '';
 
     try {
-      const reply = await window.claude.complete({ messages:[{ role:'user', content:
+      const reply = await window.claude.complete({ label: 'group chat reply', messages:[{ role:'user', content:
         `Write as ${member.name} in a group chat called "${group.name}".
 ${identityPromptFor(member)}
 Voice cues: ${member.personality}. ${member.description?.slice(0,220)}
@@ -9119,7 +9189,7 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
 ${BANNED_PHRASES_RULE}`;
 
-        const raw = await window.claude.complete({ messages:[{ role:'user', content: prompt }] });
+        const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content: prompt }] });
         if (!active) return;
         const feedAvoidTexts = feed.slice(0,20).map(p => p.text).filter(Boolean);
         let cleanText = cleanSocialPostText(raw, char, player, { feed, avoidTexts: [recentContext, ...feedAvoidTexts] });
@@ -9179,6 +9249,7 @@ ${BANNED_PHRASES_RULE}`;
               if (!active) return;
               try {
                 const replyRaw = await window.claude.complete({
+                  label: 'feed post reply',
                   messages:[{ role:'user', content:
                     `Write as ${replier.name} on a campus social app.
 ${identityPromptFor(replier)}
@@ -9271,7 +9342,7 @@ ${BANNED_PHRASES_RULE}` }]
         const charTeam = teamFor(char);
         const won = charTeam === 'Slytherin' ? slyWon : !slyWon;
         const opponent = charTeam === currentMatch?.home ? currentMatch?.away : currentMatch?.home;
-        const raw = await window.claude.complete({ messages:[{ role:'user', content:
+        const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
           `Write as ${char.name} on a campus social app.
 ${identityPromptFor(char)}
 Voice cues: ${char.personality}.
@@ -9303,7 +9374,7 @@ ${BANNED_PHRASES_RULE}`
 
   async function triggerGmzInspiredTake(char, gmzPost) {
     try {
-      const raw = await window.claude.complete({ messages:[{ role:'user', content:
+      const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
         `Write as ${char.name} on a campus social app.
 ${identityPromptFor(char)}
 Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,220)}
@@ -9344,6 +9415,7 @@ ${BANNED_PHRASES_RULE}` }]});
     const handles = [...chars, player].map(c => `@${c.handle}`).join(', ');
     try {
       const raw = await window.claude.complete({
+        label: 'feed post',
         messages:[{ role:'user', content:
           `Write as GMZ (@gmz), the most chaotic student gossip account at Merlin's College of Magic. You cover campus drama, Quidditch scandals, relationship gossip, and anything controversial. You write in breathless tabloid style.
 
@@ -9507,7 +9579,7 @@ ${BANNED_PHRASES_RULE}` }]
               return `@${sibling?.handle || p.charId}: "${p.text}"`;
             });
           const eventAvoidTexts = [ev.scenario, ...siblingReactions];
-          const raw = await window.claude.complete({ messages:[{ role:'user', content:
+          const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
             `Write as ${char.name} on a campus social app.
 ${identityPromptFor(char)}
 Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,240)}

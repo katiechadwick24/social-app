@@ -3120,14 +3120,14 @@ function fallbackPublicBanterLine(char, player, avoidTexts = []) {
     callum: ['that was almost a comeback. annoying.', 'try making the next one useful.', 'slytherin keeps mistaking noise for leverage.'],
     elara: ['charming. awful, but charming.', 'i hate that i laughed.', 'say less before this becomes flattering.'],
     tamsin: ['unhelpful. unfortunately funny.', 'that answered more than you think it did.', 'i am choosing not to encourage this publicly.'],
-    jude: ['terrible answer. useful answer.', 'that is a full sentence if you are committed enough.', 'beautifully unhelpful. almost proud.'],
+    jude: ['silas made it sound clinical, which means it is probably personal.', 'that is captain for stop proving his point in public.', 'he said sleep like he was not also diagnosing a disaster.'],
     theo: ['clean caption. horrible diplomacy.', 'that is engagement bait with cheekbones.', 'annoying answer. excellent post.'],
     havoc: ['worried i will distract you? rude. accurate, but rude.', 'say less. bad idea moving.', 'if that was a no, try sounding less interesting.'],
     rowan: ['someone deserved that and i respect the mystery.', 'awful answer. excellent timing.', 'i am hearing yes, but funnier.'],
     silas: ['make the joke useful or get off my pitch.', 'that was not strategy. annoyingly, it worked.', 'aim the spectacle or end it.'],
     briar: ['deeply unhelpful. still funny.', 'i hate that this counts as morale.', 'someone put that on a training schedule.'],
-    milo: ['i understood everything and nothing. perfect.', 'this is why i keep refreshing.', 'terrible answer. funny answer.'],
-  }[char?.id] || ['someone deserved that and i respect the mystery.', 'terrible answer. funny answer.', 'that made it worse. thank you.'];
+    milo: ['i understood everything and nothing. perfect.', 'this is why i keep refreshing.', 'that was rude and somehow educational.'],
+  }[char?.id] || ['someone deserved that and i respect the mystery.', 'that was rude and somehow educational.', 'that made the thread worse in a useful way.'];
   const start = Math.floor(Math.random() * pool.length);
   for (let i = 0; i < pool.length; i++) {
     const candidate = pool[(start + i) % pool.length];
@@ -3140,6 +3140,13 @@ function fallbackPublicBanterLine(char, player, avoidTexts = []) {
   }
   trackFallback(char?.id, pool[start]);
   return pool[start];
+}
+
+function looksLikeDeadAirReply(text = '') {
+  const clean = String(text || '').toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, ' ').trim();
+  return /^(?:okay|ok|sure|yeah|right|noted|fair|fine)\.?$/.test(clean)
+    || /^(?:terrible|awful|useful|funny|interesting)\s+answer\.?\s*(?:useful|funny|interesting|awful|terrible)?\s*answer\.?$/.test(clean)
+    || /^(?:that|this)\s+(?:made|makes)\s+it\s+worse\.?\s*(?:thank\s+you)?\.?$/.test(clean);
 }
 
 function fallbackFlatThreadLine(char, player, opts = {}) {
@@ -3363,6 +3370,9 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   }
   if (char && (looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
     return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
+  }
+  if (char && looksLikeDeadAirReply(clean)) {
+    return fallbackPublicBanterLine(char, player, avoidTexts);
   }
   if (char && looksLikeInterrogationSpiral(clean)) {
     return fallbackPublicBanterLine(char, player, avoidTexts);
@@ -4822,8 +4832,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const broadSocialThread = isKeresPost || isGMZThread || (post.likes || 0) > 50000 || postTagsNamedChar || authorHighFollowers || hasRelationshipLanguage || /keres|gmz|rumou?r|photo|practice|quidditch|potions|house feud|screenshot/i.test(postText);
     const isHighStakesThread = isGMZThread || (post.likes || 0) > 100000 || postTagsNamedChar || isKeresPost;
     const targetBase = isPlayerPost ? 3 : (isGMZThread ? 3 : (embarrassmentContext || broadSocialThread ? 2 : 2));
-    const targetCount = Math.min(isPlayerPost ? 5 : 4, Math.max(targetBase, directlyMentioned.length + (broadSocialThread ? 1 : 0) + (Math.random() < 0.45 ? 1 : 0)));
-    const targetCeiling = isHighStakesThread ? 8 : 6;
+    const targetCount = Math.min(isPlayerPost ? 4 : 3, Math.max(targetBase, directlyMentioned.length + (broadSocialThread ? 1 : 0) + (Math.random() < 0.35 ? 1 : 0)));
+    const targetCeiling = isHighStakesThread ? 5 : 4;
     const targetLimit = Math.min(isPlayerPost ? targetCeiling : targetCeiling, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
     let picked = [
       ...directlyMentioned,
@@ -4947,6 +4957,7 @@ Each reply 6-24 words. Give every speaker a distinct social move and sentence sh
           setCharComments(prev => [...prev, charR1[i]]);
         }, 400 + i*(600 + Math.random()*500));
       }
+      if (!cancelled) setLoadingChars(false);
 
       // ─── ROUND 2: bots react as audience ──────────────────────
       // They've now seen the post AND the character drama
@@ -4960,9 +4971,9 @@ Each reply 6-24 words. Give every speaker a distinct social move and sentence sh
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
       const botCount = isKeresPost
-        ? (isHighStakesThread ? 5 + Math.floor(Math.random() * 3) : 4 + Math.floor(Math.random() * 2))
+        ? (isHighStakesThread ? 4 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 2))
         : isGMZThread
-        ? 4 + Math.floor(Math.random() * 3)
+        ? 3 + Math.floor(Math.random() * 2)
         : isHighStakesThread
         ? 3 + Math.floor(Math.random() * 2)
         : broadSocialThread
@@ -5065,8 +5076,6 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           setBotComments(prev => [...prev, bots[i]]);
         }, botStartDelay + i*(2800 + Math.random()*2400));
       }
-      if (!cancelled) setLoadingChars(false);
-
       const originalPosterCanJumpIn = author && author.id !== player.id && author.id !== '__gmz__' && charR1.length > 0;
       if (originalPosterCanJumpIn && (isHighStakesThread || broadSocialThread || Math.random() < 0.72)) {
         const targetReply = [...charR1].sort((a,b) => (b.likes || 0) - (a.likes || 0))[0];
@@ -5492,9 +5501,13 @@ ${player.name} (@${player.handle}) replied directly to your post: "${text}"
 Answer them. Do not ignore this. You own the original post, so respond from your own position instead of asking what the post means. Be reactive, specific, and in character. If they joke, flirt, roast, question, or challenge you, meet that energy. 6-26 words. No hashtags. No quotes.`
           }]
         });
+        let replyText = cleanSocialReplyText(res, targetChar, player, { feed, avoidTexts: [post.text, currentTranscript, priorTargetLines, text], playfulBanter: !!playfulThreadRule, selfSubject: true, contextText: `${post.text || ''} ${text || ''}`, latestUserText: text, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle });
+        if (!replyText || looksLikeDeadAirReply(replyText)) {
+          replyText = fallbackPublicBanterLine(targetChar, player, [post.text, text].filter(Boolean));
+        }
         const reply = {
           charId: targetChar.id,
-          text: cleanSocialReplyText(res, targetChar, player, { feed, avoidTexts: [post.text, currentTranscript, priorTargetLines, text], playfulBanter: !!playfulThreadRule, selfSubject: true, contextText: `${post.text || ''} ${text || ''}`, latestUserText: text, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle }),
+          text: replyText,
           likes: Math.floor(Math.random()*12000) + 1200,
           timestamp: playerEntry.timestamp + 0.2,
           replyTo: player.handle,
@@ -5510,7 +5523,17 @@ Answer them. Do not ignore this. You own the original post, so respond from your
           excludeIds: [targetChar.id],
           replyToHandle: targetChar.handle,
         });
-      } catch(e) {}
+      } catch(e) {
+        const reply = {
+          charId: targetChar.id,
+          text: fallbackPublicBanterLine(targetChar, player, [post.text, text].filter(Boolean)),
+          likes: Math.floor(Math.random()*12000) + 1200,
+          timestamp: playerEntry.timestamp + 0.2,
+          replyTo: player.handle,
+          nestedReply: false,
+        };
+        setCharComments(prev => [...prev, reply]);
+      }
       return;
     }
 
@@ -10418,6 +10441,34 @@ Write ONE standalone public post with ${char.name}'s own take on the gossip. The
     } catch(e) {}
   }
 
+  function buildGMZTipPost(cleanTip) {
+    const raw = String(cleanTip || '').replace(/\s+/g, ' ').trim();
+    const roster = [player, ...chars].filter(Boolean);
+    const named = roster.filter(c => characterMentionedInText(raw, c));
+    const firstNamed = named[0];
+    let body = raw
+      .replace(/^anonymous\s+tip\s*(?:submitted)?\s*(?:through\s+gmz\s+dms?)?[:.\-\s]*/i, '')
+      .replace(/^raw\s+tip[:.\-\s]*/i, '')
+      .replace(/\bI\s+(saw|heard|caught|found|watched|noticed|spotted)\b/gi, 'sources $1')
+      .replace(/\bmy\s+(friend|roommate|teammate|source)\b/gi, 'a $1')
+      .trim();
+    if (firstNamed?.handle && !new RegExp(`@${escapeRegExp(firstNamed.handle)}\\b`, 'i').test(body)) {
+      const first = String(firstNamed.name || '').split(/\s+/)[0];
+      const full = String(firstNamed.name || '').trim();
+      if (full) body = body.replace(new RegExp(`\\b${escapeRegExp(full)}\\b`, 'i'), `@${firstNamed.handle}`);
+      if (first && !new RegExp(`@${escapeRegExp(firstNamed.handle)}\\b`, 'i').test(body)) {
+        body = body.replace(new RegExp(`\\b${escapeRegExp(first)}\\b`, 'i'), `@${firstNamed.handle}`);
+      }
+    }
+    const hasKnownHandle = /@[a-z0-9_]+\b/i.test(body);
+    const hook = /\b(?:saw|heard|caught|found|watched|noticed|spotted|witness|source|common room|dorm|locker|pitch|match|kiss|bite|dm|photo|receipt)\b/i.test(body)
+      ? 'WITNESSES SAY:'
+      : 'ANONYMOUS TIP:';
+    const post = `${hook} ${body}`.replace(/\s+/g, ' ').trim();
+    if (hasKnownHandle || !firstNamed?.handle) return post.slice(0, 280);
+    return `${hook} @${firstNamed.handle} ${body}`.replace(/\s+/g, ' ').trim().slice(0, 280);
+  }
+
   async function triggerGMZPost(context, { anonymousTip = false } = {}) {
     const recentContext = feed.slice(0,8).map(p => {
       const poster = [...chars, player, GMZ_CHAR].find(c => c.id === p.charId);
@@ -10481,6 +10532,22 @@ Write ONE GMZ gossip post. Rules:
   function handleGMZTipSubmit(rawTip) {
     const cleanTip = String(rawTip || '').trim();
     if (!cleanTip) return;
+    const cleanText = cleanSocialPostText(buildGMZTipPost(cleanTip), GMZ_CHAR, player, { feed });
+    const newPost = {
+      id: `gmz-tip-post-${Date.now()}`,
+      charId: '__gmz__',
+      text: cleanText,
+      likes: Math.floor(Math.random()*90000 + 12000),
+      reposts: Math.floor(Math.random()*9000 + 700),
+      comments: Math.floor(Math.random()*240 + 35),
+      timestamp: Date.now(),
+      reply: null,
+      botComments: [],
+      isGMZ: true,
+      anonymousTip: true,
+      sourceTip: cleanTip,
+    };
+    setFeed(f => [newPost, ...f]);
     setEventLog(log => [{
       id: `gmz-tip-${Date.now()}`,
       type: 'dm',
@@ -10488,13 +10555,17 @@ Write ONE GMZ gossip post. Rules:
       text: `Anonymous GMZ tip submitted: ${cleanTip}`,
       timestamp: Date.now(),
     }, ...log]);
-    const tipContext = [
-      'Anonymous tip submitted through GMZ DMs.',
-      `Raw tip: "${cleanTip}"`,
-      `Tipster is anonymous. Do not reveal or imply ${player.name} (@${player.handle}) sent it.`,
-      'Turn this into public gossip using rumor language. Preserve uncertainty if details are not confirmed.'
-    ].join('\n');
-    triggerGMZPost(tipContext, { anonymousTip: true });
+    const likelyPosters = chars.filter(c => {
+      const mentioned = characterMentionedInText(cleanText, c);
+      const hay = `${c.personality || ''} ${c.description || ''}`.toLowerCase();
+      return mentioned || /(provocative|witty|dramatic|sharp|chaotic|competitive|reckless|social|gossip|smug|bold|protective|jealous)/i.test(hay)
+        || ['theo','jude','rowan','milo','havoc','elara','tamsin','briar','vesper'].includes(c.id);
+    });
+    const takeCount = Math.random() < 0.45 ? 1 : 0;
+    for (let i = 0; i < takeCount && likelyPosters.length; i++) {
+      const pick = likelyPosters.splice(Math.floor(Math.random() * likelyPosters.length), 1)[0];
+      setTimeout(() => triggerGmzInspiredTake(pick, newPost), 2600 + i * 1800 + Math.random() * 1600);
+    }
   }
 
   async function handleEventSubmit(eventOverride) {

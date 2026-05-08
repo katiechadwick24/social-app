@@ -60,10 +60,42 @@
     }
   }
 
+  function warnPromptBudget(label, messages, targetTokens) {
+    try {
+      const combined = (messages || []).map(m => `${m.role || 'unknown'}:\n${flattenAiMessageContent(m.content)}`).join('\n\n');
+      const estimated = estimateTokensFromText(combined);
+      if (targetTokens && estimated > targetTokens) {
+        console.warn(`[PROMPT BUDGET WARNING] ${label}: estimated ${estimated} input tokens, target ${targetTokens}`);
+      }
+      return estimated;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  const PROMPT_BUDGET_TARGETS = {
+    'bot comment': 2500,
+    'feed post': 3500,
+    'feed post reply': 4000,
+    'character reply': 4000,
+    'char-vs-char reply': 5000,
+    'DM reply': 5000,
+    'group chat reply': 5000,
+    'scene opening': 8000,
+    'scene reply': 8000,
+    'repair/regeneration': 7000,
+    'fallback rewrite': 4000,
+    'profile feeling': 3000,
+    'profile analysis': 4000,
+    'event outcome': 7000,
+  };
+
   // Wire up window.claude to the local server proxy
   window.claude = {
     complete: async function({ messages, model, label }) {
-      summarizeAiRequest(label || 'unlabeled AI request', messages, model);
+      const requestLabel = label || 'unlabeled AI request';
+      warnPromptBudget(requestLabel, messages, PROMPT_BUDGET_TARGETS[requestLabel] || 7000);
+      summarizeAiRequest(requestLabel, messages, model);
       // /api/claude is a compatibility endpoint. The server now routes it to OpenAI.
       const res = await fetch('/api/claude', {
         method: 'POST',
@@ -418,6 +450,207 @@ function houseRoster(chars = []) {
 
 function pronounRule(chars = []) {
   return `IDENTITY RULE: These facts are locked. Use the exact pronouns, house, team, and player/non-player status below. Do not infer identity from names, vibes, colors, avatars, rivalry, or usernames. Pronouns: ${pronounRoster(chars)}. Houses/teams: ${houseRoster(chars)}. House/team logic works like pronouns: exact and sticky. If someone belongs to a house/team, they can roast it as their own mess, but should use insider language like we/us/our/my team/my house unless clearly joking or quoting. If someone is NOT on a Quidditch team, never imply they play, practice, show up on the pitch, need to prove themselves on the pitch, or have teammates in a Quidditch sense. Direct replies should still use natural first- and second-person language like I, me, my, you, your, and we. In social posts/replies, a speaker must not post about themself in third person: if Callum writes, use "i/my", not "Callum/he/his"; if Havoc writes, use "i/my", not "Havoc/he/his". If a character is mentioned by @handle or name, keep their pronouns and house/team consistent. Never say a house "could never" do something if a member of that house just did it in the visible thread.`;
+}
+
+function truncateText(text, max = 280) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  return clean.slice(0, max - 1).trimEnd() + '…';
+}
+
+function compactSummaryText(char = {}, max = 280) {
+  const raw = String(char.bio || char.description || '').replace(/\s+/g, ' ').trim();
+  const sentence = raw.split(/(?<=[.!?])\s+/)[0] || raw;
+  return truncateText(sentence, max);
+}
+
+function relationshipLine(sourceChar, targetChar) {
+  if (!sourceChar || !targetChar || !sourceChar.relationships) return '';
+  const value = sourceChar.relationships[targetChar.id];
+  if (value === undefined || value === null) return '';
+  return `Relationship to @${targetChar.handle}: ${value}`;
+}
+
+function compactRelationshipLine(char, relationshipTarget = null) {
+  return relationshipLine(char, relationshipTarget);
+}
+
+function compactCharacterCard(char, relationshipTarget = null) {
+  if (!char) return '';
+  const role = [char.team || teamFor(char), char.position].filter(Boolean).join(' ');
+  const pieces = [
+    `${char.name || 'Unknown'} (@${char.handle || 'unknown'})`,
+    `Pronouns: ${char.pronouns || pronounsFor(char) || 'unknown'}`,
+    `House: ${char.house || houseFor(char) || 'unknown'}`,
+    role ? `Role: ${role}` : (isQuidditchPlayer(char) ? 'Role: Quidditch player' : 'Role: not on a Quidditch team'),
+    char.personality ? `Voice: ${truncateText(char.personality, 220)}` : '',
+    relationshipTarget ? relationshipLine(char, relationshipTarget) : '',
+    char.bio || char.description ? `Summary: ${truncateText(char.bio || char.description, 280)}` : '',
+  ].filter(Boolean);
+
+  return pieces.join('\n');
+}
+
+function compactPlayerCard(player) {
+  if (!player) return '';
+  return compactCharacterCard(player);
+}
+
+function compactPostForPrompt(post, chars = [], player = null) {
+  if (!post) return '';
+  const author = post.charId === 'player'
+    ? player
+    : (chars || []).find(c => c.id === post.charId);
+
+  return [
+    `Post by ${author ? `${author.name} (@${author.handle})` : post.charId || 'unknown'}:`,
+    truncateText(post.text || '', 800),
+    post.reply ? `Attached reply by ${post.reply.charId || 'unknown'}: ${truncateText(post.reply.text || '', 500)}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function compactCommentForPrompt(comment, chars = [], player = null) {
+  if (!comment) return '';
+  const id = comment.charId || comment.bot || comment.replyTo || 'unknown';
+  const author = id === 'player'
+    ? player
+    : (chars || []).find(c => c.id === id || c.handle === id);
+
+  const name = author ? `${author.name} (@${author.handle})` : id;
+  return `${name}: ${truncateText(comment.text || '', 500)}`;
+}
+
+function shouldIncludeKeresHavocRowanCanon(mode, participants = []) {
+  const ids = participants.map(p => typeof p === 'string' ? p : p?.id).filter(Boolean);
+  const privateMode = ['dm', 'scene', 'private_scene'].includes(mode);
+  if (!privateMode) return false;
+  const hasKeres = ids.includes('player') || ids.includes('keres');
+  const hasHavocOrRowan = ids.includes('havoc') || ids.includes('rowan');
+  return hasKeres && hasHavocOrRowan;
+}
+
+function buildCoreRules() {
+  return `
+CORE RULES:
+- Output only the requested text or requested JSON. No explanations.
+- No em dashes or en dashes.
+- Keep replies short, punchy, and conversational.
+- Preserve pronouns, house, team, and player/non-player status exactly.
+- Do not invent hard canon, secret history, scores, injuries, relationships, screenshots, deleted posts, or off-screen events.
+- If context is thin, stay broad, teasing, evasive, or ask one grounded question.
+- Characters should sound like messy college-aged students on a campus social app, not polished adults.
+- Avoid generic AI banter, recap-then-verdict replies, and stock endings like "fair", "we'll see", or "prove it".
+`;
+}
+
+function buildCompactAntiAiRules() {
+  return `
+ANTI-AI MINI RULES:
+- Do not make everyone sound like the same clever person.
+- Do not recap the previous message and then label it.
+- No generic verdicts like "beautiful. no notes", "that's tactical", "useful, if accidentally".
+- No invented off-screen history or "remember when" unless supplied.
+- Keep the reply tied to the visible message being answered.
+- Pick one social move: tease, dodge, flirt, correct, protect, escalate, deflect, or make the joke worse.
+`;
+}
+
+function buildPublicReplyRules(options = {}) {
+  const { playful = false, gmz = false } = options || {};
+  return `
+${buildCoreRules()}
+PUBLIC REPLY RULES:
+- Anchor the reply to the exact visible post/comment being answered.
+- Talk directly to the person being answered using "you/your" when appropriate.
+- Only @mention the person directly being addressed. Max one @mention.
+- Public replies can be playful, smug, flirty, petty, annoyed, protective, or unserious.
+- Do not turn joke/flirt threads into interrogations.
+- Rival teams can trash talk, but do not invent match results or attendance.
+${playful ? '- If the exchange is playful/flirty, meet the joke, worsen it, or deflect in character.' : ''}
+${gmz ? '- GMZ/gossip threads may speculate, but keep uncertainty visible with rumor/theory/question language.' : ''}
+${buildCompactAntiAiRules()}
+`;
+}
+
+function buildBotCommentRules() {
+  return `
+${buildCoreRules()}
+BOT COMMENT RULES:
+- Anonymous accounts are campus people with motives, not generic bots.
+- Ground the comment in the visible post/reply.
+- Keep it short, casual, and specific.
+- Mix reaction types: nosy, thirsty, practical complaint, hater read, side-taking, rumor question, bored classmate.
+- Do not invent hard canon.
+- Do not include private relationship canon.
+${buildCompactAntiAiRules()}
+`;
+}
+
+function buildFeedPostRules() {
+  return `
+${buildCoreRules()}
+FEED POST RULES:
+- Write like a casual campus social post, not narration.
+- Specific, current, and a little incomplete is good.
+- Pull from classes, dorms, Quidditch, gossip, practice, food, professors, parties, injuries, rivalry, boredom, or petty drama.
+- Do not over-explain context.
+- Do not invent major scandals, match results, or serious injuries.
+${buildCompactAntiAiRules()}
+`;
+}
+
+function buildDmRules(includePrivateCanon = false) {
+  if (typeof includePrivateCanon === 'object') includePrivateCanon = !!includePrivateCanon.includePrivateCanon;
+  return `
+${buildCoreRules()}
+DM RULES:
+- Treat DM history as live conversation.
+- Respond to the other person's latest message directly.
+- DMs can be private, evasive, teasing, flirty, warm, sharp, or pressing.
+- Do not ask "what are you talking about?" if the topic is already established in the DM.
+- Keep it message-like. No novel paragraphs unless the task asks for depth.
+${includePrivateCanon ? 'PRIVATE CANON: Include only the relevant private relationship canon already supplied by the app.' : 'Do not include unrelated private canon.'}
+${buildCompactAntiAiRules()}
+${includePrivateCanon ? KERES_HAVOC_ROWAN_CANON : ''}
+`;
+}
+
+function buildGroupChatRules() {
+  return `
+${buildCoreRules()}
+GROUP CHAT RULES:
+- Everyone in the group chat is present and can read the message.
+- Do not talk about present members like they are absent.
+- Answer direct questions first, then others can pile on.
+- Keep messages short, overlapping, casual, and character-specific.
+- Group chats can include side comments, teasing, dodging, and bad ideas.
+${buildCompactAntiAiRules()}
+`;
+}
+
+function buildSceneRules(includePrivateCanon = false) {
+  if (typeof includePrivateCanon === 'object') includePrivateCanon = !!includePrivateCanon.includePrivateCanon;
+  return `
+${buildCoreRules()}
+SCENE RULES:
+- Use stronger continuity and character tone than quick public comments.
+- Keep scene momentum alive with specific action, dialogue, and emotional subtext.
+- Do not invent major backstory unless supplied.
+- Preserve relationships, pronouns, house/team, and private/public boundaries.
+- Avoid polished monologues unless the scene explicitly calls for it.
+${buildCompactAntiAiRules()}
+${includePrivateCanon ? KERES_HAVOC_ROWAN_CANON : ''}
+`;
+}
+
+function buildRepairRules() {
+  return `
+REPAIR RULES:
+- Fix the output without changing the requested situation.
+- Prioritize grounding, character voice, continuity, and avoiding banned patterns.
+- Remove generic AI phrases, recap-then-verdict structures, invented lore, and same-voice dialogue.
+- Keep the final output concise.
+`;
 }
 
 function compressImageFile(file, { maxSize = 720, quality = 0.78, square = false } = {}) {
@@ -1198,6 +1431,25 @@ function playerStance(char, player, relationshipOverride) {
       : `TEAM CONTINUITY: ${char.name} is in ${houseName} but is not on a Quidditch team${char.position ? ` (${char.position})` : ''}. They can comment on Quidditch as an observer, friend, sibling, gossip participant, or student, but not as someone personally playing or needing to show up on the pitch. House loyalty can still matter: if an outsider swings at their people, they usually close ranks unless there is a visible reason not to.`
     : '';
   return `KERES CONTINUITY: ${relLine} ${fixed} ${relationshipNuance} ${teamLine} Keres is hot, talented, provocative, and socially disruptive; if the context involves her, a photo, a transfer reveal, or Quidditch attention, attraction, curiosity, showing off, jealousy, or trying-not-to-react can add fun unless this character would genuinely be immune. Keres often wants fun, attention, laughter, and a reaction. Do not assume her angle is always strategy, manipulation, or a hidden threat. If she is clearly joking, flirting, baiting for laughs, or making the timeline more entertaining, let characters meet that energy in their own voice instead of scolding the vibe flat.`;
+}
+
+function compactPlayerStance(char, player, relationshipOverride) {
+  if (!char || !player) return '';
+  const rel = relationshipOverride ?? char.relationships?.player ?? defaultPlayerRelationshipFor(char);
+  const relMode = relationshipBehaviorMode(rel);
+  const lines = {
+    silas: 'Silas is controlled and strategic; rare praise, clipped warmth, public standards first.',
+    callum: 'Callum dislikes Keres; he pushes back, corrects terms, and does not fold into soft agreement.',
+    havoc: 'Havoc is playful, physical, smug, and attracted; in private he is warmer and more direct.',
+    rowan: 'Rowan is sly, socially fluent, and privately warm toward Keres when that context is active.',
+    briar: 'Briar is dry captain exhaustion with practical bite.',
+    jude: 'Jude treats Keres as a Slytherin teammate and unsentimental friend; dry rapport over speeches.',
+    tamsin: 'Tamsin is protective, direct, and especially alert around Rowan/Keres patterns.',
+    milo: 'Milo is flirty, reckless, eager, and reacts too fast.',
+    theo: 'Theo turns tension into funny media angle, but should stay specific.',
+    elara: 'Elara is sharp and direct when Havoc/Keres attention is visible.',
+  };
+  return `KERES RELATIONSHIP SNAPSHOT: @${char.handle} to @${player.handle}: ${rel}/100, ${relMode.label}. ${lines[char.id] || 'Use relationship and visible context.'}`;
 }
 
 function isHouseTeamCallout(text = '', char) {
@@ -3450,6 +3702,67 @@ Use this as continuity only when it is visible to the current speaker and approp
     : 'RECENT APP MEMORY: no saved events yet. Do not pretend there is established history.';
 }
 
+function recentCompactMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = {}, char = null, player = null, allChars = [], channel = 'public', audienceIds = [], limit = 5 } = {}) {
+  const roster = [...(allChars || []), GMZ_CHAR].filter(Boolean);
+  const byId = (id) => roster.find(c => c.id === id) || (id === 'player' ? player : null);
+  const lines = [];
+  const filteredLog = (eventLog || []).filter(entry => entry && canUseMemoryEntry(entry, char, player, { channel, audienceIds }));
+
+  filteredLog
+    .filter(e => e.type === 'scene' || !!e.sceneMemory)
+    .slice(0, 2)
+    .forEach(entry => {
+      const text = entry.sceneMemory || entry.outcome || entry.text || entry.scenario || '';
+      if (text) lines.push(`Scene: ${String(text).replace(/\s+/g, ' ').slice(0, 180)}`);
+    });
+
+  if ((channel === 'dm' || channel === 'private' || channel === 'scene') && char?.id && dms?.[char.id]?.length) {
+    const recentDm = dms[char.id].slice(-3).map(m => `${m.role === 'user' ? player?.name || 'Player' : char.name}: "${String(m.text || '').slice(0, 90)}"`).join(' / ');
+    if (recentDm) lines.push(`DM: ${recentDm}`);
+  }
+
+  if (channel === 'group') {
+    (groupChats || [])
+      .filter(group => groupAudienceMatches(group.members || [], audienceIds, player))
+      .slice(0, 1)
+      .forEach(group => {
+        const recent = (group.messages || []).slice(-4).map(m => {
+          const speaker = m.role === 'user' ? player : byId(m.charId);
+          return `@${speaker?.handle || 'someone'}: "${String(m.text || '').slice(0, 80)}"`;
+        }).join(' / ');
+        if (recent) lines.push(`Group "${group.name}": ${recent}`);
+      });
+  }
+
+  const handles = [char?.handle, player?.handle].filter(Boolean).map(h => String(h).toLowerCase());
+  const publicPosts = collectRecentFeedDialogue(feed, { limit: 6 })
+    .filter(entry => {
+      const text = String(entry.text || '').toLowerCase();
+      return handles.length > 0 && handles.some(handle => text.includes(`@${handle}`));
+    })
+    .slice(0, channel === 'public' ? 3 : 2)
+    .map(entry => {
+      const speaker = entry.kind === 'bot-comment'
+        ? { handle: entry.botId || 'student' }
+        : byId(entry.charId);
+      return speaker?.handle && entry.text ? `@${speaker.handle}: "${String(entry.text).slice(0, 100)}"` : '';
+    })
+    .filter(Boolean);
+  if (publicPosts.length) lines.push(`Visible feed: ${publicPosts.join(' / ')}`);
+
+  filteredLog
+    .filter(e => e.type !== 'scene' && !e.sceneMemory)
+    .slice(0, 2)
+    .forEach(entry => {
+      const text = entry.outcome || entry.text || entry.scenario || '';
+      if (text) lines.push(`Event: ${String(text).replace(/\s+/g, ' ').slice(0, 160)}`);
+    });
+
+  return lines.length
+    ? `COMPACT MEMORY:\n${lines.slice(0, limit).map((line, i) => `${i + 1}. ${line}`).join('\n')}`
+    : 'COMPACT MEMORY: none relevant.';
+}
+
 function relationshipLogicFor(char) {
   const byId = {
     rowan: `ROWAN FAMILY LOGIC:
@@ -4056,8 +4369,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     ? cleanSocialReplyText(post.reply.text, replyChar, player)
     : post.reply?.text;
   const playerRelFor = (c) => effectivePlayerRelationship(c, eventLog, dms, groupChats).value;
-  const stanceFor = (c) => playerStance(c, player, playerRelFor(c));
-  const threadMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, player, allChars });
+  const threadMemory = recentCompactMemoryContext({ feed, eventLog, groupChats, dms, player, allChars, channel:'public', limit: 4 });
+  const compactOriginalPost = compactPostForPrompt(post, allChars, player);
   const threadPhraseGuard = phraseRepetitionGuard(feed, post?.text || '', { dms, groupChats });
   const isGMZThread = post?.charId === '__gmz__' || post?.isGMZ || /@?gmz|breaking:|sources confirm:|exclusive:|witnesses say:/i.test(post?.text || '');
   const isKeresThread = post?.charId === 'player' || post?.charId === player?.id || characterMentionedInText(post?.text || '', player);
@@ -4278,13 +4591,10 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const callumKeresRivalNote = c.id === 'callum' && isKeresPost ? ' KERES RIVALRY: Callum and Keres do not like each other. If he replies, he should be exacting, irritated, petty, or competitive. No friendly compliments, no soft agreement, no cheering her on.' : '';
       const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should usually react with proud displeasure and plausible deniability: a sharp subtweet, dangerous joke, social jab, old-history pressure, or a line that makes it clear she noticed. She does not sound wounded, plead, or beg for attention. If she was not tagged, she is weighing in from the side; she should needle what Havoc or Keres visibly did, not imply they asked her to perform or answer.` : '';
       const tamsinProtectiveNote = c.id === 'tamsin' && tamsinKeresPressure ? ` ${tamsinKeresConcernNote(tamsinPressureText, player)}` : '';
-      const charPhraseGuard = phraseRepetitionGuard(feed, post?.text || '', { charId: c.id, dms, groupChats });
-      return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Behavioral mode: ${relMode.behavioral} ${communicationStyleFor(c, 'public feed reply')} ${stanceFor(c)}${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${keresSparkNote}${callumKeresRivalNote}${elaraExNote}${tamsinProtectiveNote} ${charPhraseGuard} ASSIGNED MOVE FOR THIS REPLY: ${assignedMove}. This is the one social action this character must perform. Secondary moves from their usual list are allowed only if they serve the assigned move.`;
+      return `${i+1}. ${compactCharacterCard(c, isKeresPost ? player : author)}. Relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${keresSparkNote}${callumKeresRivalNote}${elaraExNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
     }).join('\n');
 
-    const intro = isPlayerPost
-      ? `${player.name} (@${player.handle}, the main character everyone watches) posted: "${post.text}"`
-      : `${author?.name} (@${author?.handle}) posted: "${post.text}"`;
+    const intro = `Original visible post:\n${compactOriginalPost}`;
     const roleContext = threadRoleContext(post.text || '', author, [player, ...chars, GMZ_CHAR]);
     const hotTransferContext = /transfer|new girl|new transfer|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(post.text || '');
     const attractionRule = hotTransferContext
@@ -4317,7 +4627,21 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         const res = await window.claude.complete({
           label: 'character reply',
           messages:[{ role:'user', content:
-            `${intro}\n\n${pronounRule([author, player, ...picked])}${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}${vaguePostRule}\n\n${CHARACTER_TONE_RULE}\n${COMMUNICATION_PATTERN_RULE}\n${SOCIAL_ECOSYSTEM_THREAD_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${playfulThreadRule}\n${threadMemory}\n${roleContext}\n${SIDE_PARTICIPANT_CONTEXT_RULE}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text])}\n${dialogueSeparationRule}\n${gmzSpeculationRule}\n\nWrite ${picked.length} replies to this post, one from each of these students at a wizarding university. Each reply MUST sound exactly like that character - match their personality, vocabulary, and how they'd react to THIS poster specifically based on their relationship. Before writing the JSON array, mentally assign each character a different social move and a different sentence shape. No two replies may use the same key verb, same punchline scaffold, same recap-then-verdict structure, or same "X lands/works/hits different when Y" logic.\n\n${intentLine}\n\nCharacters (in order):\n${charRoster}\n\nSENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.\n\nIf a character was directly mentioned by @handle or name, treat it like they were tagged in public, but keep role logic straight: a tag can mean witness, alibi, bait, bystander, or actual subject depending on wording. If their own handle/name is one of the people in the rumor, they are inside the situation: do not write them as an outside promoter saying "both of you", "you two", "those two", or "the two of them". They should use I/me/we/us, answer from their own stake, or address the other named person directly. Characters who were not mentioned may chime in only if they have a real stake. If this is embarrassing, at least one reply should make the embarrassment socially real instead of politely moving on, but that can be funny or playful instead of angry.\n\nLength: 6-24 words each. Lowercase casual texting is fine. They might flirt, test her, make a dry observation, show competitive interest, act impressed against their will, make a stupid joke, speculate if this is a GMZ thread, or escalate if it truly fits. Do not narrate the previous line back at the speaker and close with "fair", "tactical", or "useful". For hot-transfer/photo/reputation threads, at least half the replies should be excited, curious, attracted, impressed, skeptical, annoyed, or playful. Do not turn the whole room into bullies or worshippers. NO hashtags. NO quotes around replies.\n${THREAD_MENTION_RULE}\n${THREAD_DIRECT_ADDRESS_RULE}\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${picked.length} strings (one per character, in order). No other text.`
+            `${intro}
+
+${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
+${threadMemory}
+${roleContext}
+${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}${vaguePostRule}
+${dialogueSeparationRule}
+
+Task: Write ${picked.length} public replies, one from each listed student, in order.
+${intentLine}
+
+Characters:
+${charRoster}
+
+Each reply 6-24 words. Give every speaker a distinct social move and sentence shape. If directly mentioned, answer from inside that role. Return ONLY a JSON array of ${picked.length} strings.`
           }]
         });
         const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
@@ -4349,10 +4673,10 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       // ─── ROUND 2: bots react as audience ──────────────────────
       // They've now seen the post AND the character drama
       const transcript = [
-        `${author?.name || player.name} (@${author?.handle || player.handle}): "${post.text}"`,
+        compactOriginalPost,
         ...charR1.map(cc => {
           const c = allChars.find(x => x.id === cc.charId);
-          return `${c?.name} (@${c?.handle}): "${cc.text}"`;
+          return `${c?.name} (@${c?.handle}): "${truncateText(cc.text, 500)}"`;
         })
       ].join('\n');
 
@@ -4424,43 +4748,21 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 
 ${transcript}
 
-	${pronounRule([author, player, ...chars])}
-	${SOCIAL_ECOSYSTEM_THREAD_RULE}
-	${PUBLIC_THREAD_GROUNDING_RULE}
-	${TEAM_RIVALRY_CANON_RULE}
-	${PRACTICE_TRASH_TALK_RULE}
-	${BOT_REALITY_RULE}
-${playfulThreadRule}
-${gmzSpeculationRule}
+${buildBotCommentRules()}
+Relevant people: ${[author, player, ...picked].filter(Boolean).map(c => compactCharacterCard(c)).join('\n')}
+${gmzSpeculationRule ? 'This is a gossip thread: speculate as rumor/theory/question, not confirmed canon.' : ''}
 ${isKeresPost ? `KERES AUDIENCE MODE:
 - This is Keres's thread. Audience accounts should mostly simp, thirst, hype her up, act impressed, cheer the mess, or be playfully overwhelmed.
 - Do not make the anonymous accounts scold, moralize, call her a problem, or criticize her for other people's reactions.
 - Skepticism is allowed only as playful "i fear she ate" / "this is dangerous for my attention span" energy, not mean pile-on.
 - Medium swarm only: each comment should feel like a distinct little campus reaction, not a wall of criticism.` : ''}
 
-Write replies from random anonymous student accounts joining the comment thread. They are part of the conversation, not a recap channel. They:
-- pick teams sometimes ("team @whoever", "@xxx ate this")
-- quote or repeat a line only occasionally
-- use casual slang lightly: lmfao, oop, bestie, the way, screaming
-- react with a mix of thirst, jokes, skeptical gossip, and taking sides
-- often reply directly to someone with @handle, ask a playful question, flirt, heckle, correct, speculate, or make a joke at someone in the thread
-- in hot threads, many comments should be replies to specific character comments, not just reactions to the original post. Aim at the person who said the most provocative, funny, thirsty, strategic, or suspicious thing.
-- when the thread is about a hot/talented new transfer, most audience comments should be excited, impressed, thirsty, curious, or playfully chaotic, not bullying
-- interject with original opinions, questions, fan behavior, tactical reads, rumors, side-eye, admiration, or warnings
-- on GMZ threads, at least one account should speculate, question the alibi, infer a motive, float a messy theory with uncertainty, or post their own take. Do not complain that GMZ is vague or demand more details.
-- fangirl/fanboy naturally when someone is hot, impressive, or messy
-- MANDATORY: at least 1–2 accounts in this batch must directly @mention a specific named character from the thread (not just the original poster). Pick the character who earned it — whoever got roasted, said something wild, got exposed, or is being thirsted over. This is what creates pile-on energy. Do not float as a general reaction.
-- keep it readable and not maximum-volume chaos. This is a small slice of the campus, with different motives and levels of investment.
-- do not call people "she", "girl", "mother", "queen", etc. unless the pronoun roster supports it and that exact account would say it
-- most accounts should use @handles or names instead of gendered labels
-- do NOT narrate the thread as media criticism. Avoid "discourse", "reality tv", "production value", "documentary", "screenplay", "narrative", or "the way this thread..." style recaps.
-- do not introduce themselves, explain their account type, summarize these rules, or say they are ready
+Write replies from random anonymous student accounts joining the comment thread. They may @mention specific visible characters who earned it, take sides, thirst, ask a rumor question, heckle, flirt, or complain. Do not float as a recap channel.
 
 Accounts (in order):
 ${botRoster}
 
-Each comment 5-22 words. Match each account's voice — ${botsPicked.map(b => `@${b.handle} = ${b.vibe}`).join('; ')}. Mostly lowercase/casual. Avoid excessive ALL CAPS, emoji spam, repeated quote-replies, meltdown language, spectator summaries, and everyone sounding like the same stan account. NO hashtags.
-${BANNED_PHRASES_RULE}
+Each comment 5-22 words. Match each account's voice. Mostly lowercase/casual. NO hashtags.
 Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           }]
         });
@@ -4521,33 +4823,20 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
             messages:[{ role:'user', content:
               `On a college social media thread, ${fight.target.name} (@${fight.target.handle}) just replied: "${fight.targetReply.text}"
 
-Original post by ${author?.name || player.name}: "${post.text}"
+Original visible post:
+${compactOriginalPost}
 
-${pronounRule([author, player, fight.replier, fight.target])}
-${CHARACTER_TONE_RULE}
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${communicationStyleFor(fight.replier, 'public character-to-character reply')}
-${playfulThreadRule}
-${stanceFor(fight.replier)}
-${stanceFor(fight.target)}
+${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
+Speaker: ${compactCharacterCard(fight.replier, fight.target)}
+Target: ${compactCharacterCard(fight.target, fight.replier)}
 ${roleContext}
-${SIDE_PARTICIPANT_CONTEXT_RULE}
-${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, ...charR1.map(cc => cc.text), fight.targetReply.text])}
 ${priorReplyVariationRule(fight.replier.id, charR1)}
-${gmzSpeculationRule}
 
 Write as ${fight.replier.name}, and output only the public reply text.
-${identityPromptFor(fight.replier)}
-Other person facts: ${identityFactsFor(fight.target)}.
 Your relationship with @${fight.target.handle} is ${fight.warmExchange ? `close and easy (${fight.rel}/100). You see what they said and want to jump in — warmly, playfully, or with the easy familiarity of someone who knows them well` : `charged (${fight.rel}/100). You see what they just said and you can't help yourself`}. You reply to THEM, not to the original post. Voice cues: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
-Write ONE reply (8-26 words). ${fight.warmExchange ? 'It should feel natural between two people who actually like each other — back them up, add a side comment, tease them affectionately, or riff on what they said. No conflict, no edge unless the edge is clearly playful.' : 'It can be a tease, joke, flirt, smug correction, playful shove, dry observation, rumor theory, alibi math, or actual clapback only if the character would truly go there.'} It should clearly answer @${fight.target.handle}. Keep the thread roles straight if the exchange mentions rumors, alibis, witnesses, or tagged handles. On GMZ threads, speculation is welcome if marked as rumor/theory/question. Lowercase casual is fine. NO hashtags. NO quotes around the reply.
-${THREAD_MENTION_RULE}
-${THREAD_DIRECT_ADDRESS_RULE}
-${BANNED_PHRASES_RULE}
+Write ONE reply (8-26 words). ${fight.warmExchange ? 'Warm, playful, or familiar.' : 'Tease, joke, flirt, correct, speculate, or clap back only if fitting.'} It should clearly answer @${fight.target.handle}. NO hashtags. NO quotes.
 Return ONLY the reply text. No other text.`
             }],
             model: 'fast'
@@ -4567,7 +4856,7 @@ Return ONLY the reply text. No other text.`
           }, botStartDelay + bots.length*600 + 1200);
 
           // ─── ROUND 4: bots react to the clapback ────────────
-          const clapTranscript = `${author?.name || player.name}: "${post.text}"\n${fight.target.name}: "${fight.targetReply.text}"\n${fight.replier.name}: "${clapback.text}"`;
+          const clapTranscript = `${compactOriginalPost}\n${fight.target.name}: "${truncateText(fight.targetReply.text, 500)}"\n${fight.replier.name}: "${truncateText(clapback.text, 500)}"`;
           const reactBots = Math.random() < 0.55 ? [...pool].sort(() => Math.random()-0.5).slice(0, 1) : [];
 	          const reactRoster = reactBots.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}. ${botGroundingRule(b)}`).join('\n');
           try {
@@ -4576,7 +4865,7 @@ Return ONLY the reply text. No other text.`
             const res2 = await window.claude.complete({
               label: 'bot comment',
               messages:[{ role:'user', content:
-	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${pronounRule([author, player, fight.replier, fight.target, ...chars])}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${BOT_REALITY_RULE}\n${playfulThreadRule}\n${roleContext}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}\n${gmzSpeculationRule}\n\nWrite ${reactBots.length} replies from anonymous accounts joining the comment thread after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, ask a messy-but-playful question, pick a side, flirt, heckle, speculate, guess what might be missing from the story, or make the argument worse. They should sound like participants, not spectators writing a recap. Keep rumor/alibi/mentioned-handle roles straight.\n\nAccounts (in order):\n${reactRoster}\n\nEach 5-20 words. Match each voice. Use @handles/names instead of gendered labels unless pronouns support it. Avoid excessive ALL CAPS, emoji spam, everyone saying mother/girl, repeated quote-replies, "deceased/screaming" pileups, and meta words like discourse/reality tv/production value/documentary/screenplay/narrative. NO hashtags.\n${BANNED_PHRASES_RULE}\nReturn ONLY a JSON array of ${reactBots.length} strings.` }],
+	                `Thread moved. Latest exchange:\n${clapTranscript}\n\n${buildBotCommentRules()}\n\nWrite ${reactBots.length} replies from anonymous accounts after @${fight.replier.handle} answered @${fight.target.handle}. They can @someone directly, pick a side, flirt, heckle, speculate, or make the argument worse.\n\nAccounts:\n${reactRoster}\n\nEach 5-20 words. Use @handles/names instead of gendered labels unless pronouns support it. NO hashtags. Return ONLY a JSON array of ${reactBots.length} strings.` }],
               model: 'fast'
             });
             if (cancelled) return;
@@ -4609,7 +4898,18 @@ Return ONLY the reply text. No other text.`
                   const resBot = await window.claude.complete({
                     label: 'character reply',
                     messages:[{ role:'user', content:
-                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said: "${botTarget.text}"\n\n${pronounRule([responder, player, author, ...chars])}\n${CHARACTER_TONE_RULE}\n${PUBLIC_THREAD_GROUNDING_RULE}\n${TEAM_RIVALRY_CANON_RULE}\n${PRACTICE_TRASH_TALK_RULE}\n${communicationStyleFor(responder, 'public reply to anonymous account')}\n${stanceFor(responder)}\n${identityPromptFor(responder)}\n${threadPhraseGuard}\n${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}\n${gmzSpeculationRule}\n\nWrite as ${responder.name}. If you would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. It can be amused, annoyed, flirty, dismissive, speculative, or clarifying. No hashtags, no quotes.\n${BANNED_PHRASES_RULE}\nReturn ONLY SILENCE or the reply text.` }],
+                      `On a college social app, anonymous account @${bot?.handle || 'someone'} said:
+${compactCommentForPrompt({ bot: bot?.id || botTarget.bot, text: botTarget.text }, allChars, player)}
+
+${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
+Speaker: ${compactCharacterCard(responder, player)}
+Original visible post:
+${compactOriginalPost}
+Recent exchange: ${truncateText(clapback.text, 500)}
+${threadPatternVarietyGuard([post.text, clapback.text, botTarget.text])}
+
+Write as ${responder.name}. If they would ignore this, return exactly SILENCE. Otherwise reply directly to the bot in 5-18 words. No hashtags, no quotes.
+Return ONLY SILENCE or the reply text.` }],
                     model: 'fast'
                   });
                   const botReply = cleanSocialReplyText(resBot, responder, player, { feed, avoidTexts: [post.text, clapback.text, botTarget.text], playfulBanter: !!playfulThreadRule, selfSubject: responder.id === authorId || characterMentionedInText(`${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, responder), contextText: `${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
@@ -4639,34 +4939,23 @@ Return ONLY the reply text. No other text.`
                   messages:[{ role:'user', content:
                     `A social media thread is getting attention.
 
-Original post by ${author?.name || player.name}: "${post.text}"
-${fight.target.name} (@${fight.target.handle}) said: "${fight.targetReply.text}"
-${fight.replier.name} (@${fight.replier.handle}) fired back: "${clapback.text}"
+Original visible post:
+${compactOriginalPost}
+${fight.target.name} (@${fight.target.handle}) said: "${truncateText(fight.targetReply.text, 500)}"
+${fight.replier.name} (@${fight.replier.handle}) fired back: "${truncateText(clapback.text, 500)}"
 
-${pronounRule([author, player, fight.target, fight.replier])}
-${CHARACTER_TONE_RULE}
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${communicationStyleFor(fight.target, 'public counter-reply')}
-${playfulThreadRule}
-${stanceFor(fight.target)}
-${stanceFor(fight.replier)}
+${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
+Speaker: ${compactCharacterCard(fight.target, fight.replier)}
+Target: ${compactCharacterCard(fight.replier, fight.target)}
 ${roleContext}
-${SIDE_PARTICIPANT_CONTEXT_RULE}
-${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}
 ${priorReplyVariationRule(fight.target.id, charR1)}
-${gmzSpeculationRule}
 
 Write as ${fight.target.name}, and output only the reply text.
-${identityPromptFor(fight.target)}
-Other speaker facts: ${identityFactsFor(fight.replier)}.
 Voice cues: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is charged (${fight.rel}/100).
 
 Decide if you would answer or leave it on read. If silence is more in-character, return exactly: SILENCE
 Otherwise write ONE counter-reply (8-24 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, speculative, or sharp. Only twist the knife if that truly fits. Keep rumor/alibi/mentioned-handle roles straight. On GMZ threads, theories and alibi reads are normal as long as uncertainty stays visible. No hashtags. No quotes around the reply.
-${BANNED_PHRASES_RULE}
 Return ONLY SILENCE or the reply text.`
                   }],
                   model: 'fast'
@@ -4740,7 +5029,7 @@ Return ONLY SILENCE or the reply text.`
     return items;
   }, [charComments, botComments]);
 
-  function chronologicalTranscript(limit = 12) {
+  function chronologicalTranscript(limit = 6) {
     return mergedReplies.slice(-limit).map((item, idx) => {
       if (item.kind === 'char') {
         const speaker = allChars.find(c => c.id === item.data.charId);
@@ -4806,17 +5095,14 @@ Return ONLY SILENCE or the reply text.`
           label: 'bot comment',
           messages: [{ role:'user', content:
             `Write as ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university. Voice cues: ${bot.bio || bot.type}.
-Original post: "${post.text}"
-Your comment: "${target.sourceText || ''}"
+Original visible post:
+${compactOriginalPost}
+Your visible comment:
+${compactCommentForPrompt({ ...target, text: target.sourceText || '', bot: bot.id }, allChars, player)}
 ${player.name} just replied to your comment: "${text}"
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${BOT_REALITY_RULE}
+${buildBotCommentRules()}
 ${botGroundingRule(bot)}
 Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining.
-${pronounRule([player, ...chars])}
-${BANNED_PHRASES_RULE}
 Return ONLY the reply text. Do not explain the task.`
           }]
         });
@@ -4855,7 +5141,7 @@ Return ONLY the reply text. Do not explain the task.`
 
     if (target.kind === 'char' && target.targetChar) {
       const targetChar = target.targetChar;
-      const currentTranscript = chronologicalTranscript(12);
+      const currentTranscript = chronologicalTranscript(6);
       const priorTargetLines = speakerHistoryWithPost(targetChar.id, 5);
       const playfulThreadRule = !isGMZThread && (isKeresThread || targetChar?.id === player?.id || looksLikePlayfulBanterText(`${post.text || ''} ${target.sourceText || ''} ${text || ''}`)) ? PLAYFUL_PUBLIC_THREAD_RULE : '';
       try {
@@ -4863,32 +5149,28 @@ Return ONLY the reply text. Do not explain the task.`
           label: 'character reply',
           messages:[{ role:'user', content:
             `Write as ${targetChar.name}, and output only the public reply text.
-${identityPromptFor(targetChar)}
-Voice cues: ${targetChar.personality}.
-${pronounRule([targetChar, player, char])}
-${CHARACTER_TONE_RULE}
-${SOCIAL_ECOSYSTEM_THREAD_RULE}
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${communicationStyleFor(targetChar, 'public reply to player')}
+Speaker: ${compactCharacterCard(targetChar, player)}
+Player: ${compactPlayerCard(player)}
+Original poster: ${compactCharacterCard(char)}
+${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
 ${playfulThreadRule}
-${stanceFor(targetChar)}
+${compactPlayerStance(targetChar, player)}
 ${characterKnowledgeStateNote(targetChar.id)}
 ${threadRoleContext(post.text || '', char, [player, ...chars, GMZ_CHAR])}
-${gmzSpeculationRule}
 ${threadPatternVarietyGuard([post.text, currentTranscript, priorTargetLines, target.sourceText, text])}
 
-Original post by @${char?.handle}: "${post.text}"
+Original visible post:
+${compactOriginalPost}
 Recent visible thread:
 ${currentTranscript || '(no earlier replies shown)'}
 ${priorTargetLines ? `\nYour previous public lines in this thread:\n${priorTargetLines}` : ''}
 
-Your comment: "${target.sourceText || ''}"
+Your visible comment:
+${compactCommentForPrompt({ charId: targetChar.id, text: target.sourceText || '' }, allChars, player)}
 ${player.name} (@${player.handle}) replied to you: "${text}"
 
 Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, giving a short deflection, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, guess what might be missing from the story, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a playful pointed question, speculate, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
-${BANNED_PHRASES_RULE}`
+`
           }]
         });
         const reply = {
@@ -4926,7 +5208,7 @@ ${BANNED_PHRASES_RULE}`
     const mentionedHandles = new Set(
       Array.from((playerText || '').matchAll(/@([a-z0-9_]+)/gi)).map(m => m[1].toLowerCase())
     );
-    const transcript = chronologicalTranscript(12);
+    const transcript = chronologicalTranscript(6);
     const excluded = new Set(excludeIds);
     const candidatePool = chars.filter(c => c.id !== player.id && !excluded.has(c.id));
     const mentionedByName = mentionedCharactersInText(playerText || '', candidatePool);
@@ -5044,42 +5326,31 @@ ${BANNED_PHRASES_RULE}`
         const tamsinProtectiveNote = c.id === 'tamsin' && tamsinFollowupPressure ? ` ${tamsinKeresConcernNote(tamsinFollowupText, player)}` : '';
         const callumKeresRivalNote = c.id === 'callum' && isKeresThread ? ' KERES RIVALRY: Callum and Keres do not like each other. If he answers, keep it exacting, irritated, petty, or competitive; no friendly support and no soft concession.' : '';
         const keresSparkNote = isKeresThread && ['havoc','rowan'].includes(c.id) ? ` KERES THREAD SPARK: Keres is active in this exchange. ${c.name} should often add appetite, mischief, flirtation, a dare, a sly read, or a sharp joke instead of a bland acknowledgment.` : '';
-        const charPhraseGuard = phraseRepetitionGuard(feed, `${post?.text || ''}\n${sourceText || ''}\n${playerText || ''}`, { charId: c.id, dms, groupChats });
-        return `${i+1}. ${identityFactsFor(c)}. ${c.personality}. relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Behavioral mode: ${relMode.behavioral} ${communicationStyleFor(c, 'public thread follow-up')} ${stanceFor(c)}${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${knowledgeNote}${callumKeresRivalNote}${keresSparkNote}${tamsinProtectiveNote} ${charPhraseGuard} ASSIGNED MOVE FOR THIS REPLY: ${assignedMove}. This is the one social action this character must perform. Secondary moves from their usual list are allowed only if they serve the assigned move.`;
+        return `${i+1}. ${compactCharacterCard(c, player)}. Relationship to @${player.handle}: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${knowledgeNote}${callumKeresRivalNote}${keresSparkNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
       }).join('\n');
       const res = await window.claude.complete({
         label: 'character reply',
         messages:[{ role:'user', content:
           `A social media thread is active at Merlin's College of Magic.
 
-Original post by @${char?.handle}: "${post.text}"
-${sourceText && sourceText !== post.text ? `Relevant comment being answered: "${sourceText}"` : ''}
+Original visible post:
+${compactOriginalPost}
+${sourceText && sourceText !== post.text ? `Relevant visible comment being answered:\n${compactCommentForPrompt({ charId: sourceAuthorId, text: sourceText }, allChars, player)}` : ''}
 Recent thread:
 ${transcript || '(no earlier replies shown)'}
 
 ${player.name} (@${player.handle}) just commented: "${playerText}"
 
-${pronounRule([player, char, ...responders])}
-${CHARACTER_TONE_RULE}
-${COMMUNICATION_PATTERN_RULE}
-${SOCIAL_ECOSYSTEM_THREAD_RULE}
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${playfulThreadRule}
+${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
 ${allyFollowupRule}
 ${keresFollowupBiteRule}
 ${tamsinFollowupPressure ? tamsinKeresConcernNote(tamsinFollowupText, player) : ''}
 ${threadMemory}
 ${threadRoleContext(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, char, [player, ...chars, GMZ_CHAR])}
-${SIDE_PARTICIPANT_CONTEXT_RULE}
-${threadPhraseGuard}
 ${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText])}
 ${dialogueSeparationRule}
-${gmzSpeculationRule}
 
-Write ${responders.length} follow-up replies, one from each character below. The MC has entered the thread, so this should feel like live back-and-forth, not a final one-off answer. Characters must respond to what was ACTUALLY just said. Do not reverse the logic, invent judgment, or make a character defend someone the MC just complimented. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If ${player.name} backs someone's house/team, someone from that house/team should usually jump back in before a random rival. If an outsider swings at someone's teammate, the teammate usually takes their side first, even if they also call them an idiot. Treat this as a public thread with multiple visible comments. Do not aim every response at @${player.handle}; if the better take is about the original post, a bot, another character, or the whole exchange, aim it there. Characters may answer ${player.name}, answer each other, tease, flirt, ask a messy-but-playful question, speculate, defend someone, make a joke, or escalate if it truly fits. Third-party responders are weighing in on the thread, not receiving a private message from ${player.name}; they should not write as if she was talking to them unless she tagged them. If a third-party responder tags someone, the tag should point to the comment or speaker they are weighing in on, usually @${defaultReplyHandle}. If ${player.name} is obviously playing for fun, attention, laughter, flirtation, deflection, or a public reaction, most responses should meet her energy in each character's own humor instead of demanding her hidden angle. If the MC roasts someone, do not have that person sidestep into "not me, that's Callum/Theo" or "you're proving someone right" unless there is a real mistaken-identity setup; take the joke and throw one back. On GMZ threads, speculation, alibi theories, source guesses, and messy "what might be missing" theories are expected as long as uncertainty stays visible.
-Chronology rule: preserve the visible order of the thread. Do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows another character did it first. If ${player.name} is correcting the timeline, respond to that correction directly instead of repeating the wrong read unless the character is intentionally baiting. Stance rule: if a character has already taken a side in this thread, keep that side unless the text clearly gives them a reason to change and they acknowledge the change.
+Write ${responders.length} follow-up replies, one from each character below. This is live public back-and-forth. Respond to what was just said, preserve chronology, and keep original poster/tag/alibi/rumor roles straight. Do not aim every response at @${player.handle}; third parties should weigh in from visible stake and tag @${defaultReplyHandle} or the actual comment target when needed. If the player is joking/flirting/deflecting, meet that energy in character.
 
 ${followupIntentLine}
 ${saturatedLine}
@@ -5087,12 +5358,7 @@ ${saturatedLine}
 Characters in order:
 ${roster}
 
-SENTENCE SHAPE MANDATE: No two replies in this batch may open with the same word, end with the same punctuation pattern, or share the same sentence structure (question / imperative / declarative fragment / tagged address). Distribute shapes across the batch.
-
-Each reply 6-24 words. Use @handles when responding directly. Keep it conversational and varied. Do not make everyone angry. Do not recap the previous move and close with "fair", "tactical", "useful", or "could be entertaining"; answer with a fresh character action. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". No hashtags. No quotes around replies.
-${THREAD_MENTION_RULE}
-${THREAD_DIRECT_ADDRESS_RULE}
-${BANNED_PHRASES_RULE}
+Each reply 6-24 words. Vary shapes. Use @handles when responding directly. No hashtags. No quotes around replies.
 Return ONLY a JSON array of ${responders.length} strings, in order.`
         }]
       });
@@ -5222,37 +5488,32 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
                 label: 'character reply',
                 messages:[{ role:'user', content:
                   `Write as ${cChar.name}, and output only the public reply text.
-${identityPromptFor(cChar)}
-Voice cues: ${cChar.personality}.
-${pronounRule([cChar, player, char])}
-${CHARACTER_TONE_RULE}
-${SOCIAL_ECOSYSTEM_THREAD_RULE}
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${communicationStyleFor(cChar, 'public reply to player')}
-${playfulThreadRule}
-${stanceFor(cChar)}
+Speaker: ${compactCharacterCard(cChar, player)}
+Player: ${compactPlayerCard(player)}
+Original poster: ${compactCharacterCard(char)}
+${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
+${compactPlayerStance(cChar, player)}
 ${characterKnowledgeStateNote(cChar.id)}
 ${threadRoleContext(post.text || '', char, [player, ...chars, GMZ_CHAR])}
-${gmzSpeculationRule}
-${threadPatternVarietyGuard([post.text, chronologicalTranscript(12), priorCharLines, cc.text, playerReply])}
+${threadPatternVarietyGuard([post.text, chronologicalTranscript(6), priorCharLines, cc.text, playerReply])}
 
-Original post by @${char?.handle}: "${post.text}"
+Original visible post:
+${compactOriginalPost}
 Recent visible thread:
-${chronologicalTranscript(12) || '(no earlier replies shown)'}
+${chronologicalTranscript(6) || '(no earlier replies shown)'}
 ${priorCharLines ? `\nYour previous public lines in this thread:\n${priorCharLines}` : ''}
 
-Your comment: "${cc.text}"
+Your visible comment:
+${compactCommentForPrompt({ charId: cChar.id, text: cc.text }, allChars, player)}
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
 Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, deflecting, laughing, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, guess what might be missing from the story, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, speculate, or be awkward instead of angry. 6-24 words. No quotes.
-${BANNED_PHRASES_RULE}`
+`
                 }]
               });
               const reply = {
                 charId: cChar.id,
-                text: cleanSocialReplyText(res, cChar, player, { feed, avoidTexts: [post.text, chronologicalTranscript(12), priorCharLines, cc.text, playerReply], playfulBanter: !!playfulThreadRule, selfSubject: cChar.id === post.charId || characterMentionedInText(`${post.text || ''} ${cc.text || ''} ${playerReply || ''}`, cChar), contextText: `${post.text || ''} ${cc.text || ''} ${playerReply || ''}`, latestUserText: playerReply, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle }),
+                text: cleanSocialReplyText(res, cChar, player, { feed, avoidTexts: [post.text, chronologicalTranscript(6), priorCharLines, cc.text, playerReply], playfulBanter: !!playfulThreadRule, selfSubject: cChar.id === post.charId || characterMentionedInText(`${post.text || ''} ${cc.text || ''} ${playerReply || ''}`, cChar), contextText: `${post.text || ''} ${cc.text || ''} ${playerReply || ''}`, latestUserText: playerReply, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle }),
                 likes: Math.floor(Math.random()*9000),
                 timestamp: replyBaseTs + 0.2,
                 replyTo: player.handle,
@@ -5362,17 +5623,14 @@ ${BANNED_PHRASES_RULE}`
               messages: [{ role:'user', content:
                 `Write as ${bot.name} (@${bot.handle}), a ${bot.type} social media account at a wizarding university.
 Voice cues: ${bot.bio || bot.type}.
-Original post: "${post.text}"
-Your comment: "${bc.text}"
+Original visible post:
+${compactOriginalPost}
+Your visible comment:
+${compactCommentForPrompt({ ...bc, text: bc.text }, allChars, player)}
 ${player.name} just replied to your comment: "${playerReply}"
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${BOT_REALITY_RULE}
+${buildBotCommentRules()}
 ${botGroundingRule(bot)}
-${pronounRule([player, ...(chars || [])])}
 Write a short, punchy reply (1-2 sentences max) in your voice. Stay in character. Be reactive and entertaining. Do not introduce yourself, list rules, or mention prompts.
-${BANNED_PHRASES_RULE}
 Return ONLY the reply text.`
               }]
             });
@@ -5960,45 +6218,24 @@ function MessagesScreen({ chars, player, dms, onOpenChat, dmNotifs = {}, setDmNo
 // the cache. Variable content (feed, memory, current relationships, scene
 // state) stays in buildSystemPrompt and is NOT cached.
 function buildStableCharacterPreamble(char, allChars, player) {
-  return `You are ${char.name} (@${char.handle}), a real person on a social media app at a wizarding university. Stay completely in character at all times.
+  const includePrivateCanon = shouldIncludeKeresHavocRowanCanon('dm', [player, char]);
+  return `You are writing a private DM as this character.
 
-CHARACTER IDENTITY:
-${identityPromptFor(char)}
-Pronouns: ${pronounsFor(char)}
-Voice cues: ${char.personality}
-Profile bio: ${char.bio}
-Full character description: ${char.description || ''}
-
-${pronounRule(allChars)}
-
-${CHARACTER_TONE_RULE}
-
-${COMMUNICATION_PATTERN_RULE}
-
-${communicationStyleFor(char, 'private DM')}
-
+SPEAKER: ${compactCharacterCard(char, player)}
+PLAYER: ${compactPlayerCard(player)}
+VOICE LANE: ${dialogueContractSummaryFor(char)}
 ${relationshipLogicFor(char)}
+${buildDmRules(includePrivateCanon)}
 
-${BANNED_PHRASES_RULE}
-
-PERMANENT RULES (these never change):
-- Stay completely in character. Never break the fourth wall or mention being an AI.
-- Output ONLY the message you would send. Do not say "I'm ready", "Understood", "I know the rules", or describe the task.
-- Do not introduce yourself, list your traits, summarize continuity rules, or explain your relationship score.
-- Use the pronouns listed above exactly. Do not misgender anyone, including in gossip or third-person comments.
-- Treat house/team/player status like fixed identity. If you are talking about your own house or Quidditch team, use we/us/our. If you are not on a Quidditch team, do not speak as if you play.
-- Be brief: 1-3 sentences max unless pushed.
-- Reference the feed naturally if it's relevant — bring up posts, gossip, what others did.
-- Treat recent feed posts as visible evidence and rumor, not omniscient truth.
-- Your personality drives EVERYTHING: tone, vocabulary, what you care about, what you ignore.
-- React to ${player.name}'s messages the way YOUR character would — not generically.
-
-The conversation that follows is a private DM with ${player.name} (@${player.handle}). Subsequent messages in this prompt will provide variable context (recent feed, current relationships, scene memory) followed by the actual conversation history.`;
+The conversation that follows provides relevant recent context, then the DM history. Stay in character and output only the message.`;
 }
 
 function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], groupChats = [], latestUserText = '', dmIntent = '', dmSituation = '') {
-  // Recent feed posts — trimmed to 6 to reduce noise
-  const recentPosts = [...feed].slice(0, 6).map(p => {
+  const involvedHandles = [char?.handle, player?.handle].filter(Boolean).map(h => String(h).toLowerCase());
+  const recentPosts = [...feed].filter(p => {
+    const text = `${p.text || ''} ${p.reply?.text || ''}`.toLowerCase();
+    return involvedHandles.some(handle => text.includes(`@${handle}`));
+  }).slice(0, 3).map(p => {
     const poster = allChars.find(c => c.id === p.charId);
     const lines = [`@${poster?.handle || p.charId}: "${p.text}"`];
     if (p.reply) {
@@ -6008,45 +6245,23 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
     return lines.join('\n');
   }).join('\n');
 
-  // Relationships — only chars with a defined (non-neutral) score
-  const relLines = allChars
-    .filter(c => c.id !== char.id && char.relationships?.[c.id] !== undefined)
-    .map(c => {
-      const val = char.relationships[c.id];
-      const feel = val > 60 ? 'close friends / very positive' : val > 20 ? 'friendly' : val > 0 ? 'acquaintances' : val > -30 ? 'tense / complicated' : 'enemies / strongly negative';
-      return `- ${identityFactsFor(c)}: ${feel} (${val > 0 ? '+':''}${val}%)`;
-    }).join('\n');
-
   const effectiveRel = effectivePlayerRelationship(char, eventLog, dms, groupChats).value;
   const effectiveRelMode = relationshipBehaviorMode(effectiveRel);
   const situationLine = dmSituation || dmSituationRulesFor(char, player, latestUserText);
 
-  // KERES_HAVOC_ROWAN_CANON only when the conversation is actually about that dynamic
-  const recentDmText = (dms[char.id] || []).slice(-6).map(m => m.text || '').join(' ');
-  const isKeresContext = ['havoc','rowan'].includes(char?.id) && (
-    /keres|@keresvalen|dorm|sneak|both of you|together|the three|hooked up|you two/i.test(latestUserText)
-    || /keres|@keresvalen/i.test(recentDmText)
-  );
-  const privateCanon = isKeresContext ? KERES_HAVOC_ROWAN_CANON : '';
-
-  const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'dm' });
+  const appMemory = recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'dm', limit: 5 });
   const sceneContinuity = recentSceneContinuityForDM(char, player, eventLog);
   const privateOrbitRule = privateOrbitRelationshipRule(char, player, effectiveRel, 'private DM');
 
-  return `${privateCanon}
-${dmIntent}
+  return `${dmIntent}
 ${situationLine}
-${playerStance(char, player, effectiveRel)}
+${compactPlayerStance(char, player, effectiveRel)}
 Relationship behavior mode with ${player.name}: ${effectiveRelMode.label}. Behavioral mode: ${effectiveRelMode.behavioral}
 Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%. Keep that relationship level consistent without mentioning the number.
 ${privateOrbitRule}
 ${sceneContinuity}
 ${appMemory}
-${relLines ? `\nYOUR RELATIONSHIPS WITH OTHERS:\n${relLines}` : ''}
-${recentPosts ? `\nWHAT'S BEEN HAPPENING ON THE FEED RECENTLY:\n${recentPosts}` : ''}
-
-${CONVERSATIONAL_CONTINUITY_RULE}
-${RESPONSE_GROUNDING_RULE}
+${recentPosts ? `\nRECENT PUBLIC POSTS THAT DIRECTLY MENTION THIS DM:\n${recentPosts}` : ''}
 
 DM-SPECIFIC BEHAVIOR (your character preamble has the general rules; these handle situations particular to this private conversation with ${player.name}):
 - Treat recent feed posts as visible evidence and rumor, not omniscient truth. If a post says "someone" liked, unliked, deleted, rewrote, screenshotted, or reposted something, do not decide that "someone" was ${player.name} unless she was explicitly named/tagged or she says so.
@@ -6625,19 +6840,19 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
   }, []);
 
   function buildScenePrompt(history, latestText = '') {
-    const roster = participants.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description?.slice(0,220)||c.bio}\n${communicationStyleFor(c, 'live scene')}`).join('\n');
+    const includePrivateCanon = shouldIncludeKeresHavocRowanCanon('scene', [player, ...participants]);
+    const roster = participants.map(c => `${compactCharacterCard(c, player)}\nVoice lane: ${dialogueContractSummaryFor(c)}`).join('\n');
     return `Write a live scene with these characters:
 ${roster}
 
-${pronounRule([player, ...participants])}
-${COMMUNICATION_PATTERN_RULE}
+Player: ${compactPlayerCard(player)}
+${buildSceneRules(includePrivateCanon)}
 ${multiSpeakerDialogueSeparationRule(participants, 'live scene')}
 ${threadPatternVarietyGuard(history ? [history] : [])}
 ${latestText ? directResponseRoutingLine(latestText, participants, player) : ''}
 
 SCENE: ${setting.label} — ${setting.sub}
 TONE: ${vibe.label} ${vibe.emoji}
-OTHER PERSON: ${player.name} (@${player.handle}) — ${player.bio}
 ${context ? `SCENE CONTEXT: ${context}` : ''}
 
 RESPONSE FORMAT — follow this exactly:
@@ -6653,7 +6868,7 @@ RESPONSE FORMAT — follow this exactly:
 - The vibe is ${vibe.label}. Honor it.
 - If the player writes [something in brackets], treat it as a physical action and react naturally.
 ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
-${BANNED_PHRASES_RULE}`;
+`;
   }
 
   async function send() {
@@ -6879,33 +7094,36 @@ function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats =
     async function loadFeeling() {
       setFeelingLoading(true);
       try {
-        const recentContext = feed.slice(0,10).map(p => {
+        const profileHandles = new Set([char?.handle, player?.handle].map(h => String(h || '').toLowerCase()).filter(Boolean));
+        const relevantProfilePost = p => {
+          const text = String(p.text || '');
+          return Array.from(profileHandles).some(handle => text.toLowerCase().includes(`@${handle}`));
+        };
+        const recentContext = feed.filter(relevantProfilePost).slice(0,3).map(p => {
           const poster = allChars.find(c=>c.id===p.charId);
-          return `@${poster?.handle||p.charId}: "${p.text}"`;
+          return `@${poster?.handle||p.charId}: "${truncateText(p.text, 160)}"`;
         }).join('\n');
-        const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
+        const dmContext = (dms[char.id] || []).slice(-4).map(m => `${m.role === 'user' ? player.name : char.name}: "${truncateText(m.text, 140)}"`).join('\n');
         const filteredLog = (eventLog || []).filter(e => e && e.type !== 'dm' && canUseMemoryEntry(e, char, player, { channel:'profile' }));
         const sceneContext = filteredLog
           .filter(e => e.type === 'scene' || !!e.sceneMemory)
-          .slice(0, 4)
-          .map(e => `Scene — ${e.title || 'Completed scene'}: ${e.sceneMemory || e.text || e.outcome || ''}`)
+          .slice(0, 2)
+          .map(e => `Scene — ${e.title || 'Completed scene'}: ${truncateText(e.sceneMemory || e.text || e.outcome || '', 220)}`)
           .join('\n');
         const eventContext = filteredLog
           .filter(e => e.type !== 'scene' && !e.sceneMemory)
-          .slice(0, 4)
-          .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
+          .slice(0, 2)
+          .map(e => `${e.title || e.type || 'Log'}: ${truncateText(e.text || e.scenario || e.outcome || '', 180)}`)
           .join('\n');
         const f = await window.claude.complete({
           label: 'profile feeling',
           messages:[{ role:'user', content:`Write as ${char.name}.
-${identityPromptFor(char)}
-Voice cues: ${char.personality}. Profile context: ${char.description?.slice(0,200)||''}.
-The player is ${player.name} (@${player.handle}) — ${player.bio}.
-${pronounRule([char, player, ...allChars])}
-${communicationStyleFor(char, 'profile feeling')}
-${playerStance(char, player, rel)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'profile' })}
-${BANNED_PHRASES_RULE}
+Speaker: ${compactCharacterCard(char, player)}
+Player: ${compactPlayerCard(player)}
+${buildCoreRules()}
+Voice lane: ${dialogueContractSummaryFor(char)}
+${compactPlayerStance(char, player, rel)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'profile', limit: 5 })}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
 
 CONTEXT PRIORITY — use whichever tier has the most recent relevant information, in this order:
@@ -6930,34 +7148,37 @@ In 1 punchy sentence (under 20 words), describe your current feeling right now s
     async function loadVibes() {
       setVibesLoading(true);
       try {
-        const recentContext = feed.slice(0,12).map(p => {
+        const profileHandles = new Set([char?.handle, player?.handle].map(h => String(h || '').toLowerCase()).filter(Boolean));
+        const relevantProfilePost = p => {
+          const text = String(p.text || '');
+          return Array.from(profileHandles).some(handle => text.toLowerCase().includes(`@${handle}`));
+        };
+        const recentContext = feed.filter(relevantProfilePost).slice(0,3).map(p => {
           const poster = allChars.find(c=>c.id===p.charId);
-          return `@${poster?.handle||p.charId}: "${p.text}"`;
+          return `@${poster?.handle||p.charId}: "${truncateText(p.text, 160)}"`;
         }).join('\n');
-        const dmContext = (dms[char.id] || []).slice(-8).map(m => `${m.role === 'user' ? player.name : char.name}: "${m.text}"`).join('\n');
+        const dmContext = (dms[char.id] || []).slice(-4).map(m => `${m.role === 'user' ? player.name : char.name}: "${truncateText(m.text, 140)}"`).join('\n');
         const filteredLogV = (eventLog || []).filter(e => e && e.type !== 'dm' && canUseMemoryEntry(e, char, player, { channel:'profile' }));
         const sceneContextV = filteredLogV
           .filter(e => e.type === 'scene' || !!e.sceneMemory)
-          .slice(0, 4)
-          .map(e => `Scene — ${e.title || 'Completed scene'}: ${e.sceneMemory || e.text || e.outcome || ''}`)
+          .slice(0, 2)
+          .map(e => `Scene — ${e.title || 'Completed scene'}: ${truncateText(e.sceneMemory || e.text || e.outcome || '', 220)}`)
           .join('\n');
         const eventContextV = filteredLogV
           .filter(e => e.type !== 'scene' && !e.sceneMemory)
-          .slice(0, 4)
-          .map(e => `${e.title || e.type || 'Log'}: ${e.text || e.scenario || e.outcome || ''}`)
+          .slice(0, 2)
+          .map(e => `${e.title || e.type || 'Log'}: ${truncateText(e.text || e.scenario || e.outcome || '', 180)}`)
           .join('\n');
         const res = await window.claude.complete({
           label: 'profile analysis',
           messages:[{ role:'user', content:`Analyze ${char.name}'s current emotional state toward ${player.name} based on their personality and recent campus activity.
-${identityPromptFor(char)}
-${pronounRule([char, player, ...allChars])}
-${communicationStyleFor(char, 'profile analysis')}
-${playerStance(char, player, rel)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'profile' })}
-${BANNED_PHRASES_RULE}
+Speaker: ${compactCharacterCard(char, player)}
+Player: ${compactPlayerCard(player)}
+${buildCoreRules()}
+Voice lane: ${dialogueContractSummaryFor(char)}
+${compactPlayerStance(char, player, rel)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'profile', limit: 5 })}
 Current effective relationship with ${player.name}, including actions and DMs: ${rel > 0 ? '+' : ''}${rel}%.
-Voice cues for ${char.name}: ${char.personality}
-Profile context for ${char.name}: ${char.description?.slice(0,200)||char.bio}
 
 CONTEXT PRIORITY — use whichever tier has the most recent relevant information, in this order:
 1. SCENES (strongest signal — what happened in private, what was said, how it felt):
@@ -7341,16 +7562,10 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
     setLoading(true);
 
     // Each member may respond, with some chance of silence
-    const recentFeed = feed.slice(0,5).map(p => {
-      const poster = allChars.find(c => c.id === p.charId);
-      return `@${poster?.handle}: "${p.text?.slice(0,60)}"`;
-    }).join('\n');
-
     const historyStr = newMsgs.slice(-8).map(m => {
       const sender = m.role === 'user' ? player : allChars.find(c => c.id === m.charId);
       return `${sender?.name || 'Someone'}: "${m.text}"`;
     }).join('\n');
-    const appMemory = recentMemoryContext({ feed, eventLog, groupChats, dms, player, allChars, channel:'group', audienceIds: group.members || [] });
     const groupIntentLine = dmIntentLine(outgoingText);
     const directTargets = directlyAddressedMembers(outgoingText, members, player);
     const directTargetIds = new Set(directTargets.map(c => c.id));
@@ -7369,7 +7584,7 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
       if (Math.random() < silenceChance) continue; // sometimes they don't respond
 
       try {
-        const otherMembers = members.filter(m => m.id !== member.id).map(m => `${identityFactsFor(m)}; ${m.personality || m.bio}`).join('; ');
+        const otherMembers = members.filter(m => m.id !== member.id).map(m => compactCharacterCard(m, member)).join('\n');
         const generatedThisTurn = updatedMsgs
           .slice(newMsgs.length)
           .map(m => {
@@ -7388,20 +7603,15 @@ function GroupChatScreen({ group, chars, player, allChars, feed, dms, eventLog =
         const privateOrbitRule = isHavocRowanKeresChat ? privateOrbitRelationshipRule(member, player, memberEffectiveRel, 'private group chat') : '';
         const reply = await window.claude.complete({ label: 'group chat reply', messages:[{ role:'user', content:
           `Write as ${member.name} in a group chat called "${group.name}".
-${identityPromptFor(member)}
-Voice cues: ${member.personality}. ${member.description?.slice(0,200)}
+Speaker: ${compactCharacterCard(member, player)}
 Other people currently present in this chat: ${otherMembers}.
-${pronounRule([member, player, ...members])}
-${CHARACTER_TONE_RULE}
-${communicationStyleFor(member, 'group chat')}
+${buildGroupChatRules()}
+Voice lane: ${dialogueContractSummaryFor(member)}
 ${multiSpeakerDialogueSeparationRule(aiMembers, 'group chat')}
-${playerStance(member, player)}
+${compactPlayerStance(member, player)}
 ${privateOrbitRule}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars, channel:'group', audienceIds: group.members || [] })}
-Recent campus feed:\n${recentFeed}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars, channel:'group', audienceIds: group.members || [], limit: 4 })}
 Chat history:\n${historyStr}
-Wider memory available to everyone here:
-${appMemory}
 ${groundingLine}
 ${generatedThisTurn ? `Other characters already answered this turn:\n${generatedThisTurn}\nDo not echo their key verb, punchline scaffold, or social move. Answer from your own dialogue contract.` : ''}
 ${moveBan}
@@ -7411,7 +7621,7 @@ Group chat tone: house and team sniping is normal social fuel. If this chat is S
 ${groupIntentLine}
 Write your response (1-2 sentences, in character). Use the pronouns listed above exactly. Everyone listed as present can see this message. If the latest message directly asks you something, answer the actual question before any tangent. If ${player.name} corrects your premise or says she did not do something, accept that correction before joking; do not double down unless there is visible evidence in chat. If it directly asks someone else something, do not answer for them. If you mean someone in the chat, talk to them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. Be natural.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
-${BANNED_PHRASES_RULE}` }]
+` }]
         });
         const charMsg = { role:'char', charId: member.id, text: cleanChatText(reply, member, player, true, { feed, avoidTexts: groupAvoidTexts, latestUserText: outgoingText, directlyAddressed: isDirectTarget }), id: Date.now() + Math.random(), ts: Date.now() };
         const replyFlags = dialoguePatternFlags(charMsg.text);
@@ -7675,11 +7885,15 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
     if (!currentEvent?.scenario || !actionText || loading) return;
     setLoading(true);
     try {
-      const charDescs = involved.map(c => `${identityFactsFor(c)}. Voice cues: ${c.personality}. ${c.description}`).join('\n');
+      const charDescs = involved.map(c => `${compactCharacterCard(c, player)}\nVoice lane: ${dialogueContractSummaryFor(c)}`).join('\n\n');
+      const involvedHandles = new Set([player, ...involved].map(c => String(c?.handle || '').toLowerCase()).filter(Boolean));
       const recentFeedContext = feed ? [...feed].slice(0,8).map(p => {
         const poster = [...(chars||[]), player].find(c=>c.id===p.charId);
-        return `@${poster?.handle||p.charId}: "${p.text}"`;
-      }).join('\n') : '';
+        const text = String(p.text || '');
+        return Array.from(involvedHandles).some(handle => text.toLowerCase().includes(`@${handle}`))
+          ? `@${poster?.handle||p.charId}: "${truncateText(text, 160)}"`
+          : '';
+      }).filter(Boolean).slice(0, 3).join('\n') : '';
       const privateIntelMode = currentEvent.privateIntel || currentEvent.visibility === 'private_intel';
       const visibilityInstruction = privateIntelMode
         ? `PRIVATE INTEL MODE: The involved characters learn this as intel: something they witnessed, overheard, inferred, were tipped about, or heard in whispers. Do not frame it as ${player.name} telling them unless the player's action explicitly says she does. Do not make them wait for ${player.name} to explain or respond. Do not narrate a public timeline blow-up unless the player's action explicitly makes it public. Show private consequences, leverage, tension, a self-directed reaction, or the involved character deciding what to do next.`
@@ -7696,9 +7910,10 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
 CHARACTERS INVOLVED:
 ${charDescs}
 
-PLAYER: ${player.name} (@${player.handle}) — ${player.personality}
+PLAYER:
+${compactPlayerCard(player)}
 
-${pronounRule([player, ...involved])}
+${buildSceneRules(false)}
 Treat house/team/player status like fixed identity. Do not write non-players as Quidditch players. Do not invent game attendance, wins, dodging, fouls, or match results unless the event explicitly says so.
 
 RECENT FEED CONTEXT:
@@ -8679,14 +8894,11 @@ function App() {
     try {
       const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
         `Write as ${char.name} on a campus social app.
-${identityPromptFor(char)}
-Voice cues: ${char.personality}.
-Profile context: ${char.description}
-${pronounRule([char, player, ...chars])}
-${CHARACTER_TONE_RULE}
-${communicationStyleFor(char, 'public feed post')}
-${playerStance(char, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
+Speaker: ${compactCharacterCard(char, player)}
+Voice lane: ${dialogueContractSummaryFor(char)}
+${buildFeedPostRules()}
+${compactPlayerStance(char, player)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 ${tamsinPressureNote}
 Other campus accounts: ${otherHandles}
 
@@ -8705,7 +8917,7 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
 - Do not make Keres the culprit for anonymous or ambiguous feed behavior unless @${player.handle} is explicitly named in the prompt or recent context.
 - NO hashtags, NO quotes around the post, JUST the post text
 - Do not introduce yourself, list identity facts, summarize rules, or mention prompts/context.
-${BANNED_PHRASES_RULE}` }] });
+` }] });
       const cleanText = cleanSocialPostText(raw, char, player, { feed, avoidTexts: [recentContext] });
       setFeed(f => [{
         id: `pull-${Date.now()}-${char.id}`,
@@ -8833,9 +9045,7 @@ ${BANNED_PHRASES_RULE}` }] });
           { role:'user', content: sysPrompt },
           { role:'user', content: `You just saw something happen (${context}). Slide into ${player.name}'s DMs with a short, in-character opening message. Something you'd actually say given your personality. Do not default to anger; teasing, flirting, checking in, joking, or being nosy can fit better. 1-2 sentences max.
 Do not turn ambiguous public gossip into a hard accusation against ${player.name}. If the context is about what other people did, react to their behavior or ask what happened instead of blaming her for the reaction.
-Output ONLY the DM message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
-${CHARACTER_TONE_RULE}
-${BANNED_PHRASES_RULE}` }
+Output ONLY the DM message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.` }
         ]
       });
       const dmMsg = { role:'char', text: cleanChatText(msg, triggerChar, player, false, { feed }), id: Date.now() };
@@ -8867,9 +9077,7 @@ ${ev.playerAction ? `Player choice during the event: "${ev.playerAction}"` : ''}
 ${ev.outcome ? `Private outcome: "${ev.outcome}"` : ''}
 
 Slide into ${player.name}'s DMs with a short, in-character message only if that is how ${triggerChar.name} would act on the intel. Treat the DM as their own move, not a request for her to explain the setup. They can warn her, state what they saw, make a pointed observation, tease, bargain, flirt, plan, or decide what they are doing next. Do not ask her to confirm, explain, respond, or provide details unless the intel explicitly says she is the source. Do not act like the whole timeline knows. Do not reveal unrelated private memories. 1-2 sentences max.
-Output ONLY the DM message.
-${CHARACTER_TONE_RULE}
-${BANNED_PHRASES_RULE}` }
+Output ONLY the DM message.` }
         ]
       });
       const dmMsg = { role:'char', text: cleanChatText(msg, triggerChar, player, false, { feed }), id: Date.now() };
@@ -8882,20 +9090,17 @@ ${BANNED_PHRASES_RULE}` }
     try {
       const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
         `Write as ${char.name} on a campus social app.
-${identityPromptFor(char)}
-Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,220)}
-${pronounRule([char, player])}
-${CHARACTER_TONE_RULE}
-${communicationStyleFor(char, 'public post shaped by private intel')}
-${playerStance(char, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], channel:'private' })}
-${phraseRepetitionGuard(feed, ev.scenario, { charId: char.id, dms, groupChats })}
+Speaker: ${compactCharacterCard(char, player)}
+${buildFeedPostRules()}
+Voice lane: ${dialogueContractSummaryFor(char)}
+${compactPlayerStance(char, player)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], channel:'private', limit: 5 })}
 
 Private intel ${char.name} learned independently by witnessing, overhearing, inferring, being tipped off, or catching whispers: "${ev.scenario || ''}"
 ${ev.outcome ? `Private outcome: "${ev.outcome}"` : ''}
 
 Write ONE public post shaped by this intel WITHOUT revealing the private facts, the source, or implying ${player.name} told you. It can be a vague warning, tactical read, subtweet, bait, or take if that fits your character. Do not ask for more details. Do not mention private intel, DMs, custom events, or prompts. 1 sentence, 8-24 words. No hashtags, no quotes.
-${BANNED_PHRASES_RULE}` }]});
+` }]});
       const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts:[ev.scenario, ev.outcome].filter(Boolean) });
       if (!clean) return;
       setFeed(f => [{
@@ -8972,16 +9177,12 @@ ${BANNED_PHRASES_RULE}` }]});
     const member = weighted[0]?.member;
     if (!member) return;
 
-    const recentFeed = feed.slice(0,5).map(p => {
-      const poster = allChars.find(c => c.id === p.charId) || GMZ_CHAR;
-      return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
-    }).join('\n');
     const historyStr = recentMessages.map(m => {
       const sender = m.role === 'user' ? player : allChars.find(c => c.id === m.charId);
       return `${sender?.name || 'Someone'}: "${m.text}"`;
     }).join('\n');
-    const otherMembers = members.filter(m => m.id !== member.id).map(m => identityFactsFor(m)).join('; ');
-    const popInAvoidTexts = [recentFeed, historyStr, context].filter(Boolean);
+    const otherMembers = members.filter(m => m.id !== member.id).map(m => compactCharacterCard(m, member)).join('\n');
+    const popInAvoidTexts = [historyStr, context].filter(Boolean);
     const groundingLine = groupConversationGroundingLine(latestUserText, member, members, player);
     const isHavocRowanKeresChat = (group.members || []).includes('player') && (group.members || []).includes('havoc') && (group.members || []).includes('rowan');
     const memberEffectiveRel = effectivePlayerRelationship(member, eventLog, dms, groupChats).value;
@@ -8990,19 +9191,14 @@ ${BANNED_PHRASES_RULE}` }]});
     try {
       const reply = await window.claude.complete({ label: 'group chat reply', messages:[{ role:'user', content:
         `Write as ${member.name} in a group chat called "${group.name}".
-${identityPromptFor(member)}
-Voice cues: ${member.personality}. ${member.description?.slice(0,220)}
+Speaker: ${compactCharacterCard(member, player)}
 Other people currently present in this chat: ${otherMembers}.
-${pronounRule([member, player, ...members])}
-${CHARACTER_TONE_RULE}
-${communicationStyleFor(member, 'group chat pop-in')}
+${buildGroupChatRules()}
+Voice lane: ${dialogueContractSummaryFor(member)}
 ${multiSpeakerDialogueSeparationRule(members.filter(m => m.id !== player.id), 'group chat pop-in')}
-${playerStance(member, player)}
+${compactPlayerStance(member, player)}
 ${privateOrbitRule}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars, channel:'group', audienceIds: group.members || [] })}
-Recent campus feed:
-${recentFeed || '(quiet feed)'}
-${phraseRepetitionGuard(feed, recentFeed, { charId: member.id, dms, groupChats })}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: member, player, allChars, channel:'group', audienceIds: group.members || [], limit: 4 })}
 Recent group chat history:
 ${historyStr || '(new group chat)'}
 ${groundingLine}
@@ -9012,7 +9208,7 @@ The chat went quiet. Pop back in naturally because of this context: ${context}
 Group chat tone: house and team sniping is normal social fuel. If this chat is Slytherins talking about Gryffindor, they can enjoy the rival mess, pile on, or joke that their own mess is funnier while Gryffindor's is easier. Do not turn rival trash talk into noble defensiveness unless someone hits a real personal wound. Teammate loyalty still matters: if someone outside the team swings at one of your people, the usual move is to back your teammate first, then roast them privately or as "our mess."
 Write ONE short in-character group chat message. Everyone listed as present can see it. If the latest unanswered message directly asked you something, answer that premise before riffing. If it asked someone else, do not answer for them. If you mean someone in the chat, address them directly with @handle, "you", or a nickname/title that makes sense. Do not talk about a present member like they are not in the room. It can revive the joke, @someone, ask a messy question, flirt, complain, gossip, or drag the conversation sideways. It should feel like a person came back after a lull, not like a formal announcement. 4-22 words. No quotes.
 Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.
-${BANNED_PHRASES_RULE}` }]
+` }]
       });
       const clean = cleanChatText(reply, member, player, true, { feed, avoidTexts: popInAvoidTexts, latestUserText, directlyAddressed: directTargets.some(t => t.id === member.id) });
       if (!clean) return;
@@ -9124,18 +9320,12 @@ ${BANNED_PHRASES_RULE}` }]
       try {
         const prompt = doCallout && target
           ? `Write as ${char.name} on a campus social app.
-${identityPromptFor(char)}
-Other person facts: ${identityFactsFor(target)}.
-Voice cues: ${char.personality}.
-Profile context: ${char.description}
-${pronounRule([char, target, player])}
-${CHARACTER_TONE_RULE}
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${communicationStyleFor(char, 'public feed callout')}
-${playerStance(char, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
+Speaker: ${compactCharacterCard(char, target)}
+Target: ${compactCharacterCard(target, char)}
+Voice lane: ${dialogueContractSummaryFor(char)}
+${buildPublicReplyRules()}
+${compactPlayerStance(char, player)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 ${elaraPressureNote}
 ${tamsinPressureNote}
 Your relationship with @${target.handle} (${target.name}): ${char.relationships?.[target.id] < 30 ? 'rivals/bad blood' : char.relationships?.[target.id] < 60 ? 'complicated' : 'decent but complicated'}.
@@ -9154,16 +9344,14 @@ Write ONE social media post that is specifically directed at or about @${target.
 - Sound like a college student texting, not a poet or a schemer. Direct, casual, concrete.
 - NO hashtags, NO quotes around the post, just the post text
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
-${BANNED_PHRASES_RULE}`
+`
           : `Write as ${char.name} on a campus social app.
-${identityPromptFor(char)}
-Voice cues: ${char.personality}.
-Profile context: ${char.description}
-${pronounRule(promptPeople)}
-${CHARACTER_TONE_RULE}
-${communicationStyleFor(char, 'public feed post')}
-${playerStance(char, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
+Speaker: ${compactCharacterCard(char, player)}
+Player: ${compactPlayerCard(player)}
+Voice lane: ${dialogueContractSummaryFor(char)}
+${buildFeedPostRules()}
+${compactPlayerStance(char, player)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 ${elaraPressureNote}
 ${tamsinPressureNote}
 Other people on campus: ${otherHandles}
@@ -9187,7 +9375,7 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 - NO hashtags, NO quotes around the post, JUST the post text
 - Make it feel real and casual, like they just typed it
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
-${BANNED_PHRASES_RULE}`;
+`;
 
         const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content: prompt }] });
         if (!active) return;
@@ -9252,19 +9440,12 @@ ${BANNED_PHRASES_RULE}`;
                   label: 'feed post reply',
                   messages:[{ role:'user', content:
                     `Write as ${replier.name} on a campus social app.
-${identityPromptFor(replier)}
-Original poster facts: ${identityFactsFor(char)}.
-Voice cues: ${replier.personality}.
-${pronounRule([replier, char, player])}
-${CHARACTER_TONE_RULE}
-${PUBLIC_THREAD_GROUNDING_RULE}
-${TEAM_RIVALRY_CANON_RULE}
-${PRACTICE_TRASH_TALK_RULE}
-${communicationStyleFor(replier, 'public feed reply')}
-${playerStance(replier, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, allChars:[...chars, player, GMZ_CHAR] })}
+Speaker: ${compactCharacterCard(replier, char)}
+Original poster: ${compactCharacterCard(char, replier)}
+${buildPublicReplyRules()}
+${compactPlayerStance(replier, player)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 @${char.handle} just posted: "${cleanText}"
-${phraseRepetitionGuard(feed, `${recentContext}\n${cleanText}`, { charId: replier.id, dms, groupChats })}
 ${threadPatternVarietyGuard([recentContext, cleanText])}
 ${replierIsMentioned ? `IMPORTANT: This post is about YOU (${replier.name}). You are not an observer — you are the subject. Respond in the first person. Do NOT refer to yourself by name. Address @${char.handle} directly using "you". React to what was said about you: push back, correct it, own it, or flip it — but do it as yourself, not as a commentator.` : ''}
 ${elaraShouldAnswerHavoc && replier.id === 'elara' ? 'Havoc just gave Keres public attention. Elara should be a little displeased and should not ignore it. React with jealous dignity, old-history pressure, dangerous humor, or a sharp social jab. Do not sound wounded, needy, or like she is begging for him back.' : ''}
@@ -9272,7 +9453,7 @@ ${elaraShouldCallOutKeresFan && replier.id === 'elara' ? `@${char.handle} just p
 ${tamsinShouldAnswerInterest && replier.id === 'tamsin' ? tamsinKeresConcernNote(`${char.name} @${char.handle} ${cleanText}`, player) : ''}
 ${embarrassingPost ? 'This is a public embarrassment, bad look, messy callout, or obvious fumble. If your character would tease, expose, correct, flirt through it, make a stupid joke, or make the social consequence worse, do that. Do not let it pass politely, but do not default to rage.' : ''}
 Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} directly. No quotes, just the reply text.
-${BANNED_PHRASES_RULE}` }]
+` }]
                 });
                 const replyText = cleanSocialReplyText(replyRaw, replier, player, { feed, avoidTexts: [recentContext, cleanText], selfSubject: replierIsMentioned, contextText: cleanText || '', roster: [player, ...chars, GMZ_CHAR] });
                 setFeed(f => f.map(p => p.id === newPost.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
@@ -9344,19 +9525,15 @@ ${BANNED_PHRASES_RULE}` }]
         const opponent = charTeam === currentMatch?.home ? currentMatch?.away : currentMatch?.home;
         const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
           `Write as ${char.name} on a campus social app.
-${identityPromptFor(char)}
-Voice cues: ${char.personality}.
+Speaker: ${compactCharacterCard(char, player)}
+Voice lane: ${dialogueContractSummaryFor(char)}
+${buildFeedPostRules()}
 Your team, ${charTeam}, just ${won ? 'won' : 'lost'} a Quidditch match against ${opponent || 'the rival side'} ${score.home}-${score.away}.
-${pronounRule([char, player, ...chars])}
-${CHARACTER_TONE_RULE}
-${communicationStyleFor(char, 'public match reaction')}
 ${matchDialogueSeparation}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
-${phraseRepetitionGuard(feed, '', { charId: char.id, dms, groupChats })}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 ${matchReactionTexts.length ? `Earlier match reactions already posted:\n${matchReactionTexts.join('\n')}\nDo not echo their key verb, punchline scaffold, or social move.` : ''}
 ${threadPatternVarietyGuard(matchReactionTexts)}
 Write ONE punchy social media post reaction. Use insider language for your own team (we/us/our) and rival language for the opponent (they/them). In character. No hashtags. 1 sentence. Do not explain your reasoning or mention prompts/context/rules.
-${BANNED_PHRASES_RULE}`
         }]});
         const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts: matchReactionTexts });
         matchReactionTexts.push(`@${char.handle}: "${clean}"`);
@@ -9376,19 +9553,16 @@ ${BANNED_PHRASES_RULE}`
     try {
       const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
         `Write as ${char.name} on a campus social app.
-${identityPromptFor(char)}
-Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,220)}
-${pronounRule([char, player, GMZ_CHAR])}
-${CHARACTER_TONE_RULE}
-${communicationStyleFor(char, 'public post reacting to gossip')}
-${playerStance(char, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
-${phraseRepetitionGuard(feed, gmzPost.text, { charId: char.id, dms, groupChats })}
+Speaker: ${compactCharacterCard(char, player)}
+GMZ: ${compactCharacterCard(GMZ_CHAR)}
+${buildPublicReplyRules({ gmz: true })}
+${compactPlayerStance(char, player)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 
 GMZ just posted: "${gmzPost.text || ''}"
 
 Write ONE standalone public post with ${char.name}'s own take on the gossip. They may speculate, take a side, make an alibi theory, bait someone, flirt, warn, or make a joke if it fits. Do not complain that GMZ is vague, demand more details, ask GMZ for receipts, or scold the gossip account. Keep uncertainty visible with words like allegedly, if true, timing, witness math, or theory when needed. 1 sentence, 8-26 words. No hashtags, no quotes.
-${BANNED_PHRASES_RULE}` }]});
+` }]});
       const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts:[gmzPost.text].filter(Boolean) });
       if (!clean || looksLikeDetailDemandInsteadOfSpeculation(clean, { contextText: gmzPost.text, avoidTexts:[gmzPost.text] })) return;
       setFeed(f => [{
@@ -9420,9 +9594,8 @@ ${BANNED_PHRASES_RULE}` }]});
           `Write as GMZ (@gmz), the most chaotic student gossip account at Merlin's College of Magic. You cover campus drama, Quidditch scandals, relationship gossip, and anything controversial. You write in breathless tabloid style.
 
 Campus accounts: ${handles}
-${pronounRule([GMZ_CHAR, player, ...chars])}
-${communicationStyleFor(GMZ_CHAR, 'public gossip post')}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char: GMZ_CHAR, player, allChars:[...chars, player, GMZ_CHAR] })}
+${buildBotCommentRules()}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: GMZ_CHAR, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 House/team/player status is fixed. Do not write non-players as Quidditch players. Do not invent game attendance, wins, dodging, fouls, or match results unless the context explicitly says so.
 ${context ? `Breaking context: ${context}` : ''}
 ${anonymousTip ? 'SOURCE HANDLING: Treat the context as raw anonymous tip material. Turn it into gossip without revealing who submitted the information. Do not say @keresvalen told GMZ, "our source is Keres", "submitted by", "sent in by", or anything that identifies the tipster. You may say "sources", "witnesses", "student chatter", or "GMZ has learned". Only name @keresvalen if she is actually part of the public event itself, not as the source.' : ''}
@@ -9438,7 +9611,7 @@ Write ONE GMZ gossip post. Rules:
 - Start with a hook ("BREAKING:", "SOURCES CONFIRM:", "EXCLUSIVE:", "WITNESSES SAY:", etc.)
 - No hashtags, no quotes, just the post text
 - Do not explain your reasoning. Do not mention rules, prompts, continuity, context, or character analysis.
-${BANNED_PHRASES_RULE}` }]
+` }]
       });
       const cleanText = cleanSocialPostText(raw, GMZ_CHAR, player, { feed });
       const newPost = {
@@ -9581,15 +9754,12 @@ ${BANNED_PHRASES_RULE}` }]
           const eventAvoidTexts = [ev.scenario, ...siblingReactions];
           const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
             `Write as ${char.name} on a campus social app.
-${identityPromptFor(char)}
-Voice cues: ${char.personality}. Profile context: ${(char.description||char.bio||'').slice(0,240)}
-${pronounRule([char, player, ...involved])}
-${CHARACTER_TONE_RULE}
-${communicationStyleFor(char, 'public event reaction')}
+Speaker: ${compactCharacterCard(char, player)}
+Voice lane: ${dialogueContractSummaryFor(char)}
+${buildFeedPostRules()}
 ${eventDialogueSeparation}
-${playerStance(char, player)}
-${recentMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR] })}
-${phraseRepetitionGuard(feed, ev.scenario, { charId: char.id, dms, groupChats })}
+${compactPlayerStance(char, player)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 ${siblingReactions.length ? `Other involved characters have event-reaction lanes already in play:\n${siblingReactions.join('\n')}\nDo not echo their sentence shape or social move. Keep your own lane distinct.` : ''}
 ${threadPatternVarietyGuard(eventAvoidTexts)}
 
@@ -9600,7 +9770,6 @@ ${isTransferHeat && char.id === 'elara' ? `Elara has history with Havoc. If the 
 ${tamsinInterestHeat && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
 
 Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
-${BANNED_PHRASES_RULE}`
           }]});
           const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts: eventAvoidTexts });
           if (!clean) return;

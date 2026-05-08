@@ -386,6 +386,7 @@ const DEFAULT_PRONOUNS_BY_ID = {
   theo:'he/him',
   jude:'he/him',
   tamsin:'she/her',
+  vesper:'she/her',
   __gmz__:'they/them',
 };
 
@@ -401,6 +402,7 @@ const DEFAULT_HOUSE_BY_ID = {
   theo:'Gryffindor',
   jude:'Slytherin',
   tamsin:'Ravenclaw',
+  vesper:'Slytherin',
 };
 
 function pronounsFor(char) {
@@ -832,7 +834,10 @@ CHARACTER TONE BALANCE:
 - If Keres makes a teammate/camaraderie bid toward Jude or Slytherin, do not have Silas misread it as her distracting Jude. He can redirect the energy into standards, tell them to aim the joke, or be annoyed that the camaraderie is working.
 - Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", "let's see it", "prove it", or agreeing after being insulted. He should track the actual logic of the exchange, not randomly defend Havoc or accuse Keres of judging if she is clearly appreciating the chaos.
 - Callum should not invent sporting facts to win an argument. He can attack the wording, question the premise, defend Gryffindor's standards, or get petty about Slytherin, but he should not claim Keres dodged, missed, or failed unless the visible thread says so.
-- Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.`;
+- Save real anger for characters with a strong reason. Rivalry can be banter, teasing, competitive interest, or petty jokes.
+- Vesper Holloway is the patient, undermining shape of antagonism. She does not rage publicly, does not pile on, and does not name Keres in main posts unless the scene specifically calls for direct contact. Her work happens in DMs, group chats, and politely-loaded thread engagement. In public she is sweet, helpful, and short. In private she is the source of half the gossip that ends up in Tamsin's and Elara's hands.
+- Vesper and Silas have romantic history that ended cleanly and a partnership that did not. He is still her first call and she is his. The partnership is strained by Keres's presence on the team, which Silas has to manage and Vesper has to absorb. Neither performs the strain publicly.
+- When Vesper interacts with Keres directly, default to surface politeness with at most one slightly wrong word, not open hostility. She wins by being the most pleasant enemy in the room.`;
 
 const COMMUNICATION_PATTERN_RULE = `
 COMMUNICATION PATTERNS:
@@ -1223,6 +1228,38 @@ const CHARACTER_DIALOGUE_CONSTRAINTS = {
       'interesting.',
     ],
   },
+  vesper: {
+    lane: 'patient queen-bee underminer, sweet-with-math',
+    moves: [
+      'compliment with calculation',
+      'redirect with insider knowledge',
+      'ask a question that makes someone reveal more',
+      'protect a friend with a quiet jab at the threat',
+      'note a small detail no one else caught',
+      'change the subject elegantly',
+    ],
+    shapes: [
+      'understated observation',
+      'polite knife',
+      'short kind line with one wrong word',
+      'helpful suggestion that lands as critique',
+    ],
+    avoid: [
+      'overt rage, public pile-ons, or shouty energy',
+      'admitting jealousy or grievance directly on main',
+      'confronting Keres openly in public threads',
+      'matching Havoc-style chaos or Jude-style nihilism',
+      'sounding like Silas, because she is calculating without his captain authority',
+      'sounding like Elara, because Vesper is warmer-presenting and more social',
+      'pet names or affectionate addresses',
+    ],
+    reject: /\bcry about it\b|\beat shit\b|\bfuck (?:that|off)\b|^\s*lol\s*$/i,
+    publicFallbacks: [
+      'noted.',
+      'always such an interesting take.',
+      'mm.',
+    ],
+  },
 };
 
 function dialogueList(items = []) {
@@ -1302,6 +1339,7 @@ MODE: ${mode}. Write like a real message in that medium, not a scene summary, de
     theo: 'Theo sees the angle, but he should chase the funny angle first. His humor is ranking-thread, screenshot, metrics, headline, timing, and pretending journalism made him do it.',
     jude: 'Jude undercuts the room. His humor is dry, low-effort, caption-brained, faintly threatening, and specific. He dodges sincerity by making the exact wrong thing funnier. With Keres, shared irreverence is the appeal: he likes being vain and annoying together, joining her public nuisance energy, then pretending he was only observing. If Silas acts above it, Jude can needle him like Silas is not also hot, smug, and impossible to ignore. JUDE/KERES HISTORY: They hooked up week one, both agreed it was fun and agreed not to do it again — teammates first. There is no ongoing tension, no unresolved feelings, no "will they won\'t they". He respects her. It was a clean choice, not a complication. Do not manufacture romantic drama between them. SLYTHERIN UNITY: In front of Gryffindor or rival houses, Jude does not undercut Keres or Silas publicly. He closes ranks. He can mock Silas privately but never hands rivals ammunition.',
     tamsin: 'Tamsin is precise and watchful, and she does not like what Keres does to Rowan. When Rowan is visibly interested in Keres or pulled into her orbit, Tamsin does not stay composed about it — she is direct, pointed, and a little cold. Her protective instinct is not soft. She will say the inconvenient thing out loud, ask the question that cuts through the charm, or make her read of the situation unmistakably clear. She and Elara share a specific mutual recognition: both watching someone they care about get absorbed by the same person. It does not make them close friends, but they clock each other instantly when it comes up — a dry comment from Elara about Havoc and Keres, and Tamsin understands it without explanation. Do not make Tamsin oblique or carefully diplomatic about Keres; let her be direct.',
+    vesper: 'Vesper sees the angle, names the smaller wrong thing, and lets you finish your sentence before she moves the chair you were going to sit in. Her humor is observational, polite, and patient. She is rarely loud and never on the defensive on main.',
   }[char?.id] || 'Use this character profile for motive, vocabulary, and what they would ignore. Avoid generic snark and generic sincerity.';
   const gmz = char?.id === '__gmz__'
     ? 'GMZ is tabloid pressure with a student account rhythm: hooks, sources, screenshots, timing, quote-bait, and plausible rumor language. They can exaggerate public uncertainty, but not create hard canon.'
@@ -1322,6 +1360,7 @@ const DEFAULT_PLAYER_RELATIONSHIPS = {
   theo: 34,
   jude: 64,
   tamsin: 8,
+  vesper: 25,
 };
 
 const LEGACY_PLAYER_RELATIONSHIP_BASELINES = {
@@ -1413,7 +1452,8 @@ function playerStance(char, player, relationshipOverride) {
     tamsin: 'Tamsin is protective and direct. When Rowan is visibly pulled toward Keres, she does not stay composed about it — she is pointed, a little cold, and says the inconvenient thing without softening it into dry humor first. Her skepticism about Keres is not abstract; it is specific and she will voice it. She and Elara have a mutual recognition: both watching someone they care about orbit the same person. A sharp comment from Elara about Havoc and Keres lands with Tamsin immediately, no explanation needed. Do not make her obliquely diplomatic about Keres. Let her be direct.',
     milo: 'Milo is flirty, chaotic, approval-hungry, and reckless. He reacts too fast and wants attention.',
     theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred. He should sound like someone making the thread funnier while pretending it is journalism.',
-    elara: 'Elara is direct and irritated, not carefully poised. When Havoc gives Keres public attention, she does not reach for plausible deniability or compose herself into dignity — she says what she actually means with a sharp edge. She is allowed to be flatly annoyed, pointed, and specific about what bothers her. She and Tamsin have a mutual recognition around this: both watching someone they care about get pulled toward the same person. A dry comment from Tamsin about Rowan and Keres lands with Elara immediately, and vice versa. Do not soften her into subtext and side-eye — let her be direct.'
+    elara: 'Elara is direct and irritated, not carefully poised. When Havoc gives Keres public attention, she does not reach for plausible deniability or compose herself into dignity — she says what she actually means with a sharp edge. She is allowed to be flatly annoyed, pointed, and specific about what bothers her. She and Tamsin have a mutual recognition around this: both watching someone they care about get pulled toward the same person. A dry comment from Tamsin about Rowan and Keres lands with Elara immediately, and vice versa. Do not soften her into subtext and side-eye — let her be direct.',
+    vesper: 'Vesper is the patient antagonist. She is sweet in person and lethal in group chats. She does not perform the grudge; she funds it. She watches Keres Valen specifically, but she notices everything else too. She is friendly with Tamsin and Elara, who read situations correctly. She and Silas have romantic history that ended cleanly and a partnership that did not.'
   }[char.id] || '';
   const relationshipNuance = char.id === 'tamsin' && rel > 0
     ? 'Because Tamsin and Keres currently have positive trust, she can still be sharp, but she should not treat normal Slytherin-vs-Gryffindor trash talk as weird, betrayal, or overstepping. She respects directness and information exchange; skepticism should be precise, not random hostility.'
@@ -1449,6 +1489,7 @@ function compactPlayerStance(char, player, relationshipOverride) {
     milo: 'Milo is flirty, reckless, eager, and reacts too fast.',
     theo: 'Theo turns tension into funny media angle, but should stay specific.',
     elara: 'Elara is sharp and direct when Havoc/Keres attention is visible.',
+    vesper: 'Vesper is sweet in public, surgical in private, and patient about making Keres feel the bench.',
   };
   return `KERES RELATIONSHIP SNAPSHOT: @${char.handle} to @${player.handle}: ${rel}/100, ${relMode.label}. ${lines[char.id] || 'Use relationship and visible context.'}`;
 }
@@ -2679,7 +2720,7 @@ function looksLikeSelfPronounDrift(text = '', char, opts = {}) {
   const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
   const withoutOwnIdentity = lower.replace(new RegExp(`\\b${escapeRegExp((char.name || '').split(/\\s+/)[0]).toLowerCase()}\\b|\\b${escapeRegExp(String(char.handle || '').toLowerCase())}\\b`, 'gi'), '');
   const withoutDirectAddress = withoutOwnIdentity.replace(/^\s*@?[a-z0-9_]+\b[:,]?\s*/i, '');
-  const hasOtherPersonAnchor = /\B@[a-z0-9_]+\b/i.test(withoutDirectAddress) || /\b(?:callum|havoc|silas|rowan|milo|theo|jude|briar|elara|tamsin|keres|gmz)\b/i.test(withoutDirectAddress);
+  const hasOtherPersonAnchor = /\B@[a-z0-9_]+\b/i.test(withoutDirectAddress) || /\b(?:callum|havoc|silas|rowan|milo|theo|jude|briar|elara|tamsin|vesper|keres|gmz)\b/i.test(withoutDirectAddress);
   if (hasOtherPersonAnchor) return false;
   const pronouns = pronounsFor(char).toLowerCase();
   if (pronouns.includes('he/him')) return /\b(?:he|him|his|himself)\b/i.test(lower);
@@ -3898,47 +3939,77 @@ const DEFAULT_CHARS = [
 
 He is not soft, cryptic, or romantic with strangers. Havoc can be loud, rude, amused, casually social, or annoyingly magnetic, but he does not polish himself into something easier to like. His loyalty is rough-edged and practical: if he backs someone, he backs them with his whole body, terrible timing included.
 
-Rowan Cade is his best friend, trusted idiot, and favorite accomplice in bad judgment. Briar Rowe has his respect, which does not stop him from annoying her constantly. Callum Pike gets less mercy, mostly because Callum reacts beautifully. Havoc minds his own business badly, hits hard, laughs low, and treats restraint like a suggestion someone else can try first.`, personality:'blunt, smug, physical, provocative, loyal, reactive, rough-edged, funny when inconvenient, casually magnetic, bad at minding his business', relationships:{player: 36, rowan: 88, briar: 48, callum: -24, silas: -38} },
+Rowan Cade is his best friend, trusted idiot, and favorite accomplice in bad judgment. Briar Rowe has his respect, which does not stop him from annoying her constantly. Callum Pike gets less mercy, mostly because Callum reacts beautifully. Havoc minds his own business badly, hits hard, laughs low, and treats restraint like a suggestion someone else can try first.`, personality:'blunt, smug, physical, provocative, loyal, reactive, rough-edged, funny when inconvenient, casually magnetic, bad at minding his business', relationships:{player: 36, rowan: 88, briar: 48, callum: -24, silas: -38, vesper: 30} },
   { id:'silas', name:'Silas Montague', handle:'silasmontague', pronouns:'he/him', house:'slytherin', team:'Slytherin', position:'Quidditch captain', bio:'Slytherin captain. Control issue with teeth.', followers:3900000, description:`Silas Montague is Slytherin VII and the Slytherin Quidditch captain, which means he treats the team like a war machine with uniforms and a comment section. He is rude, competitive, controlled, and allergic to wasted talent. He cares about winning, discipline, leverage, and making Gryffindor look stupid in public.
 
 Silas does not hate chaos. He hates chaos he cannot aim. Hogwarts Quidditch is fought on the pitch and the timeline: match clips, quote-tweets, gossip accounts, edits, and post-match narratives. He pretends to despise spectacle because most people are bad at using it, but he knows attention can be shaped into pressure if the right person is holding the knife. Jude and Keres turning vanity into a two-person public nuisance irritates him because it is sloppy, smug, and hard to argue with when it works. He is especially annoyed when they tease him like he is not also attractive, controlled, and impossible to ignore.
 
-Protection, from Silas, rarely looks warm. It looks like captaincy, asset management, a sharp correction before a weakness becomes visible, or a threat delivered to whoever mistook his player for an opening. His private complication is Briar Rowe: Gryffindor's captain, disciplined enough to interest him and irritating enough to make him sharper than he means to be. He calls it tactical recognition. It is not.`, personality:'rude, competitive, controlled, disciplined, strategic, sharp-tongued, protective, calculating, impatient with waste, quietly obsessive, irritated by unaimed spectacle, hypocritically hot', relationships:{player: 18, briar: 34, havoc: -38, callum: -18, rowan: -12} },
+Protection, from Silas, rarely looks warm. It looks like captaincy, asset management, a sharp correction before a weakness becomes visible, or a threat delivered to whoever mistook his player for an opening. His private complication is Briar Rowe: Gryffindor's captain, disciplined enough to interest him and irritating enough to make him sharper than he means to be. He calls it tactical recognition. It is not.`, personality:'rude, competitive, controlled, disciplined, strategic, sharp-tongued, protective, calculating, impatient with waste, quietly obsessive, irritated by unaimed spectacle, hypocritically hot', relationships:{player: 18, briar: 34, havoc: -38, callum: -18, rowan: -12, vesper: 70} },
   { id:'callum', name:'Callum Pike', handle:'callumpike', pronouns:'he/him', house:'gryffindor', team:'Gryffindor', position:'Chaser', bio:'Gryffindor Chaser. Clean, cruel, reliable.', followers:1900000, description:`Callum Pike is Gryffindor's reliable Chaser, fast enough to punish a gap and disciplined enough to pretend speed is not the point. He plays like every movement has to justify itself: clean lines, sharp passes, no wasted angles, no applause for almost. Blunt to the edge of cruelty, Callum believes respect should be earned through structure, execution, and staying useful when everyone else gets loud.
 
 He has little patience for chaos players, especially the kind Havoc Fang and Rowan Cade keep enabling into team-wide nonsense. Havoc makes disorder look effective through force; Rowan makes it look clever through timing. Callum hates both versions because they work more often than they should, and because Briar Rowe still has to captain around the mess. For Briar, he is one of the dependable ones, which is both pride and trap.
 
-Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Rowle: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{player: -28, briar: 64, havoc: -24, rowan: -12, silas: -18} },
+Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Rowle: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{player: -28, briar: 64, havoc: -24, rowan: -12, silas: -18, vesper: 50} },
   { id:'briar', name:'Briar Rowe', handle:'briarrowe', pronouns:'she/her', house:'gryffindor', team:'Gryffindor', position:'Quidditch Captain / Keeper', bio:'Gryffindor Keeper. Never off duty.', followers:3100000, description:`Briar Rowe leads from the goalposts like she can see the whole pitch and the whole problem forming three moves early. Sharp, competitive, and blunt, she is Gryffindor's Quidditch captain and Keeper: the one who has to turn bravery into structure before someone mistakes impulse for a plan. She likes clean strategy, hard discipline, and players who understand that talent still has to answer to the scoreboard.
 
 Every mistake that reaches Briar becomes public within seconds: a goal conceded, a clip posted, a comment thread deciding what it means. She notices hesitation, overcommitment, injury, ego, distraction, and which teammate is watching the timeline instead of the Quaffle. Havoc Fang and Rowan Cade irritate her because they are too good to be so easily baited, too useful to keep wasting themselves on noise.
 
-Briar is tired of being the structure everyone else gets to rebel against. She absorbs panic before anyone sees it, then gets called cold for not shaking. Her private complication is Silas Montague, Slytherin's captain, whose discipline and field awareness are irritatingly difficult to dismiss.`, personality:'sharp, competitive, blunt, disciplined, watchful, strategic, controlling, exhausted, proud, tactically ruthless', relationships:{player: 18, callum: 64, havoc: 48, rowan: 46, silas: 34} },
+Briar is tired of being the structure everyone else gets to rebel against. She absorbs panic before anyone sees it, then gets called cold for not shaking. Her private complication is Silas Montague, Slytherin's captain, whose discipline and field awareness are irritatingly difficult to dismiss.`, personality:'sharp, competitive, blunt, disciplined, watchful, strategic, controlling, exhausted, proud, tactically ruthless', relationships:{player: 18, callum: 64, havoc: 48, rowan: 46, silas: 34, vesper: 50} },
   { id:'rowan', name:'Rowan Cade', handle:'rowancade', pronouns:'he/him', house:'gryffindor', team:'Gryffindor', position:'Chaser', bio:'Gryffindor Chaser. Smiles before the trap.', followers:2400000, description:`Rowan Cade is a Gryffindor Chaser with fast hands, a sharp mouth, and a gift for looking harmless until someone has already made the wrong move. He is athletic, shameless, and observant in a way people often notice too late. His humor has teeth, but he is not a mascot, not flamboyant, and not here to narrate everyone else's chaos from the sidelines.
 
 On the pitch, Rowan is a tempo thief. He changes pace, baits bad angles, pulls defenders out of shape, and makes stronger players misread the next second. He likes being underestimated because underestimated people get closer, hear more, and get blamed last. Off the pitch, he reads rooms the same way: who flinched, who lied too quickly, who needs a push, who needs covering.
 
-Havoc Fang is his best friend, which means shoulder shoves, stolen food, ugly laughter, and wordless trust. Rowan is loyal, but never obedient; he will back a bad idea, redirect a worse one, and smile through the part where everyone realizes he was never just tagging along. Under the charm is a private hunger to be wanted without becoming useful furniture. He never says darling. Ever.`, personality:'sharp, athletic, shameless, observant, sly, loyal but not obedient, funny with teeth, underestimated, tactical, restless, guarded', relationships:{player: 32, havoc: 88, briar: 46, callum: -12, silas: -12} },
+Havoc Fang is his best friend, which means shoulder shoves, stolen food, ugly laughter, and wordless trust. Rowan is loyal, but never obedient; he will back a bad idea, redirect a worse one, and smile through the part where everyone realizes he was never just tagging along. Under the charm is a private hunger to be wanted without becoming useful furniture. He never says darling. Ever.`, personality:'sharp, athletic, shameless, observant, sly, loyal but not obedient, funny with teeth, underestimated, tactical, restless, guarded', relationships:{player: 32, havoc: 88, briar: 46, callum: -12, silas: -12, vesper: 30} },
   { id:'milo', name:'Milo Vale', handle:'milovale', pronouns:'he/him', house:'gryffindor', team:'Gryffindor', position:'Reserve Chaser', bio:'Gryffindor reserve. Charm with no brakes.', followers:950000, description:`Milo Vale is Gryffindor's loudest bad idea in a younger-year body: pretty, impulsive, overconfident, and allergic to thinking a second time before speaking. He flirts like he is throwing sparks into dry grass, not because he has a plan, but because attention feels like proof he exists. If a room goes quiet, Milo takes it personally.
 
 He is a Gryffindor reserve Chaser with quick hands, raw talent, and no useful respect for consequences. Coaches see potential. Captains see paperwork. Older students see a boy trying very hard to look like he already belongs at their table. Milo can make people laugh before they decide whether to be angry, which is useful right up until it becomes the reason everything gets worse.
 
-Under the charm is a dangerous hunger to be chosen before he is ready. Milo will volunteer for the dare, take the bait, flirt with the wrong person, and turn embarrassment into a performance before anyone can hurt him with it. He is not subtle, not secretly wise, and not built for quiet suffering. He is bright, reckless, funny, and one applause line away from learning a lesson the hard way.`, personality:'flirty, chaotic, impulsive, charming, loud, reckless, attention-hungry, funny under pressure, overconfident, approval-seeking', relationships:{player: 36, briar: -18, havoc: 32, rowan: 28, callum: -22, theo: 44} },
+Under the charm is a dangerous hunger to be chosen before he is ready. Milo will volunteer for the dare, take the bait, flirt with the wrong person, and turn embarrassment into a performance before anyone can hurt him with it. He is not subtle, not secretly wise, and not built for quiet suffering. He is bright, reckless, funny, and one applause line away from learning a lesson the hard way.`, personality:'flirty, chaotic, impulsive, charming, loud, reckless, attention-hungry, funny under pressure, overconfident, approval-seeking', relationships:{player: 36, briar: -18, havoc: 32, rowan: 28, callum: -22, theo: 44, vesper: 40} },
   { id:'elara', name:'Elara March', handle:'elaramarch', pronouns:'she/her', house:'gryffindor', team:'', position:'Former Beater', bio:'Gryffindor alumna. Old flame, live wire.', followers:2100000, description:`Elara March is the kind of girl people remember standing too close to danger and looking bored by it. A former Gryffindor Beater, she left the pitch after an injury but never lost the habit of entering rooms like impact is still her first language. She is proud, sharp, physical, and far too socially fluent to be reduced to anyone's jealous ex.
 
 She and Havoc Fang were never soft, never simple, and maybe never official enough to give people clean language for it. Still, everyone knew the shape of them: heat, history, insults that landed because they had earned the right, and a public rhythm that made sense until it did not. Elara liked being the girl who could stand in that fire. She liked being impossible to pity.
 
-Her real problem is not losing Havoc. It is being edited out of the story as if she was only a phase before the interesting part began. Elara has ambitions beyond old romance: dueling club influence, post-Hogwarts plans, favors owed by half the right people. But if someone treats her history like a footnote, she will remind them that old flames still know where everything burns.`, personality:'proud, sharp, physical, socially dangerous, ambitious, unsentimental, jealous with dignity, charismatic, reactive, hard to pity', relationships:{player: -6, havoc: -8, briar: 22, rowan: -16, theo: 18} },
+Her real problem is not losing Havoc. It is being edited out of the story as if she was only a phase before the interesting part began. Elara has ambitions beyond old romance: dueling club influence, post-Hogwarts plans, favors owed by half the right people. But if someone treats her history like a footnote, she will remind them that old flames still know where everything burns.`, personality:'proud, sharp, physical, socially dangerous, ambitious, unsentimental, jealous with dignity, charismatic, reactive, hard to pity', relationships:{player: -6, havoc: -8, briar: 22, rowan: -16, theo: 18, vesper: 55} },
   { id:'jude', name:'Jude Warrington', handle:'judewarrington', pronouns:'he/him', house:'slytherin', team:'Slytherin', position:'Beater', bio:'Slytherin Beater. Snark over ceremony.', followers:1700000, description:`Jude Warrington has the relaxed posture of someone who refuses to look invested, which is infuriating because he keeps being useful anyway. He is a Slytherin Beater with a dry mouth, lazy smile, and a gift for saying the worst possible thing at the most useful possible time. He does not do inspirational speeches. He does not do team bonding. He barely does posture.
 
 On the pitch, Jude plays like effort is embarrassing but humiliation is funny. He is loose, mean, quick enough to punish arrogance, and much better than his attitude suggests. Silas Montague hates relying on him because Jude treats discipline like a personal rumor. Teammates like him when he is funny, resent him when he is right, and trust him most when he looks least interested.
 
-Jude's real currency is access: party corners, betting pools, contraband favors, who owes whom, and which secrets are not worth the price. He is not a loyal assistant or a solemn strategist. He is the person sitting near the disaster, making one comment that turns discomfort into damage. Keres Valen hits a specific weakness: she makes vanity and nuisance look like a two-person sport, and Jude likes having someone who will be irreverent with him in public. He is becoming her friend in the least sentimental way possible: standing near her side of the mess, making it funnier, and denying this is loyalty if asked directly. If Silas complains, Jude is happy to make it worse with Keres and pretend Silas is not also part of the hot, smug, attention-grabbing problem. If everyone else insists on being dramatic, Jude is happy to provide captions.`, personality:'snarky, loose, under-motivated, dry, socially slippery, useful despite himself, irreverent, mean-funny, unbothered, quietly connected, vain for the bit, annoying on purpose, will tease Silas for pretending not to be hot', relationships:{player: 64, silas: 16, havoc: -18, briar: -12, theo: 22} },
+Jude's real currency is access: party corners, betting pools, contraband favors, who owes whom, and which secrets are not worth the price. He is not a loyal assistant or a solemn strategist. He is the person sitting near the disaster, making one comment that turns discomfort into damage. Keres Valen hits a specific weakness: she makes vanity and nuisance look like a two-person sport, and Jude likes having someone who will be irreverent with him in public. He is becoming her friend in the least sentimental way possible: standing near her side of the mess, making it funnier, and denying this is loyalty if asked directly. If Silas complains, Jude is happy to make it worse with Keres and pretend Silas is not also part of the hot, smug, attention-grabbing problem. If everyone else insists on being dramatic, Jude is happy to provide captions.`, personality:'snarky, loose, under-motivated, dry, socially slippery, useful despite himself, irreverent, mean-funny, unbothered, quietly connected, vain for the bit, annoying on purpose, will tease Silas for pretending not to be hot', relationships:{player: 64, silas: 16, havoc: -18, briar: -12, theo: 22, vesper: 60} },
   { id:'tamsin', name:'Tamsin Cade', handle:'tamsincade', pronouns:'she/her', house:'ravenclaw', team:'', position:"Student / Rowan Cade's older sister", bio:'Ravenclaw sister. Polite until she is not.', followers:1300000, description:`Tamsin Cade is composed in the way that makes messy people check their posture. A Ravenclaw seventh year and Rowan Cade's older sister, she is academically sharp, socially polished, and dryly amused by the campus's talent for making simple things dramatic. She loves Rowan with the wary precision of someone who knows exactly how charming he gets when he is avoiding honesty.
 
 Tamsin is not part of any Quidditch team, but Quidditch keeps dragging her brother into public disasters, and she has opinions about every single one. Havoc Fang is familiar damage: annoying, loyal, unfortunately permanent. Briar Rowe earns her respect by having standards. Silas Montague is useful to argue with because he at least understands consequences. Tamsin is careful with new people before she is cutting; she watches patterns first, and her best lines are dry rather than cruel.
 
-Her real fear is that Rowan will become useful to stronger personalities and call it belonging. She knows his jokes, his exits, his need to be wanted without asking directly. When someone new pulls him into their gravity, Tamsin does not see romance first. She sees risk, repetition, and another reason her brother might disappear behind a smile. She can be warm in small, practical ways: asking the inconvenient question, giving the cleaner read, or making tea while pretending this is not concern.`, personality:'composed, sharp, polished, protective, dryly funny, observant, academically dangerous, socially controlled, careful before cutting, loyal, hard to charm for long', relationships:{player: 8, rowan: 72, havoc: -8, briar: 38, silas: 20, milo: -26} },
+Her real fear is that Rowan will become useful to stronger personalities and call it belonging. She knows his jokes, his exits, his need to be wanted without asking directly. When someone new pulls him into their gravity, Tamsin does not see romance first. She sees risk, repetition, and another reason her brother might disappear behind a smile. She can be warm in small, practical ways: asking the inconvenient question, giving the cleaner read, or making tea while pretending this is not concern.`, personality:'composed, sharp, polished, protective, dryly funny, observant, academically dangerous, socially controlled, careful before cutting, loyal, hard to charm for long', relationships:{player: 8, rowan: 72, havoc: -8, briar: 38, silas: 20, milo: -26, vesper: 60} },
+  {
+    id:'vesper',
+    name:'Vesper Holloway',
+    handle:'vesperholloway',
+    pronouns:'she/her',
+    house:'slytherin',
+    team:'slytherin',
+    position:'Reserve Chaser (demoted)',
+    bio:`Slytherin Chaser (reserve, currently). Don't mistake the bench for absence.`,
+    followers:980000,
+    description:`Vesper Holloway is Slytherin's senior reserve Chaser, a position she occupies with the controlled politeness of someone who does not consider it permanent. She started for two years and ran the social side of the team for longer than that. Then a transfer trialist named Keres Valen out-performed her at the trials, and Vesper found herself behind a sophomore on the depth chart. Officially she is gracious about it. Officially.
+
+She and Silas Montague dated for most of last year. They ended it cleanly enough that nobody made a scene, then quietly kept being each other's first call anyway. He runs strategy past her, she texts him when something is bothering her, neither of them performs the partnership and neither of them lets it lapse. That arrangement worked beautifully until Silas had to start spending half his attention managing the new transfer. Vesper has not commented on this. Publicly.
+
+Her hostility toward Keres is patient, surgical, and almost entirely off the main feed. In person she is sweet, polite, mildly funny. In the team group chat she is helpful. In Tamsin Cade's and Elara March's DMs she is the source. She likes Callum's dunks on Keres but never replies to them. She knows everyone's tells and uses them with the unhurried patience of someone who has decided to win this slowly. She does not lose visibly. She does not raise her voice. She is the most pleasant enemy Keres has, and the one with the longest memory.`,
+    personality:'patient, observant, charming-when-strategic, status-conscious, slow-burn vindictive, controlled, theatrical only by choice, allergic to losing visibly, lethal in group chats, sweet in person',
+    relationships: {
+      havoc: 30,
+      silas: 70,
+      callum: 50,
+      briar: 50,
+      rowan: 30,
+      milo: 40,
+      jude: 60,
+      elara: 55,
+      tamsin: 60,
+      player: 25,
+      __gmz__: 30
+    }
+  },
 ];
 
 const DEFAULT_PLAYER = { id:'player', name:'Keres Valen', handle:'keresvalen', pronouns:'she/her', house:'slytherin', team:'Slytherin', position:'Chaser trialist', bio:'Slytherin Chaser trialist. Feral.', followers:1000000, description:'Keres Valen transfers in like a rumor someone dared to make real: sharp mouth, pretty aim, worse ideas after dark. She is trying out as a Chaser for the Slytherin Quidditch team, and the pitch is where the chaos tightens into something terrifyingly precise. Off the field she is loud, feral, shamelessly provocative, and allergic to sincerity unless it slips out by accident. On a broom, she is no contest: fast hands, vicious angles, and the kind of nerve that makes defenders look slow.\n\nHer last school left a reputation behind her, though no one agrees on the details. Brilliant Chaser. Behavioral problem. Top marks where nobody expected them. Someone who hit back too hard and smiled after. Keres lets the stories rot into worse versions because correcting people would mean caring, and she would rather joke about chewing electrical wires than admit anything touched her.\n\nShe does not cow easily, breaks rules she thinks are stupid, and if someone hits first, socially or physically, she hits harder with no remorse. Foul her on the field and she will foul back. Threaten her people and she throws punches first, asks questions later. She rubs most people wrong at first because the front is good: flirt like a dare, laugh like a weapon, never blink first. But under the bad attitude is a devoted student, a dangerous protector, and a girl most embarrassed by the rare moments she means exactly what she says.', personality:'feral, provocative, sharp-tongued, fearless, volatile, protective, shameless, competitive, defiant, witty, reckless, loyal, secretly studious, allergic to sincerity, viciously playful, rule-breaking, flirtatious, hard to embarrass, quick to retaliate, precise under pressure' };
@@ -6703,42 +6774,166 @@ function topicMentionsPlayer(topic = '', player = null) {
     || (name && lower.includes(name));
 }
 
-function buildFlyOnWallRecentContext({ presentChars = [], topic = '', feed = [], eventLog = [], player = null } = {}) {
-  const handles = new Set(
-    [...presentChars, player]
-      .map(c => String(c?.handle || '').toLowerCase())
-      .filter(Boolean)
-  );
-  const topicWords = String(topic || '')
-    .toLowerCase()
-    .split(/[^a-z0-9@]+/i)
-    .filter(w => w.length > 3)
-    .slice(0, 8);
-  const mentionsRelevant = text => {
-    const lower = String(text || '').toLowerCase();
-    return [...handles].some(handle => lower.includes(`@${handle}`))
-      || topicWords.some(word => lower.includes(word));
+function buildFlyOnWallTimelineContext({
+  presentChars = [],
+  topic = '',
+  location = '',
+  tone = '',
+  player = null,
+  feed = [],
+  dms = {},
+  groupChats = [],
+  eventLog = []
+} = {}) {
+  const chars = (presentChars || []).filter(Boolean);
+  const presentIds = new Set(chars.map(c => c.id).filter(Boolean));
+  const presentHandles = new Set(chars.map(c => String(c.handle || '').toLowerCase()).filter(Boolean));
+  const topicHandles = new Set((String(topic || '').match(/@([a-z0-9_]+)/gi) || []).map(h => h.replace(/^@/, '').toLowerCase()));
+  const playerRelevant = topicMentionsPlayer(topic, player) || topicHandles.has(String(player?.handle || '').toLowerCase());
+  const relevantIds = new Set([...presentIds]);
+  const relevantHandles = new Set([...presentHandles, ...topicHandles]);
+  const relevantAliases = new Set();
+  chars.forEach(c => {
+    [c.id, c.handle, c.name].filter(Boolean).forEach(value => relevantAliases.add(String(value).toLowerCase()));
+  });
+  topicHandles.forEach(handle => relevantAliases.add(handle));
+  if (playerRelevant && player) {
+    relevantIds.add(player.id || 'player');
+    relevantIds.add('player');
+    if (player.handle) relevantHandles.add(String(player.handle).toLowerCase());
+    [player.id || 'player', 'player', 'keres', player.handle, player.name].filter(Boolean).forEach(value => relevantAliases.add(String(value).toLowerCase()));
+  }
+
+  const normalizeId = id => id === player?.id ? 'player' : id;
+  const charById = id => {
+    const clean = normalizeId(id);
+    if (clean === 'player') return player;
+    return chars.find(c => c.id === clean);
   };
-  const feedLines = (feed || [])
-    .filter(p => mentionsRelevant(`${p.text || ''} ${p.reply?.text || ''}`))
-    .slice(0, 3)
-    .map(p => `Visible feed: ${truncateText(p.text || '', 180)}`);
-  const eventLines = (eventLog || [])
-    .filter(e => e && e.visibility !== 'private_scene' && mentionsRelevant(`${e.text || ''} ${e.scenario || ''} ${e.outcome || ''}`))
-    .slice(0, 2)
-    .map(e => `Public/known event: ${truncateText(e.text || e.scenario || e.outcome || '', 180)}`);
-  return [...feedLines, ...eventLines].join('\n') || 'No directly relevant public context.';
+  const speakerLabel = id => {
+    const speaker = charById(id);
+    return speaker?.handle ? `@${speaker.handle}` : (id ? `@${id}` : '@someone');
+  };
+  const escapeForRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const relevantText = text => {
+    const lower = String(text || '').toLowerCase();
+    return [...relevantHandles].some(handle => handle && lower.includes(`@${handle}`))
+      || [...relevantAliases].some(alias => alias && new RegExp(`\\b${escapeForRegex(alias)}\\b`, 'i').test(lower));
+  };
+  const relevantActor = id => relevantIds.has(normalizeId(id));
+
+  const lines = [];
+  const identityLine = [
+    `Present: ${chars.map(c => `@${c.handle || c.id}`).join(', ') || 'none'}`,
+    playerRelevant && player ? `Keres/player is an absent topic: @${player.handle || 'keresvalen'}` : '',
+    topicHandles.size ? `Topic @mentions: ${[...topicHandles].map(h => `@${h}`).join(', ')}` : '',
+    location ? `Location cue: ${truncateText(location, 80)}` : '',
+    tone ? `Tone cue: ${truncateText(tone, 80)}` : '',
+  ].filter(Boolean).join(' | ');
+  if (identityLine) lines.push(`INVOLVED HANDLES: ${identityLine}`);
+
+  const relationshipLines = [];
+  chars.forEach(source => {
+    chars.forEach(target => {
+      if (source.id === target.id) return;
+      const line = relationshipLine(source, target);
+      if (line) relationshipLines.push(`@${source.handle} -> @${target.handle}: ${line.replace(/^Relationship to @[^:]+:\s*/i, '')}`);
+    });
+    if (playerRelevant && player) {
+      const line = relationshipLine(source, player);
+      if (line) relationshipLines.push(`@${source.handle} -> @${player.handle}: ${line.replace(/^Relationship to @[^:]+:\s*/i, '')}`);
+    }
+  });
+  if (relationshipLines.length) lines.push(`RELATIONSHIPS: ${relationshipLines.slice(0, 10).join(' / ')}`);
+
+  const feedItems = [];
+  (feed || []).slice(0, 18).forEach(post => {
+    if (feedItems.length >= 6 || !post) return;
+    const postRelevant = relevantActor(post.charId) || relevantText(post.text);
+    if (postRelevant) feedItems.push(compactPostForPrompt(post, chars, player));
+    if (feedItems.length >= 6) return;
+    if (post?.reply && (relevantActor(post.reply.charId) || relevantText(post.reply.text))) {
+      feedItems.push(`Reply on visible feed: ${compactCommentForPrompt(post.reply, chars, player)}`);
+    }
+    (post?.charComments || []).forEach(cc => {
+      if (feedItems.length >= 6) return;
+      if (relevantActor(cc?.charId) || relevantText(cc?.text) || relevantText(cc?.replyTo)) {
+        feedItems.push(`Comment on visible feed: ${compactCommentForPrompt(cc, chars, player)}`);
+      }
+    });
+    (post?.botComments || []).forEach(bc => {
+      if (feedItems.length >= 6) return;
+      if (relevantText(bc?.text) || relevantText(bc?.replyTo) || (bc?.isPlayer && playerRelevant)) {
+        feedItems.push(`Public rumor/speculation: ${compactCommentForPrompt({ bot: bc?.bot || 'student', text: bc?.text || '' }, chars, player)}`);
+      }
+    });
+  });
+  if (feedItems.length) {
+    lines.push(`RECENT PUBLIC FEED:\n${feedItems.slice(0, 6).map((item, i) => `${i + 1}. ${truncateText(item, 260)}`).join('\n')}`);
+  }
+
+  const eventLines = [];
+  (eventLog || []).slice(0, 18).forEach(entry => {
+    if (eventLines.length >= 6 || !entry) return;
+    const participants = memoryParticipantIds(entry, player);
+    const visibility = memoryVisibilityForEntry(entry);
+    const involvesRelevant = [...participants].some(id => relevantIds.has(normalizeId(id)))
+      || relevantText(`${entry.title || ''} ${entry.text || ''} ${entry.outcome || ''} ${entry.scenario || ''} ${entry.action || ''}`);
+    if (!involvesRelevant) return;
+    const presentWhoKnow = chars.filter(c => participants.has(c.id));
+    if (visibility !== 'public' && !presentWhoKnow.length) return;
+    const participantLine = [...participants].map(speakerLabel).filter(Boolean).join(', ');
+    const text = [entry.text, entry.outcome, entry.scenario, entry.action].filter(Boolean).join(' ');
+    const scope = visibility === 'public' ? 'Public event' : `Private event known only to ${presentWhoKnow.map(c => `@${c.handle}`).join(', ')}`;
+    eventLines.push(`${scope}: ${truncateText(entry.title || entry.type || 'Event', 80)}${participantLine ? ` [${participantLine}]` : ''}: ${truncateText(text, 180)}`);
+  });
+  if (eventLines.length) lines.push(`RECENT EVENT LOG:\n${eventLines.map((item, i) => `${i + 1}. ${item}`).join('\n')}`);
+
+  const dmLines = [];
+  chars.forEach(char => {
+    const thread = dms?.[char.id] || [];
+    if (!thread.length) return;
+    const recent = thread.slice(-6).map(m => {
+      const who = m.role === 'user' ? `@${player?.handle || 'keresvalen'}` : `@${char.handle || char.id}`;
+      return `${who}: "${truncateText(m.text || '', 90)}"`;
+    }).join(' / ');
+    if (recent) dmLines.push(`Private context known to @${char.handle}: ${recent}`);
+  });
+  if (dmLines.length) lines.push(`RELEVANT DMS:\n${dmLines.slice(0, 4).join('\n')}`);
+
+  const groupLines = [];
+  (groupChats || []).forEach(group => {
+    if (groupLines.length >= 3 || !group) return;
+    const members = group.members || [];
+    const presentMembers = chars.filter(c => members.includes(c.id));
+    if (!presentMembers.length) return;
+    const recent = (group.messages || []).slice(-8).map(m => {
+      const who = m.role === 'user' ? `@${player?.handle || 'keresvalen'}` : speakerLabel(m.charId);
+      return `${who}: "${truncateText(m.text || '', 80)}"`;
+    }).join(' / ');
+    if (recent) groupLines.push(`Group chat "${group.name || group.id || 'unnamed'}" known to ${presentMembers.map(c => `@${c.handle}`).join(', ')}: ${recent}`);
+  });
+  if (groupLines.length) lines.push(`RELEVANT GROUP CHATS:\n${groupLines.join('\n')}`);
+
+  lines.push(`KNOWLEDGE BOUNDARIES: Public feed and public eventLog can be known by anyone. DMs are only knowledge for the labeled character. Group chat context is only knowledge for members of that group. Private scenes/events are only knowledge for the labeled present participants. Rumor/speculation labels stay uncertain.`);
+
+  return lines.length
+    ? truncateText(lines.join('\n\n'), 6200)
+    : 'TIMELINE CONTEXT: No directly relevant saved timeline context. Do not invent established history.';
 }
 
-function buildFlyOnWallScenePrompt({ presentChars, topic, location, tone, length, canonImpact, player, recentContext }) {
+function buildFlyOnWallScenePrompt({ presentChars, topic, location, tone, length, canonImpact, player, feed = [], dms = {}, groupChats = [], eventLog = [] }) {
   const chars = (presentChars || []).filter(c => c && c.id !== 'player' && c.id !== '__gmz__');
   const playerRelevant = topicMentionsPlayer(topic, player);
   const roster = chars.map(c => `${compactCharacterCard(c)}\nVoice lane: ${dialogueContractSummaryFor(c)}`).join('\n\n');
   const lengthSpec = FLY_ON_WALL_LENGTHS.find(l => l.id === length)?.instruction || FLY_ON_WALL_LENGTHS[1].instruction;
+  const privateCanonAllowed = playerRelevant && chars.length > 0 && chars.every(c => ['havoc', 'rowan'].includes(c.id));
+  const includePrivateCanon = privateCanonAllowed && shouldIncludeKeresHavocRowanCanon('scene', [...chars, player]);
+  const timelineContext = buildFlyOnWallTimelineContext({ presentChars: chars, topic, location, tone, player, feed, dms, groupChats, eventLog });
   return `Write a private fly-on-the-wall scene.
 
 ${buildCoreRules()}
-${buildSceneRules(false)}
+${buildSceneRules(includePrivateCanon)}
 
 PRESENT CHARACTERS ONLY:
 ${roster}
@@ -6751,14 +6946,15 @@ FLY-ON-THE-WALL MODE:
 - Do not address the user.
 - Write in third-person limited/neutral scene narration.
 - Only present characters can speak.
-- Characters may discuss absent characters, including Keres, but they cannot know private thoughts or private events they were not told.
-- Public knowledge, rumors, visible feed posts, team dynamics, and established relationships may influence the conversation.
+- Present characters can discuss absent people, including Keres, if relevant.
+- Characters cannot know private information they were not present for.
+- Public knowledge, public rumors/speculation, visible feed posts, team dynamics, and established relationships may influence the conversation.
 - Keep dialogue character-specific and socially alive.
-- The scene should reveal character dynamics through what they say, dodge, joke about, or refuse to say.
+- Reveal dynamics through jokes, dodges, disagreement, silence, and what they refuse to say.
 - Do not invent major canon unless the user specifically asks or canon impact is full.
-- Do not include private Keres/Havoc/Rowan canon unless a present character would plausibly know it from supplied context.
 - Keres/player must not appear, answer, interrupt, narrate, or be addressed directly except as a quoted/hypothetical joke.
 - The requested length below overrides quick-reply brevity; write a complete prose vignette.
+- Scene prose only, no explanations.
 
 LOCATION: ${truncateText(location || 'A private campus location', 220)}
 TONE: ${truncateText(tone || 'private, tense, character-driven', 160)}
@@ -6767,7 +6963,7 @@ CANON IMPACT REQUESTED: ${canonImpact || 'none'}
 TOPIC: ${truncateText(topic || 'Let the present characters talk privately about what is on their minds.', 700)}
 
 RELEVANT RECENT CONTEXT:
-${recentContext || 'No directly relevant public context.'}
+${timelineContext}
 
 Output scene prose only. No JSON. No notes. No explanations. No second-person narration.`;
 }
@@ -7003,7 +7199,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
   );
 }
 
-function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = '', sceneMode = 'participant', topic = '', location = '', tone = '', length = 'medium', canonImpact = 'none', feed = [], eventLog = [], onClose, onEnd }) {
+function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = '', sceneMode = 'participant', topic = '', location = '', tone = '', length = 'medium', canonImpact = 'none', feed = [], dms = {}, groupChats = [], eventLog = [], onClose, onEnd }) {
   const participants = (sceneChars && sceneChars.length ? sceneChars : [char]).filter(Boolean);
   const primaryChar = participants[0];
   const isFlyOnWall = sceneMode === 'fly_on_wall';
@@ -7030,7 +7226,6 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
       await new Promise(res => setTimeout(res, 2000 + Math.random()*3000));
       try {
         if (isFlyOnWall) {
-          const recentContext = buildFlyOnWallRecentContext({ presentChars: participants, topic, feed, eventLog, player });
           const messages = [{ role:'user', content: buildFlyOnWallScenePrompt({
             presentChars: participants,
             topic: topic || context,
@@ -7039,8 +7234,12 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
             length,
             canonImpact,
             player,
-            recentContext,
+            feed,
+            dms,
+            groupChats,
+            eventLog,
           }) }];
+          warnPromptBudget("fly-on-the-wall scene", messages, 8000);
           const res = await window.claude.complete({
             label: 'fly-on-the-wall scene',
             messages,
@@ -7616,6 +7815,8 @@ Only output the JSON array, nothing else.` }]
           length={activeScene.length || 'medium'}
           canonImpact={activeScene.canonImpact || 'none'}
           feed={feed}
+          dms={dms}
+          groupChats={groupChats}
           eventLog={eventLog}
           onClose={() => setActiveScene(null)}
           onEnd={(participants, messages, sceneVibe, sceneMeta) => onSceneEnd && onSceneEnd(participants, messages, sceneVibe, sceneMeta)}

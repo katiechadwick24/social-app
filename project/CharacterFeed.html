@@ -1907,6 +1907,14 @@ function cleanSceneText(text = '') {
     .trim();
 }
 
+function cleanSceneActionDialogueText(text = '') {
+  return cleanSceneText(text)
+    .replace(/\*([^*]+)\*/g, '[$1]')
+    .replace(/\[\s+/g, '[')
+    .replace(/\s+\]/g, ']')
+    .trim();
+}
+
 function cleanFlyOnWallSceneText(text = '', player = null) {
   const handle = String(player?.handle || '').replace(/^@/, '');
   const firstName = String(player?.name || 'Keres').split(/\s+/)[0];
@@ -1919,6 +1927,17 @@ function cleanFlyOnWallSceneText(text = '', player = null) {
     .filter(line => !speakerRx.test(line))
     .join('\n')
     .trim();
+}
+
+function renderSceneParts(text = '', mutedColor = C.muted) {
+  return String(text || '').split(/(\[[^\]]+\]|\*[^*]+\*)/g).map((part, i) => {
+    const isBracketAction = part.startsWith('[') && part.endsWith(']');
+    const isStarAction = part.startsWith('*') && part.endsWith('*');
+    if (isBracketAction || isStarAction) {
+      return <em key={i} style={{color:mutedColor, fontStyle:'italic', fontSize:13}}>{part}</em>;
+    }
+    return <span key={i}>{part}</span>;
+  });
 }
 
 function normalizeFlyOnWallOutput(text, presentChars = []) {
@@ -2003,6 +2022,44 @@ function normalizeFlyOnWallOutput(text, presentChars = []) {
     timestamp: now,
     ts: now,
   }];
+}
+
+function normalizeFlyOnWallBeats(rawText, presentChars = []) {
+  const parsed = parseJsonArrayFromText(rawText);
+  const chars = (presentChars || []).filter(Boolean);
+  const now = Date.now();
+  const charByHandle = (value = '') => {
+    const clean = String(value || '').replace(/^@/, '').toLowerCase().trim();
+    return chars.find(c =>
+      String(c.handle || '').toLowerCase() === clean ||
+      String(c.id || '').toLowerCase() === clean ||
+      String(c.name || '').toLowerCase() === clean ||
+      String(c.name || '').toLowerCase().split(/\s+/)[0] === clean
+    ) || null;
+  };
+  const beats = parsed.map((beat, i) => {
+    if (!beat || typeof beat !== 'object') return null;
+    const speaker = charByHandle(beat.handle || beat.speaker || beat.char || beat.character);
+    if (!speaker) return null;
+    const action = cleanSceneText(beat.action || '').replace(/^\[|\]$/g, '').trim();
+    const dialogue = cleanSceneText(beat.dialogue || beat.text || '').replace(/^\[.*?\]\s*/, '').trim();
+    const text = [
+      action ? `[${action}]` : '',
+      dialogue,
+    ].filter(Boolean).join(' ').trim();
+    if (!text) return null;
+    const t = now + i;
+    return {
+      role: 'char',
+      charId: speaker.id,
+      text,
+      mode: 'fly_on_wall',
+      id: t,
+      timestamp: t,
+      ts: t,
+    };
+  }).filter(Boolean);
+  return beats.length ? beats : normalizeFlyOnWallOutput(cleanFlyOnWallSceneText(rawText), chars);
 }
 
 const SCENE_FALLBACKS = {
@@ -6845,9 +6902,9 @@ const SCENE_VIBES = [
   { id:'more',     label:'Something more…',   emoji:'🔥', color:'#e91e8c' },
 ];
 const FLY_ON_WALL_LENGTHS = [
-  { id:'short', label:'Short', instruction:'700-1000 words, focused on one charged exchange' },
-  { id:'medium', label:'Medium', instruction:'1100-1600 words, with a clear turn in the conversation' },
-  { id:'long', label:'Long', instruction:'1700-2300 words, with multiple emotional beats but no filler' },
+  { id:'short', label:'Short', instruction:'4-6 beats, focused on one charged exchange' },
+  { id:'medium', label:'Medium', instruction:'7-10 beats, with a clear turn in the conversation' },
+  { id:'long', label:'Long', instruction:'11-15 beats, with multiple emotional beats but no filler' },
 ];
 const FLY_ON_WALL_CANON_IMPACTS = [
   { id:'none', label:'none' },
@@ -7043,8 +7100,10 @@ FLY-ON-THE-WALL MODE:
 - Reveal dynamics through jokes, dodges, disagreement, silence, and what they refuse to say.
 - Do not invent major canon unless the user specifically asks or canon impact is full.
 - Keres/player must not appear, answer, interrupt, narrate, or be addressed directly except as a quoted/hypothetical joke.
-- The requested length below overrides quick-reply brevity; write a complete prose vignette.
-- Scene prose only, no explanations.
+- Use scene-chat formatting: small physical actions in [brackets], then dialogue as plain text.
+- No quote marks around dialogue. No asterisks.
+- Each beat should be one speaker taking one small action, saying one line, or both.
+- The requested length below is a beat count, not a word count.
 
 LOCATION: ${truncateText(location || 'A private campus location', 220)}
 TONE: ${truncateText(tone || 'private, tense, character-driven', 160)}
@@ -7055,7 +7114,10 @@ TOPIC: ${truncateText(topic || 'Let the present characters talk privately about 
 RELEVANT RECENT CONTEXT:
 ${timelineContext}
 
-Output scene prose only. No JSON. No notes. No explanations. No second-person narration.`;
+Return ONLY a JSON array of beat objects like:
+[{"handle":"havocfang","action":"He leans back against the bedframe, jaw working once.","dialogue":"say the actual thing, rowan."}]
+
+Use exact handles from the present-character roster. No notes. No explanations. No second-person narration.`;
 }
 
 function scoreSceneRelationshipForChar(char, sceneMessages = [], vibe) {
@@ -7352,8 +7414,7 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
             messages,
           });
           console.log('[FlyOnWall] AI returned', res);
-          const cleaned = cleanFlyOnWallSceneText(res, player);
-          const normalized = normalizeFlyOnWallOutput(cleaned, participants);
+          const normalized = normalizeFlyOnWallBeats(res, participants);
           console.log('[FlyOnWall] normalized messages', normalized);
           setMsgs(prev => {
             const next = [...prev, ...normalized].slice(-SCENE_MAX_MESSAGES);
@@ -7518,22 +7579,18 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
             if (m.role === 'scene' || m.isNarration) {
               return (
                 <div key={m.id || m.timestamp || m.ts} style={{alignSelf:'stretch', background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:'14px 15px', color:C.text, fontSize:14, lineHeight:1.75, whiteSpace:'pre-wrap'}}>
-                  {cleanFlyOnWallSceneText(m.text, player) || m.text}
+                  {cleanSceneActionDialogueText(cleanFlyOnWallSceneText(m.text, player) || m.text)}
                 </div>
               );
             }
             const speaker = getSceneChar(m.charId);
-            const displayText = cleanSceneText(m.text);
+            const displayText = cleanSceneActionDialogueText(m.text);
             return (
               <div key={m.id || m.timestamp || m.ts} style={{display:'flex', gap:8, alignItems:'flex-end'}}>
                 <Avatar char={speaker} size={28}/>
                 <div style={{maxWidth:'82%', padding:'10px 14px', borderRadius:'18px 18px 18px 4px', background:C.card2, color:C.text, fontSize:14, lineHeight:1.7}}>
                   <div style={{color:C.muted, fontSize:11, fontWeight:700, marginBottom:3}}>@{speaker?.handle || 'scene'}</div>
-                  {displayText.split(/(\*[^*]+\*)/g).map((part, i) =>
-                    part.startsWith('*') && part.endsWith('*')
-                      ? <em key={i} style={{color:C.muted, fontStyle:'italic', fontSize:13}}>{part.slice(1,-1)}</em>
-                      : <span key={i}>{part}</span>
-                  )}
+                  {renderSceneParts(displayText)}
                 </div>
               </div>
             );
@@ -7551,11 +7608,7 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
                 color: isMe ? '#fff' : C.text,
                 fontSize:14, lineHeight:1.7,
               }}>
-                {isMe ? displayText : displayText.split(/(\*[^*]+\*)/g).map((part, i) =>
-                  part.startsWith('*') && part.endsWith('*')
-                    ? <em key={i} style={{color:C.muted, fontStyle:'italic', fontSize:13}}>{part.slice(1,-1)}</em>
-                    : <span key={i}>{part}</span>
-                )}
+                {isMe ? displayText : renderSceneParts(displayText)}
               </div>
             </div>
           );
@@ -9608,25 +9661,38 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
   }
 
   function handleSceneEnd(participants = [], messages = [], vibe = null, sceneMeta = {}) {
-    if (sceneMeta?.sceneMode === 'fly_on_wall') {
-      // TODO: Wire soft/full canon impact into relationship/event logic once the app has
-      // explicit support for observed scenes that Keres did not witness.
-      return;
-    }
-    const changes = participants
-      .filter(c => c?.id && c.id !== 'player' && c.id !== '__gmz__')
-      .map(c => ({ id: c.id, value: scoreSceneRelationshipForChar(c, messages, vibe) }))
-      .filter(ch => ch.value !== 0);
     const label = participants.map(c => c.name).join(', ');
     const speakerName = (msg) => {
       if (msg?.role === 'user') return player.name;
       const found = participants.find(c => c.id === msg?.charId);
       return found?.name || 'Scene';
     };
-    const sceneMemory = (messages || []).slice(-6).map(m => {
-      const clean = cleanGeneratedText(m?.text || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+    const sceneMemory = (messages || []).slice(-8).map(m => {
+      const clean = cleanGeneratedText(m?.text || '').replace(/\s+/g, ' ').trim().slice(0, 180);
       return clean ? `${speakerName(m)}: ${clean}` : '';
     }).filter(Boolean).join(' / ');
+    if (sceneMeta?.sceneMode === 'fly_on_wall') {
+      if (sceneMeta?.canonImpact !== 'none' && sceneMemory) {
+        setEventLog(log => [{
+          id: `fly-scene-${Date.now()}`,
+          type: 'scene',
+          visibility: 'private_scene',
+          participants: participants.map(c => c.id).filter(Boolean),
+          title: `Fly-on-the-wall scene: ${label}`,
+          text: `${sceneMeta.tone || vibe?.label || 'Observed scene'} at ${sceneMeta.location || 'a private location'}. Canon impact: ${sceneMeta.canonImpact}. Last beat: ${sceneMemory}`,
+          relationshipApplied: false,
+          sceneMemory,
+          sceneMode: 'fly_on_wall',
+          canonImpact: sceneMeta.canonImpact,
+          timestamp: Date.now(),
+        }, ...log]);
+      }
+      return;
+    }
+    const changes = participants
+      .filter(c => c?.id && c.id !== 'player' && c.id !== '__gmz__')
+      .map(c => ({ id: c.id, value: scoreSceneRelationshipForChar(c, messages, vibe) }))
+      .filter(ch => ch.value !== 0);
     if (changes.length) {
       setChars(list => list.map(char => {
         const change = changes.find(ch => ch.id === char.id);

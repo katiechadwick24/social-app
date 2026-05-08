@@ -1360,7 +1360,7 @@ const DEFAULT_PLAYER_RELATIONSHIPS = {
   theo: 34,
   jude: 64,
   tamsin: 8,
-  vesper: 25,
+  vesper: -18,
 };
 
 const LEGACY_PLAYER_RELATIONSHIP_BASELINES = {
@@ -4090,7 +4090,7 @@ Protection, from Silas, rarely looks warm. It looks like captaincy, asset manage
 
 He has little patience for chaos players, especially the kind Havoc Fang and Rowan Cade keep enabling into team-wide nonsense. Havoc makes disorder look effective through force; Rowan makes it look clever through timing. Callum hates both versions because they work more often than they should, and because Briar Rowe still has to captain around the mess. For Briar, he is one of the dependable ones, which is both pride and trap.
 
-Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Rowle: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{player: -28, briar: 64, havoc: -24, rowan: -12, silas: -18, vesper: 50} },
+Under the discipline, Callum is terrified of being replaceable. Reliability is the armor he built before anyone could decide he was optional. Praise him for being useful and he will stand taller; make him feel merely convenient and he will sharpen every word in his mouth. His private complication is Vesper Holloway: Slytherin, precise, restrained, tactically intelligent, and unfortunately difficult to dismiss. Around her, his insults get cleaner and his match analysis starts sounding dangerously close to admiration.`, personality:'fast, disciplined, blunt, reliable, exacting, prideful, controlled, cruel when cornered, terrified of being replaceable, structure-driven, secretly vulnerable', relationships:{player: -28, briar: 64, havoc: -24, rowan: -12, silas: -18, vesper: 50} },
   { id:'briar', name:'Briar Rowe', handle:'briarrowe', pronouns:'she/her', house:'gryffindor', team:'Gryffindor', position:'Quidditch Captain / Keeper', bio:'Gryffindor Keeper. Never off duty.', followers:3100000, description:`Briar Rowe leads from the goalposts like she can see the whole pitch and the whole problem forming three moves early. Sharp, competitive, and blunt, she is Gryffindor's Quidditch captain and Keeper: the one who has to turn bravery into structure before someone mistakes impulse for a plan. She likes clean strategy, hard discipline, and players who understand that talent still has to answer to the scoreboard.
 
 Every mistake that reaches Briar becomes public within seconds: a goal conceded, a clip posted, a comment thread deciding what it means. She notices hesitation, overcommitment, injury, ego, distraction, and which teammate is watching the timeline instead of the Quaffle. Havoc Fang and Rowan Cade irritate her because they are too good to be so easily baited, too useful to keep wasting themselves on noise.
@@ -4131,6 +4131,7 @@ Her real fear is that Rowan will become useful to stronger personalities and cal
     position:'Reserve Chaser (demoted)',
     bio:`Slytherin Chaser (reserve, currently). Don't mistake the bench for absence.`,
     followers:980000,
+    profilePhoto:'uploads/vesper-holloway.png',
     description:`Vesper Holloway is Slytherin's senior reserve Chaser, a position she occupies with the controlled politeness of someone who does not consider it permanent. She started for two years and ran the social side of the team for longer than that. Then a transfer trialist named Keres Valen out-performed her at the trials, and Vesper found herself behind a sophomore on the depth chart. Officially she is gracious about it. Officially.
 
 She and Silas Montague dated for most of last year. They ended it cleanly enough that nobody made a scene, then quietly kept being each other's first call anyway. He runs strategy past her, she texts him when something is bothering her, neither of them performs the partnership and neither of them lets it lapse. That arrangement worked beautifully until Silas had to start spending half his attention managing the new transfer. Vesper has not commented on this. Publicly.
@@ -4147,13 +4148,35 @@ Her hostility toward Keres is patient, surgical, and almost entirely off the mai
       jude: 60,
       elara: 55,
       tamsin: 60,
-      player: 25,
+      player: -18,
       __gmz__: 30
     }
   },
 ];
 
-const DEFAULT_PLAYER = { id:'player', name:'Keres Valen', handle:'keresvalen', pronouns:'she/her', house:'slytherin', team:'Slytherin', position:'Chaser trialist', bio:'Slytherin Chaser trialist. Feral.', followers:1000000, description:'Keres Valen transfers in like a rumor someone dared to make real: sharp mouth, pretty aim, worse ideas after dark. She is trying out as a Chaser for the Slytherin Quidditch team, and the pitch is where the chaos tightens into something terrifyingly precise. Off the field she is loud, feral, shamelessly provocative, and allergic to sincerity unless it slips out by accident. On a broom, she is no contest: fast hands, vicious angles, and the kind of nerve that makes defenders look slow.\n\nHer last school left a reputation behind her, though no one agrees on the details. Brilliant Chaser. Behavioral problem. Top marks where nobody expected them. Someone who hit back too hard and smiled after. Keres lets the stories rot into worse versions because correcting people would mean caring, and she would rather joke about chewing electrical wires than admit anything touched her.\n\nShe does not cow easily, breaks rules she thinks are stupid, and if someone hits first, socially or physically, she hits harder with no remorse. Foul her on the field and she will foul back. Threaten her people and she throws punches first, asks questions later. She rubs most people wrong at first because the front is good: flirt like a dare, laugh like a weapon, never blink first. But under the bad attitude is a devoted student, a dangerous protector, and a girl most embarrassed by the rare moments she means exactly what she says.', personality:'feral, provocative, sharp-tongued, fearless, volatile, protective, shameless, competitive, defiant, witty, reckless, loyal, secretly studious, allergic to sincerity, viciously playful, rule-breaking, flirtatious, hard to embarrass, quick to retaliate, precise under pressure' };
+const DEFAULT_PLAYER = { id:'player', name:'Keres Valen', handle:'keresvalen', pronouns:'she/her', house:'slytherin', team:'Slytherin', position:'Chaser', bio:'Slytherin Chaser. Feral.', followers:1000000, description:'Keres Valen transfers in like a rumor someone dared to make real: sharp mouth, pretty aim, worse ideas after dark. She is now a full Chaser for the Slytherin Quidditch team after turning the Slytherin vs Gryffindor match into a public weapon and helping secure the win. The pitch is where the chaos tightens into something terrifyingly precise. Off the field she is loud, feral, shamelessly provocative, and allergic to sincerity unless it slips out by accident. On a broom, she is no contest: fast hands, vicious angles, and the kind of nerve that makes defenders look slow.\n\nHer last school left a reputation behind her, though no one agrees on the details. Brilliant Chaser. Behavioral problem. Top marks where nobody expected them. Someone who hit back too hard and smiled after. Keres lets the stories rot into worse versions because correcting people would mean caring, and she would rather joke about chewing electrical wires than admit anything touched her.\n\nShe does not cow easily, breaks rules she thinks are stupid, and if someone hits first, socially or physically, she hits harder with no remorse. Foul her on the field and she will foul back. Threaten her people and she throws punches first, asks questions later. She rubs most people wrong at first because the front is good: flirt like a dare, laugh like a weapon, never blink first. But under the bad attitude is a devoted student, a dangerous protector, and a girl most embarrassed by the rare moments she means exactly what she says.', personality:'feral, provocative, sharp-tongued, fearless, volatile, protective, shameless, competitive, defiant, witty, reckless, loyal, secretly studious, allergic to sincerity, viciously playful, rule-breaking, flirtatious, hard to embarrass, quick to retaliate, precise under pressure' };
+
+function canonBiteMarkMatchEvent(timestamp = Date.now()) {
+  return {
+    id: 'canon-slytherin-gryffindor-bite-mark-match',
+    type: 'event',
+    visibility: 'public',
+    title: 'Slytherin vs Gryffindor bite-mark match',
+    scenario: 'After Havoc DMd Keres to come find out, they had an intense private hookup with rough, feral energy. He kept her close afterward; they slept together again, then held each other quietly without naming the tenderness. Both left with visible bite marks on their necks.',
+    action: 'Keres hid her mark until the Slytherin vs Gryffindor match, then revealed it at lineup as a deliberate psychological play. Elara noticed first, then Havoc’s team, then the school. Slytherin attacked Briar’s bruised shoulder, Gryffindor unraveled, and Slytherin won. Keres answered Callum’s fury with: "There he is. My favorite little detective. Did you come to accuse me, or are you still gathering evidence?"',
+    outcome: 'Silas officially removed Keres from trialist status and put her on the Slytherin team as Chaser. Vesper Holloway, the senior reserve Chaser displaced by Keres, is publicly gracious and privately hostile. The bite marks are public gossip: Havoc is visibly marked, Keres revealed her matching mark during the match, Elara clocked it immediately, Rowan understood the strategy, and Gryffindor took the bait.',
+    participants: ['player', 'havoc', 'rowan', 'silas', 'jude', 'vesper', 'elara', 'callum', 'briar', 'milo', 'tamsin'],
+    chars: ['havoc', 'rowan', 'silas', 'jude', 'vesper', 'elara', 'callum', 'briar', 'milo', 'tamsin'],
+    relationshipApplied: false,
+    scoreChanges: [],
+    timestamp,
+  };
+}
+
+function ensureCanonEventLog(eventLog = []) {
+  const existing = (eventLog || []).filter(e => e?.id !== 'canon-slytherin-gryffindor-bite-mark-match');
+  return [canonBiteMarkMatchEvent(), ...existing];
+}
 
 const DIALOGUE_REGRESSION_SMOKE_CASES = [
   { charId:'havoc', text:'engagement forecast: deeply annoying, wildly clickable.', reject:true },
@@ -4189,18 +4212,30 @@ if (typeof window !== 'undefined') {
 function normalizeCharacterIdentity(char) {
   if (!char) return char;
   if (char.id === 'player') {
-    return { ...char, pronouns:'she/her', house:'slytherin', team:'Slytherin', position:'Chaser trialist' };
+    return {
+      ...char,
+      pronouns:'she/her',
+      house:'slytherin',
+      team:'Slytherin',
+      position:'Chaser',
+      bio: String(char.bio || '').replace(/Chaser trialist/g, 'Chaser'),
+      description: String(char.description || DEFAULT_PLAYER.description).replace(/trying out as a Chaser for/g, 'now a full Chaser for').replace(/trialist/g, 'Chaser'),
+    };
   }
   if (char.id === 'tamsin') {
     return normalizePlayerRelationshipBaseline({ ...char, pronouns:'she/her', house:'ravenclaw', team:'', position:"Student / Rowan Cade's older sister" });
   }
   const defaultChar = DEFAULT_CHARS.find(c => c.id === char.id);
   if (!defaultChar) return normalizePlayerRelationshipBaseline(char);
-  const relationships = defaultChar.relationships?.vesper !== undefined && char.relationships?.vesper === undefined
-    ? { ...(char.relationships || {}), vesper: defaultChar.relationships.vesper }
-    : char.relationships;
+  const relationships = { ...(char.relationships || {}) };
+  if (defaultChar.relationships) {
+    Object.entries(defaultChar.relationships).forEach(([id, value]) => {
+      if (relationships[id] === undefined || (char.id === 'vesper' && id === 'player')) relationships[id] = value;
+    });
+  }
   return normalizePlayerRelationshipBaseline({
     ...char,
+    profilePhoto: char.profilePhoto || defaultChar.profilePhoto,
     relationships,
     pronouns: defaultChar.pronouns || char.pronouns,
     house: defaultChar.house || char.house,
@@ -9434,7 +9469,7 @@ function App() {
     if (saved.feed)       setFeedRaw(repairPromptLeakPosts(saved.feed, savedChars, savedPlayer));
     if (saved.dms)        setDmsRaw(repairPromptLeakDms(saved.dms, savedChars, savedPlayer));
     if (saved.groupChats) setGroupChatsRaw(normalizeGroupChats(repairPromptLeakGroupChats(saved.groupChats, savedChars, savedPlayer)));
-    if (saved.eventLog)   setEventLogRaw(saved.eventLog);
+    setEventLogRaw(ensureCanonEventLog(saved.eventLog || []));
     if (typeof saved.day === 'number') setDayRaw(saved.day);
     if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
   }
@@ -9511,7 +9546,7 @@ function App() {
       feed: cloneDefault(DEFAULT_FEED),
       dms: {},
       groupChats: normalizeGroupChats(cloneDefault(DEFAULT_GROUP_CHATS)),
-      eventLog: [],
+      eventLog: ensureCanonEventLog([]),
       day: DEFAULT_DAY,
       socialPresence: preserveProfiles ? cloneDefault(FRESH_SOCIAL_PRESENCE) : cloneDefault(DEFAULT_SOCIAL_PRESENCE),
       stateVersion: SAVE_STATE_VERSION,

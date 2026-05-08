@@ -4823,8 +4823,7 @@ ${charRoster}
 Each reply 6-24 words. Give every speaker a distinct social move and sentence shape. If directly mentioned, answer from inside that role. Return ONLY a JSON array of ${picked.length} strings.`
           }]
         });
-        const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
-        const parsed = JSON.parse(cleaned);
+        const parsed = parseJsonArrayFromText(res);
         const usedThreadTexts = [post.text || ''];
         charR1 = picked.map((c,i) => {
           const speakerHistory = speakerThreadHistory(c.id, 8);
@@ -4945,8 +4944,7 @@ Each comment 5-22 words. Match each account's voice. Mostly lowercase/casual. NO
 Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           }]
         });
-        const cleaned = res.trim().replace(/^```json\n?|\n?```$/g,'');
-        const parsed = JSON.parse(cleaned);
+        const parsed = parseJsonArrayFromText(res);
         const botAvoidTexts = [post.text, ...charR1.map(cc => cc.text)].filter(Boolean);
         bots = botsPicked.map((b,i) => ({
           bot: b.id,
@@ -5048,8 +5046,7 @@ Return ONLY the reply text. No other text.`
               model: 'fast'
             });
             if (cancelled) return;
-            const cleaned2 = res2.trim().replace(/^```json\n?|\n?```$/g,'');
-            const parsed2 = JSON.parse(cleaned2);
+            const parsed2 = parseJsonArrayFromText(res2);
             const reactBotContext = `${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`;
             reactComments = reactBots.map((b,i) => ({
               bot: b.id,

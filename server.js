@@ -157,6 +157,25 @@ function estimateMessagesSize(messages) {
   };
 }
 
+function normalizeOpenAIContent(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return flattenMessageContent(content);
+  return content.map(part => {
+    if (typeof part === 'string') return { type: 'input_text', text: part };
+    if (!part || typeof part !== 'object') return { type: 'input_text', text: String(part || '') };
+    if (typeof part.text === 'string') return { type: 'input_text', text: part.text };
+    if (typeof part.output_text === 'string') return { type: 'input_text', text: part.output_text };
+    return { type: 'input_text', text: JSON.stringify(part) };
+  });
+}
+
+function normalizeOpenAIMessages(messages) {
+  return (Array.isArray(messages) ? messages : []).map(message => ({
+    role: message?.role === 'assistant' ? 'assistant' : 'user',
+    content: normalizeOpenAIContent(message?.content),
+  }));
+}
+
 // ── OpenAI API proxy ──────────────────────────────────────────────
 function callOpenAI(messages, modelTier) {
   return new Promise((resolve, reject) => {
@@ -164,9 +183,10 @@ function callOpenAI(messages, modelTier) {
     const maxOutputTokens = Number.isFinite(OPENAI_MAX_OUTPUT_TOKENS)
       ? OPENAI_MAX_OUTPUT_TOKENS
       : 300;
+    const normalizedMessages = normalizeOpenAIMessages(messages);
     const body = JSON.stringify({
       model: selectedModel,
-      input: messages,
+      input: normalizedMessages,
       max_output_tokens: maxOutputTokens,
     });
 
@@ -236,7 +256,12 @@ function handleAiProxy(req, res, routeLabel) {
     try {
       if (!OPENAI_API_KEY || OPENAI_API_KEY === 'YOUR_API_KEY_HERE') {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'No OPENAI_API_KEY environment variable set.' }));
+        const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+        res.end(JSON.stringify({
+          error: hasAnthropicKey
+            ? 'OPENAI_API_KEY is not set. ANTHROPIC_API_KEY is set, but this deployment uses the OpenAI proxy.'
+            : 'No OPENAI_API_KEY environment variable set.'
+        }));
         return;
       }
       const { messages, model } = JSON.parse(raw);

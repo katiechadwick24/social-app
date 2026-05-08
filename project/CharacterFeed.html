@@ -83,6 +83,7 @@
     'group chat reply': 5000,
     'scene opening': 8000,
     'scene reply': 8000,
+    'fly-on-the-wall scene': 8000,
     'repair/regeneration': 7000,
     'fallback rewrite': 4000,
     'profile feeling': 3000,
@@ -1862,6 +1863,20 @@ function cleanSceneText(text = '') {
     .replace(/[“”"]/g, '')
     .replace(/\s+([.,!?])/g, '$1')
     .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function cleanFlyOnWallSceneText(text = '', player = null) {
+  const handle = String(player?.handle || '').replace(/^@/, '');
+  const firstName = String(player?.name || 'Keres').split(/\s+/)[0];
+  const speakerRx = new RegExp(`^\\s*(?:@?${escapeRegExp(handle)}|${escapeRegExp(firstName)})\\s*[:\\-]`, 'i');
+  return String(text || '')
+    .trim()
+    .replace(/^```(?:text)?\n?|\n?```$/g, '')
+    .replace(/[“”"]/g, '')
+    .split('\n')
+    .filter(line => !speakerRx.test(line))
+    .join('\n')
     .trim();
 }
 
@@ -6668,6 +6683,94 @@ const SCENE_VIBES = [
   { id:'fight',    label:'Heated argument',    emoji:'⚡', color:'#ef4444' },
   { id:'more',     label:'Something more…',   emoji:'🔥', color:'#e91e8c' },
 ];
+const FLY_ON_WALL_LENGTHS = [
+  { id:'short', label:'Short', instruction:'700-1000 words, focused on one charged exchange' },
+  { id:'medium', label:'Medium', instruction:'1100-1600 words, with a clear turn in the conversation' },
+  { id:'long', label:'Long', instruction:'1700-2300 words, with multiple emotional beats but no filler' },
+];
+const FLY_ON_WALL_CANON_IMPACTS = [
+  { id:'none', label:'none' },
+  { id:'soft', label:'soft' },
+  { id:'full', label:'full' },
+];
+
+function topicMentionsPlayer(topic = '', player = null) {
+  const lower = String(topic || '').toLowerCase();
+  const handle = String(player?.handle || '').toLowerCase();
+  const name = String(player?.name || '').toLowerCase();
+  return /\bkeres\b|@keresvalen|\bplayer\b/.test(lower)
+    || (handle && lower.includes(`@${handle}`))
+    || (name && lower.includes(name));
+}
+
+function buildFlyOnWallRecentContext({ presentChars = [], topic = '', feed = [], eventLog = [], player = null } = {}) {
+  const handles = new Set(
+    [...presentChars, player]
+      .map(c => String(c?.handle || '').toLowerCase())
+      .filter(Boolean)
+  );
+  const topicWords = String(topic || '')
+    .toLowerCase()
+    .split(/[^a-z0-9@]+/i)
+    .filter(w => w.length > 3)
+    .slice(0, 8);
+  const mentionsRelevant = text => {
+    const lower = String(text || '').toLowerCase();
+    return [...handles].some(handle => lower.includes(`@${handle}`))
+      || topicWords.some(word => lower.includes(word));
+  };
+  const feedLines = (feed || [])
+    .filter(p => mentionsRelevant(`${p.text || ''} ${p.reply?.text || ''}`))
+    .slice(0, 3)
+    .map(p => `Visible feed: ${truncateText(p.text || '', 180)}`);
+  const eventLines = (eventLog || [])
+    .filter(e => e && e.visibility !== 'private_scene' && mentionsRelevant(`${e.text || ''} ${e.scenario || ''} ${e.outcome || ''}`))
+    .slice(0, 2)
+    .map(e => `Public/known event: ${truncateText(e.text || e.scenario || e.outcome || '', 180)}`);
+  return [...feedLines, ...eventLines].join('\n') || 'No directly relevant public context.';
+}
+
+function buildFlyOnWallScenePrompt({ presentChars, topic, location, tone, length, canonImpact, player, recentContext }) {
+  const chars = (presentChars || []).filter(c => c && c.id !== 'player' && c.id !== '__gmz__');
+  const playerRelevant = topicMentionsPlayer(topic, player);
+  const roster = chars.map(c => `${compactCharacterCard(c)}\nVoice lane: ${dialogueContractSummaryFor(c)}`).join('\n\n');
+  const lengthSpec = FLY_ON_WALL_LENGTHS.find(l => l.id === length)?.instruction || FLY_ON_WALL_LENGTHS[1].instruction;
+  return `Write a private fly-on-the-wall scene.
+
+${buildCoreRules()}
+${buildSceneRules(false)}
+
+PRESENT CHARACTERS ONLY:
+${roster}
+
+${playerRelevant ? `ABSENT TOPIC PERSON:\n${compactPlayerCard(player)}` : `ABSENT PLAYER:\n${player?.name || 'Keres'} (@${player?.handle || 'keresvalen'}) is not present and should not be centered unless the topic naturally calls for it.`}
+
+FLY-ON-THE-WALL MODE:
+- The player/Keres is absent and cannot speak.
+- Do not write "you".
+- Do not address the user.
+- Write in third-person limited/neutral scene narration.
+- Only present characters can speak.
+- Characters may discuss absent characters, including Keres, but they cannot know private thoughts or private events they were not told.
+- Public knowledge, rumors, visible feed posts, team dynamics, and established relationships may influence the conversation.
+- Keep dialogue character-specific and socially alive.
+- The scene should reveal character dynamics through what they say, dodge, joke about, or refuse to say.
+- Do not invent major canon unless the user specifically asks or canon impact is full.
+- Do not include private Keres/Havoc/Rowan canon unless a present character would plausibly know it from supplied context.
+- Keres/player must not appear, answer, interrupt, narrate, or be addressed directly except as a quoted/hypothetical joke.
+- The requested length below overrides quick-reply brevity; write a complete prose vignette.
+
+LOCATION: ${truncateText(location || 'A private campus location', 220)}
+TONE: ${truncateText(tone || 'private, tense, character-driven', 160)}
+LENGTH: ${lengthSpec}
+CANON IMPACT REQUESTED: ${canonImpact || 'none'}
+TOPIC: ${truncateText(topic || 'Let the present characters talk privately about what is on their minds.', 700)}
+
+RELEVANT RECENT CONTEXT:
+${recentContext || 'No directly relevant public context.'}
+
+Output scene prose only. No JSON. No notes. No explanations. No second-person narration.`;
+}
 
 function scoreSceneRelationshipForChar(char, sceneMessages = [], vibe) {
   if (!char) return 0;
@@ -6690,17 +6793,42 @@ function scoreSceneRelationshipForChar(char, sceneMessages = [], vibe) {
 }
 
 function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
+  const [sceneMode, setSceneMode] = useState('participant');
   const [setting, setSetting] = useState(null);
   const [vibe, setVibe] = useState(null);
   const [selectedIds, setSelectedIds] = useState([char.id]);
   const [context, setContext] = useState('');
+  const [flyTopic, setFlyTopic] = useState('');
+  const [flyLocation, setFlyLocation] = useState('');
+  const [flyTone, setFlyTone] = useState('');
+  const [flyLength, setFlyLength] = useState('medium');
+  const [canonImpact, setCanonImpact] = useState('none');
   const sceneChoices = chars.filter(c => c?.description && c.id !== 'player' && c.id !== '__gmz__');
   const selectedChars = sceneChoices.filter(c => selectedIds.includes(c.id));
-  const canStart = setting && vibe && selectedChars.length > 0;
+  const isFlyOnWall = sceneMode === 'fly_on_wall';
+  const canStart = isFlyOnWall
+    ? selectedChars.length > 0 && !!(flyTopic.trim() || context.trim()) && !!((flyLocation || setting?.label || '').trim()) && !!((flyTone || vibe?.label || '').trim())
+    : setting && vibe && selectedChars.length > 0;
 
   function toggleSceneChar(id) {
-    if (id === char.id) return;
+    if (!isFlyOnWall && id === char.id) return;
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  function startScene() {
+    if (!canStart) return;
+    onStart({
+      sceneMode,
+      sceneChars: selectedChars,
+      setting,
+      vibe,
+      context: context.trim(),
+      topic: flyTopic.trim(),
+      location: (flyLocation || setting?.label || '').trim(),
+      tone: (flyTone || vibe?.label || '').trim(),
+      length: flyLength,
+      canonImpact,
+    });
   }
 
   return (
@@ -6714,6 +6842,86 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
           <p style={{color:C.text, fontWeight:700, fontSize:15}}>Set up a scene</p>
           <p style={{color:C.muted, fontSize:12}}>Choose a setting, tone, and who's there</p>
         </div>
+
+        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>MODE</p>
+        <select
+          value={sceneMode}
+          onChange={e => {
+            const nextMode = e.target.value;
+            setSceneMode(nextMode);
+            if (nextMode === 'participant' && !selectedIds.includes(char.id)) {
+              setSelectedIds(prev => [char.id, ...prev].filter((id, i, arr) => arr.indexOf(id) === i));
+            }
+          }}
+          style={{
+            width:'100%', background:C.card2, color:C.text, border:`1.5px solid ${C.border}`,
+            borderRadius:12, padding:'11px 12px', fontSize:14, marginBottom:18, outline:'none',
+          }}
+        >
+          <option value="participant">Roleplay as Keres</option>
+          <option value="fly_on_wall">Fly on the wall</option>
+        </select>
+
+        {isFlyOnWall && (
+          <>
+            <div style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 12px', marginBottom:14}}>
+              <label style={{display:'flex', alignItems:'center', gap:8, color:C.text, fontSize:13, fontWeight:700}}>
+                <input type="checkbox" checked readOnly />
+                Keres/player is absent and cannot speak
+              </label>
+            </div>
+
+            <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:8}}>TOPIC</p>
+            <textarea
+              value={flyTopic}
+              onChange={e => setFlyTopic(e.target.value)}
+              placeholder="What are the present characters talking about?"
+              rows={3}
+              style={{
+                width:'100%', background:C.card2, border:`1.5px solid ${C.border}`, borderRadius:12,
+                padding:'10px 12px', color:C.text, fontSize:13, resize:'vertical', outline:'none',
+                fontFamily:'inherit', lineHeight:1.5, marginBottom:14, boxSizing:'border-box',
+              }}
+            />
+
+            <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:8}}>LOCATION</p>
+            <input
+              value={flyLocation}
+              onChange={e => setFlyLocation(e.target.value)}
+              placeholder="Use selected location, or type a custom one"
+              style={{
+                width:'100%', background:C.card2, border:`1.5px solid ${C.border}`, borderRadius:12,
+                padding:'10px 12px', color:C.text, fontSize:13, outline:'none', marginBottom:14, boxSizing:'border-box',
+              }}
+            />
+
+            <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:8}}>TONE</p>
+            <input
+              value={flyTone}
+              onChange={e => setFlyTone(e.target.value)}
+              placeholder="Use selected tone, or type a custom one"
+              style={{
+                width:'100%', background:C.card2, border:`1.5px solid ${C.border}`, borderRadius:12,
+                padding:'10px 12px', color:C.text, fontSize:13, outline:'none', marginBottom:14, boxSizing:'border-box',
+              }}
+            />
+
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:18}}>
+              <div>
+                <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:8}}>LENGTH</p>
+                <select value={flyLength} onChange={e => setFlyLength(e.target.value)} style={{width:'100%', background:C.card2, color:C.text, border:`1.5px solid ${C.border}`, borderRadius:12, padding:'10px', fontSize:13, outline:'none'}}>
+                  {FLY_ON_WALL_LENGTHS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:8}}>CANON</p>
+                <select value={canonImpact} onChange={e => setCanonImpact(e.target.value)} style={{width:'100%', background:C.card2, color:C.text, border:`1.5px solid ${C.border}`, borderRadius:12, padding:'10px', fontSize:13, outline:'none'}}>
+                  {FLY_ON_WALL_CANON_IMPACTS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </div>
+            </div>
+          </>
+        )}
 
         <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>WHERE</p>
         <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
@@ -6757,7 +6965,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
                 display:'flex', alignItems:'center', gap:10,
                 background: active ? `${C.blue}18` : C.card2,
                 border:`1.5px solid ${active ? C.blue : C.border}`,
-                borderRadius:12, padding:'9px 12px', cursor: locked ? 'default' : 'pointer',
+                borderRadius:12, padding:'9px 12px', cursor: locked && !isFlyOnWall ? 'default' : 'pointer',
                 textAlign:'left',
               }}>
                 <Avatar char={c} size={30}/>
@@ -6784,7 +6992,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
           }}
         />
 
-        <button onClick={() => canStart && onStart(selectedChars, setting, vibe, context.trim())} disabled={!canStart} style={{
+        <button onClick={startScene} disabled={!canStart} style={{
           width:'100%', background: canStart ? C.text : C.card2,
           color: canStart ? C.bg : C.muted,
           border:'none', borderRadius:14, padding:'14px', fontSize:15, fontWeight:700,
@@ -6795,9 +7003,12 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
   );
 }
 
-function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = '', onClose, onEnd }) {
+function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = '', sceneMode = 'participant', topic = '', location = '', tone = '', length = 'medium', canonImpact = 'none', feed = [], eventLog = [], onClose, onEnd }) {
   const participants = (sceneChars && sceneChars.length ? sceneChars : [char]).filter(Boolean);
   const primaryChar = participants[0];
+  const isFlyOnWall = sceneMode === 'fly_on_wall';
+  const displaySetting = setting || { label: location || 'Private scene', sub: isFlyOnWall ? 'Fly-on-the-wall observation' : '', emoji: isFlyOnWall ? '👁️' : '🎭' };
+  const displayVibe = vibe || { label: tone || 'Private tension', emoji: isFlyOnWall ? '👁️' : '💬', color:C.purple };
   const SCENE_MAX_MESSAGES = 60;
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState('');
@@ -6811,13 +7022,34 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
     scrollToLatest(messagesRef, endRef);
   }, [msgs.length, loading]);
 
-  // Opening line from character
+  // Opening line from character, or full observed vignette for fly-on-the-wall mode.
   useEffect(() => {
     async function openingLine() {
       setLoading(true);
       // Short delay before first line — feels like they just arrived
       await new Promise(res => setTimeout(res, 2000 + Math.random()*3000));
       try {
+        if (isFlyOnWall) {
+          const recentContext = buildFlyOnWallRecentContext({ presentChars: participants, topic, feed, eventLog, player });
+          const messages = [{ role:'user', content: buildFlyOnWallScenePrompt({
+            presentChars: participants,
+            topic: topic || context,
+            location: location || displaySetting.label,
+            tone: tone || displayVibe.label,
+            length,
+            canonImpact,
+            player,
+            recentContext,
+          }) }];
+          const res = await window.claude.complete({
+            label: 'fly-on-the-wall scene',
+            messages,
+          });
+          const text = cleanFlyOnWallSceneText(res, player);
+          setMsgs([{ role:'scene', text, id: Date.now(), ts: Date.now() }]);
+          setLoading(false);
+          return;
+        }
         const res = await window.claude.complete({
           label: 'scene opening',
           messages:[{ role:'user', content: buildScenePrompt('') + '\n\nOpen the scene with 1-2 short lines from the invited character(s). Return ONLY a JSON array of objects like [{"handle":"havocfang","text":"*He leans against the wall.* You picked a dramatic spot."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. Hints at inner state through physical tells only. Short and atmospheric.' }]
@@ -6851,8 +7083,8 @@ ${multiSpeakerDialogueSeparationRule(participants, 'live scene')}
 ${threadPatternVarietyGuard(history ? [history] : [])}
 ${latestText ? directResponseRoutingLine(latestText, participants, player) : ''}
 
-SCENE: ${setting.label} — ${setting.sub}
-TONE: ${vibe.label} ${vibe.emoji}
+SCENE: ${displaySetting.label} — ${displaySetting.sub}
+TONE: ${displayVibe.label} ${displayVibe.emoji}
 ${context ? `SCENE CONTEXT: ${context}` : ''}
 
 RESPONSE FORMAT — follow this exactly:
@@ -6865,7 +7097,7 @@ RESPONSE FORMAT — follow this exactly:
 - Stay completely in character for whoever is speaking. Let the group chemistry matter.
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - Treat house/team/player status like fixed identity. If someone is not on a Quidditch team, do not write them as a player. If someone mentions their own house or team, they use we/us/our.
-- The vibe is ${vibe.label}. Honor it.
+- The vibe is ${displayVibe.label}. Honor it.
 - If the player writes [something in brackets], treat it as a physical action and react naturally.
 ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
 `;
@@ -6902,11 +7134,11 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
   }
 
   function endScene() {
-    if (onEnd) onEnd(participants, msgs, vibe);
+    if (onEnd) onEnd(participants, msgs, displayVibe, { sceneMode, canonImpact, topic, location: location || displaySetting.label, tone: tone || displayVibe.label, length });
     onClose();
   }
 
-  const vibeColor = vibe.color;
+  const vibeColor = displayVibe.color || C.purple;
 
   return (
     <div style={{
@@ -6928,23 +7160,30 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
         </div>
         <div style={{flex:1}}>
           <p style={{color:C.text, fontWeight:700, fontSize:14}}>{participants.map(c => c.name.split(' ')[0]).join(', ')}</p>
-          <p style={{color:C.muted, fontSize:11}}>{setting.emoji} {setting.label}</p>
+          <p style={{color:C.muted, fontSize:11}}>{displaySetting.emoji} {displaySetting.label}</p>
         </div>
         <div style={{background:`${vibeColor}18`, border:`1px solid ${vibeColor}44`, borderRadius:20, padding:'4px 10px', display:'flex', alignItems:'center', gap:4}}>
-          <span style={{fontSize:12}}>{vibe.emoji}</span>
-          <span style={{color:vibeColor, fontSize:11, fontWeight:600}}>{vibe.label}</span>
+          <span style={{fontSize:12}}>{displayVibe.emoji}</span>
+          <span style={{color:vibeColor, fontSize:11, fontWeight:600}}>{isFlyOnWall ? 'Fly on the wall' : displayVibe.label}</span>
         </div>
         <button onClick={endScene} style={{background:C.card2, color:C.text, border:`1px solid ${C.border}`, borderRadius:18, padding:'7px 12px', fontSize:12, fontWeight:700, cursor:'pointer'}}>End</button>
       </div>
 
       {/* Scene setting banner */}
       <div style={{padding:'10px 16px', background:C.card2, borderBottom:`1px solid ${C.border}`}}>
-        <p style={{color:C.muted, fontSize:12, textAlign:'center'}}>{setting.sub}</p>
+        <p style={{color:C.muted, fontSize:12, textAlign:'center'}}>{isFlyOnWall ? `${displayVibe.label} · canon impact: ${canonImpact}` : displaySetting.sub}</p>
       </div>
 
       {/* Messages */}
       <div ref={messagesRef} style={{flex:1, overflowY:'auto', padding:`16px 14px ${bottomSafe(92)}`, display:'flex', flexDirection:'column', gap:12}}>
         {msgs.map(m => {
+          if (isFlyOnWall) {
+            return (
+              <div key={m.id} style={{background:C.card2, border:`1px solid ${C.border}`, borderRadius:16, padding:'16px 16px', color:C.text, fontSize:14, lineHeight:1.75, whiteSpace:'pre-wrap'}}>
+                {cleanFlyOnWallSceneText(m.text, player)}
+              </div>
+            );
+          }
           const isMe = m.role === 'user';
           const displayText = isMe ? m.text : cleanSceneText(m.text);
           return (
@@ -6969,7 +7208,7 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
         })}
         {loading && (
           <div style={{display:'flex', gap:8, alignItems:'flex-end'}}>
-            <Avatar char={char} size={28}/>
+            <Avatar char={primaryChar || char} size={28}/>
             <div style={{background:C.card2, borderRadius:'18px 18px 18px 4px', padding:'10px 16px'}}>
               <div style={{display:'flex', gap:4, alignItems:'center'}}>
                 {[0,1,2].map(i => <div key={i} style={{width:6, height:6, borderRadius:'50%', background:C.muted, opacity:0.6, animation:`pulse 1.2s ${i*0.2}s infinite`}}/>)}
@@ -6981,21 +7220,23 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
       </div>
 
       {/* Input */}
-      <div style={{padding:`10px 12px ${bottomSafe(10)}`, borderTop:`1px solid ${C.border}`, background:C.bg, display:'flex', gap:8, alignItems:'flex-end'}}>
-        <div style={{flex:1, background:C.card2, borderRadius:22, border:`1px solid ${input.trim() ? vibeColor+'66' : C.border}`, padding:'11px 14px', transition:'border-color 0.2s'}}>
-          <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onFocus={() => scrollToLatest(messagesRef, endRef)}
-            placeholder="Say something... or [do something]"
-            rows={2}
-            style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:16, outline:'none', resize:'none', lineHeight:1.35, maxHeight:96}}
-          />
+      {!isFlyOnWall && (
+        <div style={{padding:`10px 12px ${bottomSafe(10)}`, borderTop:`1px solid ${C.border}`, background:C.bg, display:'flex', gap:8, alignItems:'flex-end'}}>
+          <div style={{flex:1, background:C.card2, borderRadius:22, border:`1px solid ${input.trim() ? vibeColor+'66' : C.border}`, padding:'11px 14px', transition:'border-color 0.2s'}}>
+            <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onFocus={() => scrollToLatest(messagesRef, endRef)}
+              placeholder="Say something... or [do something]"
+              rows={2}
+              style={{width:'100%', background:'none', border:'none', color:C.text, fontSize:16, outline:'none', resize:'none', lineHeight:1.35, maxHeight:96}}
+            />
+          </div>
+          <button onClick={send} disabled={!input.trim() || loading} style={{
+            background: input.trim() ? vibeColor : C.card2, color:'#fff', border:'none',
+            borderRadius:'50%', width:46, height:46, cursor: input.trim() ? 'pointer' : 'default',
+            display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:18,
+            transition:'background 0.2s',
+          }}>→</button>
         </div>
-        <button onClick={send} disabled={!input.trim() || loading} style={{
-          background: input.trim() ? vibeColor : C.card2, color:'#fff', border:'none',
-          borderRadius:'50%', width:46, height:46, cursor: input.trim() ? 'pointer' : 'default',
-          display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:18,
-          transition:'background 0.2s',
-        }}>→</button>
-      </div>
+      )}
       <style>{`@keyframes pulse { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }`}</style>
     </div>
   );
@@ -7345,7 +7586,21 @@ Only output the JSON array, nothing else.` }]
         <SceneSetupModal
           char={char} chars={allChars} player={player}
           onClose={() => setShowSceneSetup(false)}
-          onStart={(sceneChars, setting, vibe, ctx) => { setShowSceneSetup(false); setActiveScene({ chars: sceneChars, setting, vibe, context: ctx }); }}
+          onStart={(sceneConfig) => {
+            setShowSceneSetup(false);
+            setActiveScene({
+              sceneMode: sceneConfig.sceneMode || 'participant',
+              chars: sceneConfig.sceneChars || [],
+              setting: sceneConfig.setting,
+              vibe: sceneConfig.vibe,
+              context: sceneConfig.context || '',
+              topic: sceneConfig.topic || '',
+              location: sceneConfig.location || '',
+              tone: sceneConfig.tone || '',
+              length: sceneConfig.length || 'medium',
+              canonImpact: sceneConfig.canonImpact || 'none',
+            });
+          }}
         />
       )}
 
@@ -7354,8 +7609,16 @@ Only output the JSON array, nothing else.` }]
         <SceneChatScreen
           char={char} sceneChars={activeScene.chars} player={player}
           setting={activeScene.setting} vibe={activeScene.vibe} context={activeScene.context || ''}
+          sceneMode={activeScene.sceneMode || 'participant'}
+          topic={activeScene.topic || ''}
+          location={activeScene.location || ''}
+          tone={activeScene.tone || ''}
+          length={activeScene.length || 'medium'}
+          canonImpact={activeScene.canonImpact || 'none'}
+          feed={feed}
+          eventLog={eventLog}
           onClose={() => setActiveScene(null)}
-          onEnd={(participants, messages, sceneVibe) => onSceneEnd && onSceneEnd(participants, messages, sceneVibe)}
+          onEnd={(participants, messages, sceneVibe, sceneMeta) => onSceneEnd && onSceneEnd(participants, messages, sceneVibe, sceneMeta)}
         />
       )}
     </div>
@@ -8982,7 +9245,12 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
     setThreadPost(p => p && p.id === postId ? { ...p, ...patch } : p);
   }
 
-  function handleSceneEnd(participants = [], messages = [], vibe = null) {
+  function handleSceneEnd(participants = [], messages = [], vibe = null, sceneMeta = {}) {
+    if (sceneMeta?.sceneMode === 'fly_on_wall') {
+      // TODO: Wire soft/full canon impact into relationship/event logic once the app has
+      // explicit support for observed scenes that Keres did not witness.
+      return;
+    }
     const changes = participants
       .filter(c => c?.id && c.id !== 'player' && c.id !== '__gmz__')
       .map(c => ({ id: c.id, value: scoreSceneRelationshipForChar(c, messages, vibe) }))

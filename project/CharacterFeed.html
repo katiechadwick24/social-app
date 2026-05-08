@@ -508,6 +508,7 @@ function compactPostForPrompt(post, chars = [], player = null) {
   return [
     `Post by ${author ? `${author.name} (@${author.handle})` : post.charId || 'unknown'}:`,
     truncateText(post.text || '', 800),
+    post.photo ? 'Attached image: yes. Treat the image as a visible selfie/photo attached to the post; react to the image only through the caption and public context, without inventing precise unseen details.' : '',
     post.reply ? `Attached reply by ${post.reply.charId || 'unknown'}: ${truncateText(post.reply.text || '', 500)}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -3115,8 +3116,24 @@ function looksLikePrivateBanterDareDodge(reply = '', latestUserText = '') {
     || /\b(?:prove\s+it|then\s+do\s+it)\b/i.test(clean);
 }
 
-function fallbackPublicBanterLine(char, player, avoidTexts = []) {
-  const pool = {
+function fallbackPublicBanterLine(char, player, avoidTexts = [], opts = {}) {
+  const context = `${opts.contextText || ''} ${opts.latestUserText || ''}`.toLowerCase().replace(/[’]/g, "'");
+  const pitchProblemPost = /\b(?:officially|problem|pitch|chaser|slytherin|quidditch|photo|selfie|bite|mark)\b/i.test(context)
+    && /\b(?:pitch|quidditch|chaser|slytherin|problem)\b/i.test(context);
+  const contextualPool = pitchProblemPost ? {
+    callum: ['problem is one word for it. try making the next one a clean pass.', 'officially loud. still waiting on officially useful.', 'pitch problems usually come with stats. yours came with a selfie.'],
+    elara: ['that bruise is doing more public relations than half the school.', 'subtle as a bludger. cute, unfortunately.', 'officially a problem and already posing like evidence. noted.'],
+    tamsin: ['officially is an interesting word to choose publicly.', 'the pitch was already loud. this makes it less deniable.', 'that is a very efficient way to make several people worse at focus.'],
+    jude: ['congrats on making silas headache marketable.', 'problem on the pitch, problem on the timeline. tidy branding.', 'useful problem. terrible for everyone pretending not to look.'],
+    theo: ['caption economy excellent. emotional damage pending.', 'officially a problem is clean work. the photo made it legally worse.', 'that is not a post. that is a match hazard with lighting.'],
+    havoc: ['finally. took the pitch long enough to notice.', 'if that is the official version, i want the dangerous one.', 'problem suits you. annoyingly well.'],
+    rowan: ['officially was generous. you looked like trouble before the paperwork.', 'pitch problem. timeline problem. very efficient of you.', 'terrible caption. excellent evidence.'],
+    silas: ['a problem is useful if it scores.', 'make it official on the scoreboard next.', 'branding is not strategy. fortunately, you can do both.'],
+    briar: ['that is a scouting report with cheekbones.', 'problem confirmed. annoying presentation. effective.', 'gryffindor saw the pitch part. unfortunately everyone else saw the photo.'],
+    milo: ['this feels like bad news for my attention span.', 'officially a problem and unofficially unfair to everyone with eyes.', 'i support this problem and fear its consequences.'],
+    vesper: ['officially is doing a lot of work there.', 'cute caption. the depth chart remains a real place.', 'a public victory lap before the next practice. brave.'],
+  }[char?.id] : null;
+  const pool = contextualPool || {
     callum: ['that was almost a comeback. annoying.', 'try making the next one useful.', 'slytherin keeps mistaking noise for leverage.'],
     elara: ['charming. awful, but charming.', 'i hate that i laughed.', 'say less before this becomes flattering.'],
     tamsin: ['unhelpful. unfortunately funny.', 'that answered more than you think it did.', 'i am choosing not to encourage this publicly.'],
@@ -3146,6 +3163,7 @@ function looksLikeDeadAirReply(text = '') {
   const clean = String(text || '').toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, ' ').trim();
   return /^(?:okay|ok|sure|yeah|right|noted|fair|fine)\.?$/.test(clean)
     || /^(?:terrible|awful|useful|funny|interesting)\s+answer\.?\s*(?:useful|funny|interesting|awful|terrible)?\s*answer\.?$/.test(clean)
+    || /\b(?:awful\s+answer\.?\s+excellent\s+timing|captain\s+for\s+stop\s+proving|if\s+that\s+was\s+a\s+no|try\s+sounding\s+less\s+interesting|homework\s+and\s+somehow\s+this\s+is\s+louder|explain\s+the\s+actual\s+point)\b/i.test(clean)
     || /^(?:that|this)\s+(?:made|makes)\s+it\s+worse\.?\s*(?:thank\s+you)?\.?$/.test(clean);
 }
 
@@ -3372,13 +3390,13 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
   }
   if (char && looksLikeDeadAirReply(clean)) {
-    return fallbackPublicBanterLine(char, player, avoidTexts);
+    return fallbackPublicBanterLine(char, player, avoidTexts, opts);
   }
   if (char && looksLikeInterrogationSpiral(clean)) {
-    return fallbackPublicBanterLine(char, player, avoidTexts);
+    return fallbackPublicBanterLine(char, player, avoidTexts, opts);
   }
   if (char && (looksLikeHardDefensiveBanterDodge(clean) || (opts.playfulBanter && looksLikeDefensiveBanterDodge(clean)))) {
-    return fallbackPublicBanterLine(char, player, avoidTexts);
+    return fallbackPublicBanterLine(char, player, avoidTexts, opts);
   }
   if (char && looksLikeSideParticipantSelfInsertion(clean, char, opts)) {
     return fallbackSideParticipantLine(char, player, opts);
@@ -4634,7 +4652,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-const THREAD_STYLE_VERSION = 9;
+const THREAD_STYLE_VERSION = 10;
 
 function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
   return (post.charComments || []).some(cc => cc?.charId === player?.id)
@@ -4895,8 +4913,9 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ? `\nALLY BALANCE NOTE: This thread involves ${player.name}. Do not let every custom character pile onto her. At least one reply should be on her side, amused by her, correcting the room, backing her as Slytherin, or making the pile-on funnier instead of meaner.${keresAllyResponder ? ` @${keresAllyResponder.handle} is the natural ally in this responder set.` : ''}`
       : '';
     const keresPostBiteRule = isPlayerPost
-      ? `\nKERES POST BITE NOTE: This is Keres posting on main. Give the post real bite, but do not summon the whole roster. Use 1-3 custom-character replies with actual stake, then let audience accounts make the campus feel alive. Havoc and Rowan are frequent spark responders to her posts; if included, they should not be bland. If Havoc answers a Keres no, refusal, or distraction joke, flirt or escalate instead of recapping her move. Callum is not her friend and should never sound warmly supportive.`
+      ? `\nKERES POST BITE NOTE: This is Keres posting on main. Give the post real bite, but do not summon the whole roster. Use 1-3 custom-character replies with actual stake. Havoc and Rowan are frequent spark responders to her posts; if included, they should not be bland. If Havoc answers a Keres no, refusal, or distraction joke, flirt or escalate instead of recapping her move. Callum is not her friend and should never sound warmly supportive.`
       : '';
+    const visibleAnchorRule = `\nVISIBLE ANCHOR RULE: Every non-empty reply must respond to the original post in front of them. Anchor it to at least one visible thing: a word in the caption, an @handle, the attached photo, the pitch/Quidditch/team stake, the bruise/bite mark if context supports it, or a directly relevant public memory. Do NOT write generic verdicts like "awful answer, excellent timing", "that made it worse", "try sounding less interesting", "someone explain the point", or homework/noise filler. If this character has no specific reason to answer this post, return an empty string for that speaker.`;
     const vaguePostRule = looksLikeVagueAphorism(post.text || '')
       ? `\nVAGUE POST NOTE: This post has no named referent, no @handle, and no concrete anchor. Do not have any character ask what it means, who it is about, or comment on the vagueness itself. If a character cannot find a natural stake, they should either make an unrelated joke in their own voice or be silent. Treat the post as intentionally cryptic — reacting to the vibe is fine, but probing the subtext aloud is not.`
       : '';
@@ -4913,7 +4932,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 ${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
 ${threadMemory}
 ${roleContext}
-${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}${vaguePostRule}
+${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}${vaguePostRule}${visibleAnchorRule}
 ${dialogueSeparationRule}
 
 Task: Write ${picked.length} public replies, one from each listed student, in order.
@@ -4922,7 +4941,7 @@ ${intentLine}
 Characters:
 ${charRoster}
 
-Each reply 6-24 words. Give every speaker a distinct social move and sentence shape. If directly mentioned, answer from inside that role. Return ONLY a JSON array of ${picked.length} strings.`
+Each non-empty reply 6-24 words. Give every speaker a distinct social move and sentence shape. If directly mentioned, answer from inside that role. If a speaker would not naturally respond with a specific anchored line, use "" for that array slot. Return ONLY a JSON array of ${picked.length} strings.`
           }]
         });
         const parsed = parseJsonArrayFromText(res);
@@ -4959,8 +4978,8 @@ Each reply 6-24 words. Give every speaker a distinct social move and sentence sh
       }
       if (!cancelled) setLoadingChars(false);
 
-      // ─── ROUND 2: bots react as audience ──────────────────────
-      // They've now seen the post AND the character drama
+      // ─── ROUND 2: anonymous bots are paused ───────────────────
+      // Keep threads focused on character replies until the bot voices are less repetitive.
       const transcript = [
         compactOriginalPost,
         ...charR1.map(cc => {
@@ -4970,15 +4989,7 @@ Each reply 6-24 words. Give every speaker a distinct social move and sentence sh
       ].join('\n');
 
       const pool = RECURRING_BOTS.filter(b => b.id !== 'gmz');
-      const botCount = isKeresPost
-        ? (isHighStakesThread ? 4 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 2))
-        : isGMZThread
-        ? 3 + Math.floor(Math.random() * 2)
-        : isHighStakesThread
-        ? 3 + Math.floor(Math.random() * 2)
-        : broadSocialThread
-        ? 2 + (Math.random() < 0.55 ? 1 : 0)
-        : 1 + (Math.random() < 0.35 ? 1 : 0);
+      const botCount = 0;
 
       // Content-based bot weighting: route thirst bots to appearance posts,
       // sports bots to Quidditch posts, gossip bots to drama posts.
@@ -5190,7 +5201,7 @@ Return ONLY the reply text. No other text.`
 
           // ─── ROUND 4: bots react to the clapback ────────────
           const clapTranscript = `${compactOriginalPost}\n${fight.target.name}: "${truncateText(fight.targetReply.text, 500)}"\n${fight.replier.name}: "${truncateText(clapback.text, 500)}"`;
-          const reactBots = Math.random() < 0.55 ? [...pool].sort(() => Math.random()-0.5).slice(0, 1) : [];
+          const reactBots = [];
 	          const reactRoster = reactBots.map((b,i) => `${i+1}. @${b.handle} — ${b.vibe}. ${botGroundingRule(b)}`).join('\n');
           try {
             let reactComments = [];

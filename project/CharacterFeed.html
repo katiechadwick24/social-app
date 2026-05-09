@@ -1588,6 +1588,13 @@ function keresThirdPartyFlirtSignal(text = '', player = null, actor = null, rost
     .some(c => c?.id && !['havoc', 'rowan', 'player', '__gmz__'].includes(c.id));
 }
 
+function miloTaggedKeresSignal(text = '', authorId = '', player = null) {
+  if (authorId !== 'milo') return false;
+  const raw = String(text || '');
+  const handle = String(player?.handle || 'keresvalen').replace(/^@/, '');
+  return new RegExp(`@${escapeRegExp(handle)}\\b`, 'i').test(raw);
+}
+
 function tamsinRowanHavocKeresConcernSignal(text = '', player = null) {
   const raw = String(text || '');
   const hasKeres = keresVisibilitySignal(raw, player);
@@ -4921,6 +4928,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const havoc = chars.find(c => c.id === 'havoc');
     const rowan = chars.find(c => c.id === 'rowan');
     const tamsin = eligible.find(c => c.id === 'tamsin');
+    const miloTaggedKeres = miloTaggedKeresSignal(postText, authorId, player);
+    const miloKeresTagResponders = miloTaggedKeres ? eligible.filter(c => c.id === 'havoc') : [];
     const tamsinPressureText = `${postText} ${isKeresPost ? `@${player.handle}` : ''}`;
     const keresRumorText = keresVisibilitySignal(postText, player) || /gmz|rumou?r/i.test(postText);
     const thirdPartyKeresFlirt = keresThirdPartyFlirtSignal(`${postText} ${isKeresPost ? `@${player.handle}` : ''}`, player, author, [player, ...chars, GMZ_CHAR])
@@ -4978,6 +4987,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         if (c.id === 'rowan') score += 18;
         if (c.id === 'elara') score += 30;
       }
+      if (miloTaggedKeres && c.id === 'havoc') score += 220;
       if (isPlayerPost) {
         if (c.id === 'havoc') score += 92;
         if (c.id === 'rowan') score += 82;
@@ -5032,9 +5042,10 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const targetBase = isPlayerPost ? 3 : (isGMZThread ? 3 : (embarrassmentContext || broadSocialThread ? 2 : 2));
     const targetCount = Math.min(isPlayerPost ? 4 : 3, Math.max(targetBase, directlyMentioned.length + (broadSocialThread ? 1 : 0) + (Math.random() < 0.35 ? 1 : 0)));
     const targetCeiling = isHighStakesThread ? 5 : 4;
-    const targetLimit = Math.min(isPlayerPost ? targetCeiling : targetCeiling, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
+    const targetLimit = Math.min(isPlayerPost ? targetCeiling : targetCeiling, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + miloKeresTagResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
     let picked = [
       ...directlyMentioned,
+      ...miloKeresTagResponders,
       ...keresSparkResponders,
       ...(keresAllyResponder ? [keresAllyResponder] : []),
       ...exPressureResponders,
@@ -5066,7 +5077,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const houseDefenseNote = isHouseTeamCallout(post.text, c) ? ' HOUSE/TEAM CALLOUT: the post insults or needles their house/team. They should answer with more bite, defend or undercut the insult, or hit back. Do not shrug, agree mildly, or say "I guess".' : '';
       const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
-      const havocTerritorialNote = c.id === 'havoc' && thirdPartyKeresFlirt ? ' HAVOC TERRITORIAL PRESSURE: someone besides Rowan is flirting, volunteering, showing off, or trying to get Keres attention. Havoc should notice harder than Rowan: "sit down" energy, a subtle edge, a drier shot at the other person, or stepping on the moment without announcing jealousy. Do not make it competition with Rowan.' : '';
+      const havocTerritorialNote = c.id === 'havoc' && (thirdPartyKeresFlirt || miloTaggedKeres) ? ` HAVOC TERRITORIAL PRESSURE: ${miloTaggedKeres ? 'Milo tagged Keres on main, which Havoc should notice even if the wording is not openly flirty.' : 'Someone besides Rowan is flirting, volunteering, showing off, or trying to get Keres attention.'} Havoc should answer with "sit down" energy, a subtle edge, a drier shot at the other person, or a move that steps on the moment without announcing jealousy. Do not make it competition with Rowan.` : '';
       const keresSparkNote = isPlayerPost && ['havoc','rowan'].includes(c.id) ? ` KERES POST SPARK: Keres posted; ${c.name} is the kind of person who often cannot leave that alone. Reply with appetite, mischief, flirtation, a dare, a sly read, or a sharp joke that gives the post bite.` : '';
       const callumKeresRivalNote = c.id === 'callum' && isKeresPost ? ' KERES RIVALRY: Callum and Keres do not like each other. If he replies, he should be exacting, irritated, petty, or competitive. No friendly compliments, no soft agreement, no cheering her on. They are rival Chasers on opposite teams, so he must not claim she missed or wasted his passes; Slytherin has been beating Gryffindor, so keep his bitterness aimed at the opponent across the pitch.' : '';
       const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should react directly to the thing that actually bothers her: Havoc embarrassing himself over Keres, Keres enjoying the attention, or the room pretending not to see it. Let her be sharp, jealous, mean-funny, specific, and a little possessive without sounding wounded or like she is begging. If she was not tagged, she is weighing in from the side; she should needle what Havoc or Keres visibly did, not imply they asked her to perform or answer.` : '';

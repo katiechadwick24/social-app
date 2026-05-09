@@ -2734,9 +2734,45 @@ function fallbackPrivateDmCorrectionLine(char, player, avoidTexts = [], opts = {
   return pool[start];
 }
 
+function fallbackPrivateDmProgressLine(char, player, avoidTexts = [], opts = {}) {
+  const latest = String(opts.latestUserText || '').toLowerCase().replace(/[’]/g, "'");
+  const pick = (pool = []) => {
+    const start = Math.floor(Math.random() * pool.length);
+    for (let i = 0; i < pool.length; i++) {
+      const candidate = pool[(start + i) % pool.length];
+      if (!fallbackWasUsed(char?.id, candidate)
+          && !violatesCharacterDialogueContract(candidate, char)
+          && !hasDialoguePatternCollision(candidate, avoidTexts || [])) {
+        trackFallback(char?.id, candidate);
+        return candidate;
+      }
+    }
+    return '';
+  };
+  if (char?.id === 'rowan') {
+    if (/\b(?:what'?s|what is|why|how)\b.{0,80}\b(?:worked up|work(?:ed)? up|mood|all worked|bothering|got you|got into you)\b/i.test(latest)) {
+      return pick([
+        'you, mostly. and the fact that saying that out loud keeps becoming a tactical mistake.',
+        'havoc being loud, tamsin being right, and you making both feel avoidable until they are not.',
+        'the part where everyone keeps saying your name like i am supposed to stay normal about it.',
+        'you asked that like you do not already know. rude little habit.',
+      ]);
+    }
+    if (/\bjealous\s+of\s+(?:whom|who|what)\b/i.test(latest)) {
+      return pick([
+        'anyone who gets the better angle before i do. obnoxious, i know.',
+        'whoever gets to be obvious without my sister making a spreadsheet about it.',
+        'anyone standing close enough to make me answer this honestly.',
+      ]);
+    }
+  }
+  return '';
+}
+
 function fallbackUnsupportedBlameLine(char, player, group = false, avoidTexts = [], opts = {}) {
   if (!group && opts.channel === 'dm') {
-    return fallbackPrivateDmCorrectionLine(char, player, avoidTexts, opts);
+    return fallbackPrivateDmProgressLine(char, player, avoidTexts, opts)
+      || fallbackPrivateDmCorrectionLine(char, player, avoidTexts, opts);
   }
   const groupPool = {
     havoc: ['same mess, better aim. still funny.', 'fine. vague chaos, then. worse for everyone.', 'then say what you meant before rowan starts translating.'],
@@ -2804,6 +2840,20 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
     .replace(names.length ? new RegExp(`^\\s*(?:${names.join('|')})\\s*:\\s*`, 'i') : /^$/, '')
     .replace(/^\s*["']|["']\s*$/g, '')
     .trim();
+  const getDmProgressFallback = () => (!group && opts.channel === 'dm' && char
+    ? fallbackPrivateDmProgressLine(char, player, avoidTexts, opts)
+    : '');
+  if ((!group && opts.channel === 'dm' && char) && (
+    hasDialoguePatternCollision(clean, avoidTexts) ||
+    /\bjealous\s+is\s+a\s+strong\s+word\b/i.test(clean) ||
+    /\bcorrecting\s+the\s+angle\b/i.test(clean)
+  )) {
+    const dmProgressFallback = getDmProgressFallback();
+    if (!dmProgressFallback) {
+      return fallbackChatLine(char, player, group, avoidTexts);
+    }
+    return dmProgressFallback;
+  }
   if (char?.id === 'rowan' && /\bshould i be worried\b/i.test(clean)) {
     return 'tamsin is always already worried. the question is how much evidence she has.';
   }
@@ -2846,6 +2896,9 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
     return fallbackDialogueContractLine(char, player, avoidTexts);
   }
   if (char && hasDialoguePatternCollision(clean, avoidTexts)) {
+    if (!group && opts.channel === 'dm') {
+      return getDmProgressFallback() || fallbackChatLine(char, player, group, avoidTexts);
+    }
     return fallbackDialogueContractLine(char, player, avoidTexts);
   }
   if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeIdentityConfusion(clean, char)) return fallbackChatLine(char, player, group, avoidTexts);
@@ -7164,7 +7217,8 @@ DM-SPECIFIC BEHAVIOR (your character preamble has the general rules; these handl
 - Do not ask whether you should understand an obvious relationship consequence. If someone mentions your sister, best friend, ex, captain, or teammate reacting to gossip about you, reason from what you know about that person only if that relationship is actually yours.
 - If ${player.name} makes a playful private bid like "I can fix that" or "I can be more annoying", treat it as banter. Do not turn it into "prove it", "do it on the feed", or a public challenge unless she explicitly asks for one.
 - Avoid public-commentary cleanup language in DMs: no "wrong target", "bad evidence", "vibes wearing a hat", "still chaotic. i am learning", "convenient for no one", or "if they guessed wrong" unless ${player.name} directly asks for a public-facing line.
-- Do not answer private teasing with a detachable catchphrase. React to the latest wording, the relationship, and the emotional/social pressure in this DM.`;
+- Do not answer private teasing with a detachable catchphrase. React to the latest wording, the relationship, and the emotional/social pressure in this DM.
+${char?.id === 'rowan' ? `\n- ROWAN-SPECIFIC DM RULE: If ${player.name} asks why you are in a mood, what got you worked up, or who you are jealous of, answer the emotional pressure point directly. Do not repeat "jealous is a strong word", "accurate is under review", or "correcting the angle" once the conversation has moved past that dodge.` : ''}`;
 }
 
 // Compact identity block injected right before the latest user message so the
@@ -10382,7 +10436,9 @@ Do not turn ambiguous public gossip into a hard accusation against ${player.name
 Output ONLY the DM message. Do not say "I'm ready", "Understood", "I know the rules", "What's my reply", or describe the task.` }
         ]
       });
-      const dmMsg = { role:'char', text: cleanChatText(msg, triggerChar, player, false, { feed }), id: Date.now() };
+      const clean = cleanChatText(msg, triggerChar, player, false, { feed });
+      if (!clean || clean.toUpperCase() === 'SILENCE') return;
+      const dmMsg = { role:'char', text: clean, id: Date.now() };
       setDms(d => ({ ...d, [triggerChar.id]: [...(d[triggerChar.id]||[]), dmMsg] }));
       setDmNotifs(n => ({ ...n, [triggerChar.id]: (n[triggerChar.id]||0) + 1 }));
     } catch(e) {}
@@ -10411,10 +10467,13 @@ ${ev.playerAction ? `Player choice during the event: "${ev.playerAction}"` : ''}
 ${ev.outcome ? `Private outcome: "${ev.outcome}"` : ''}
 
 Slide into ${player.name}'s DMs with a short, in-character message only if that is how ${triggerChar.name} would act on the intel. Treat the DM as their own move, not a request for her to explain the setup. They can warn her, state what they saw, make a pointed observation, tease, bargain, flirt, plan, or decide what they are doing next. Do not ask her to confirm, explain, respond, or provide details unless the intel explicitly says she is the source. Do not act like the whole timeline knows. Do not reveal unrelated private memories. 1-2 sentences max.
-Output ONLY the DM message.` }
+If ${triggerChar.name} would not DM about this, return exactly SILENCE.
+Output ONLY SILENCE or the DM message.` }
         ]
       });
-      const dmMsg = { role:'char', text: cleanChatText(msg, triggerChar, player, false, { feed }), id: Date.now() };
+      const clean = cleanChatText(msg, triggerChar, player, false, { feed });
+      if (!clean || clean.toUpperCase() === 'SILENCE') return;
+      const dmMsg = { role:'char', text: clean, id: Date.now() };
       setDms(d => ({ ...d, [triggerChar.id]: [...(d[triggerChar.id]||[]), dmMsg] }));
       setDmNotifs(n => ({ ...n, [triggerChar.id]: (n[triggerChar.id]||0) + 1 }));
     } catch(e) {}
@@ -11066,6 +11125,10 @@ Write ONE GMZ gossip post. Rules:
         }, ...log]);
       }
       intelChars.forEach((char, idx) => {
+        const likelyToDm = ['havoc','rowan','milo','tamsin','elara','silas','jude','vesper'].includes(char.id)
+          || /private|secret|caught|saw|overheard|warning|threat|kiss|flirt|rumou?r|gmz|team|captain|quidditch/i.test(`${ev.scenario || ''} ${ev.outcome || ''}`);
+        if (!likelyToDm && Math.random() > 0.35) return;
+        setTimeout(() => triggerPrivateIntelDM(char, ev), 1400 + idx * 1900 + Math.random() * 1600);
       });
       const publicTakeChars = intelChars.filter(c => {
         const text = `${c.personality || ''} ${c.description || ''}`.toLowerCase();
@@ -11261,6 +11324,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
             setComposing(false);
             // Player posts: simulate growing engagement
             if (post.charId === 'player') {
+              maybeTriggerDMsFromPlayerPost(post);
               const ticks = [
                 { delay: 1500,  l: 240,  r: 8,   c: 1 },
                 { delay: 4000,  l: 1200, r: 22,  c: 3 },

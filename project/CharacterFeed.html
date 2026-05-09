@@ -890,6 +890,7 @@ const SIDE_PARTICIPANT_CONTEXT_RULE = `
 SIDE-PARTICIPANT CONTEXT RULE:
 - A third-party responder is joining a visible thread, not answering a private message and not magically becoming the subject.
 - If a character was not directly tagged, named, or involved in the visible wording, they can tag someone only to react to that person's visible comment. They must not imply that person asked them to perform, slow down, explain, answer first, or do something unless the thread explicitly says so.
+- If a character was not directly tagged, named, or involved in the visible wording, they must not claim "you dropped my name", "you said my name", "you tagged me", "you mentioned me", or that they were pulled into the thread. They can still enter as a bystander with a specific reaction to what is visible.
 - First-person opinions are fine ("i hate that i laughed", "i noticed", "i am choosing not to encourage this"). First-person involvement is not fine for side participants ("you want me to...", "mad i answered first", "need me to...") unless they were actually addressed.
 - Elara can needle Havoc about giving Keres attention, but she should anchor it to what Havoc visibly did or said. She should not insert herself into Keres and Havoc's exchange as if Havoc was talking to her.`;
 
@@ -1625,11 +1626,28 @@ function mentionedCharactersInText(text = '', roster = []) {
 
 function replyTargetHandleFromText(text = '', fallbackHandle = '', roster = [], speaker = null) {
   const speakerHandle = String(speaker?.handle || '').replace(/^@/, '').toLowerCase();
-  const handles = Array.from(String(text || '').matchAll(/@([a-z0-9_]+)/gi))
-    .map(m => m[1].toLowerCase())
-    .filter(handle => handle && handle !== speakerHandle);
-  const known = handles.find(handle => (roster || []).some(c => String(c?.handle || '').toLowerCase() === handle));
-  return known || String(fallbackHandle || '').replace(/^@/, '');
+  const leading = String(text || '').trim().match(/^@([a-z0-9_]+)\b/i);
+  const leadingHandle = leading?.[1]?.toLowerCase();
+  if (
+    leadingHandle
+    && leadingHandle !== speakerHandle
+    && (roster || []).some(c => String(c?.handle || '').toLowerCase() === leadingHandle)
+  ) {
+    return leadingHandle;
+  }
+  return String(fallbackHandle || '').replace(/^@/, '').toLowerCase();
+}
+
+function normalizeLeadingReplyHandle(text = '', replyToHandle = '') {
+  const handle = String(replyToHandle || '').replace(/^@/, '').trim();
+  const raw = String(text || '').trim();
+  if (!handle || !raw) return raw;
+  if (/^@[a-z0-9_]+\b/i.test(raw)) return raw.replace(/\s{2,}/g, ' ').trim();
+  const withoutTarget = raw
+    .replace(new RegExp(`(^|\\s)@${escapeRegExp(handle)}\\b\\s*`, 'ig'), ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return `@${handle} ${withoutTarget}`.trim();
 }
 
 function teammateStakeInText(text = '', responder, roster = []) {
@@ -3414,6 +3432,9 @@ function looksLikeSideParticipantSelfInsertion(text = '', char = null, opts = {}
   return /\b(?:you|u)\b[^.?!]{0,60}\b(?:want|need|asking|ask|asked|told|telling|mad|angry)\s+(?:me|my|i)\b/i.test(lower)
     || /\b(?:want|need|asking|ask|asked|told|telling)\s+me\s+to\b/i.test(lower)
     || /\b(?:mad|angry|annoyed)\s+(?:i|me|my)\b/i.test(lower)
+    || /\b(?:you|u)\b[^.?!]{0,80}\b(?:dropped|said|used|brought\s+up|mentioned|tagged|named)\s+(?:my\s+name|me)\b/i.test(lower)
+    || /\b(?:my\s+name|me)\b[^.?!]{0,80}\b(?:got|gets|being|was|were)?\s*(?:dropped|said|used|brought\s+up|mentioned|tagged|named|pulled\s+in|dragged\s+in)\b/i.test(lower)
+    || /\b(?:i|me|my)\b[^.?!]{0,80}\b(?:got|gets|was|were)?\s*(?:tagged|mentioned|named|pulled\s+in|dragged\s+in)\b/i.test(lower)
     || /\b(?:i|me|my)\s+(?:answered|answer|roasted|roast|slowed|slow|started|caused|did\s+it|do\s+it)\s+(?:first|again|too)\b/i.test(lower);
 }
 
@@ -3489,9 +3510,10 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   const avoidTexts = [...(opts.avoidTexts || [])];
   const silenceOnFailure = opts.failureMode === 'silence' || opts.silenceOnFailure === true;
   const softThreadCleanup = opts.softThreadCleanup === true || Number(opts.replyDepth || 0) >= 2;
+  const normalizeReplyOutput = (value) => normalizeLeadingReplyHandle(value, opts.replyToHandle);
   const fail = (fallback) => {
     if (silenceOnFailure) return '';
-    return typeof fallback === 'function' ? fallback() : fallback;
+    return normalizeReplyOutput(typeof fallback === 'function' ? fallback() : fallback);
   };
   if (opts.feed) avoidTexts.push(recentFeedDialogueText(opts.feed, { limit: opts.feedAvoidLimit || 8 }));
   const botHandle = opts.bot?.handle ? escapeRegExp(opts.bot.handle.replace(/^@/, '')) : null;
@@ -3514,7 +3536,7 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
       && !looksLikeSelfPronounDrift(clean, char, opts)
       && !violatesCharacterDialogueContract(clean, char)
     ) {
-      return clean;
+      return normalizeReplyOutput(clean);
     }
     return fail(fallback);
   };
@@ -3596,7 +3618,7 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     if (char) return fail(() => fallbackDialogueContractLine(char, player, avoidTexts));
     return fail(() => fallbackChatLine(char, player, false, avoidTexts));
   }
-  return clean;
+  return normalizeReplyOutput(clean);
 }
 
 function repairPromptLeakPosts(feed = [], chars = [], player) {
@@ -5073,7 +5095,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const relMode = relationshipBehaviorMode(rel);
       const mentionNote = directMentionIds.has(c.id)
         ? ` DIRECTLY MENTIONED in the post by @handle or name; they should usually answer the callout from inside it. If they are one of multiple named people, they must not speak like a bystander saying "both of you", "you two", "those two", or "the two of them"; use I/me/we/us or address the other named person directly.`
-        : '';
+        : ' NOT DIRECTLY MENTIONED: this character can jump in from the side, but must not claim the poster dropped their name, said their name, tagged them, mentioned them, or pulled them into it.';
       const houseDefenseNote = isHouseTeamCallout(post.text, c) ? ' HOUSE/TEAM CALLOUT: the post insults or needles their house/team. They should answer with more bite, defend or undercut the insult, or hit back. Do not shrug, agree mildly, or say "I guess".' : '';
       const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
@@ -5532,11 +5554,7 @@ Return ONLY SILENCE or the reply text.`
   const renderText = (text) => renderLinkedText(text, allChars, onCharClick);
 
   function visibleReplyText(text = '', replyTo = '') {
-    const handle = String(replyTo || '').replace(/^@/, '').trim();
-    const raw = String(text || '').trim();
-    if (!handle || !raw) return raw;
-    if (new RegExp(`(^|\\s)@${escapeRegExp(handle)}\\b`, 'i').test(raw)) return raw;
-    return `@${handle} ${raw}`;
+    return normalizeLeadingReplyHandle(text, replyTo);
   }
 
   const getBotById = id => RECURRING_BOTS.find(b => b.id === id) || RECURRING_BOTS[0];
@@ -5916,7 +5934,7 @@ Write ONE short response to ${player.name}. Treat this as a public thread with m
         const isDirectResponder = taggedIds.has(c.id) || target.some(t => t.id === c.id) || c.id === post.charId;
         const replyRoleNote = isDirectResponder
           ? ` DIRECT RESPONSE ROLE: this character was directly addressed, tagged, or owns the post being answered. They may answer @${player.handle} or the thread from their own stake.`
-          : ` THIRD-PARTY WEIGH-IN ROLE: this character is joining from the side. If they tag someone, tag @${defaultReplyHandle} or the comment they are weighing in on. Do not act like @${player.handle} was talking to them unless @${player.handle} directly tagged them. Do not write "you want me to", "mad I answered", or other lines that insert this character into an exchange they were not part of.`;
+          : ` THIRD-PARTY WEIGH-IN ROLE: this character is joining from the side. If they tag someone, tag @${defaultReplyHandle} or the comment they are weighing in on. Do not act like @${player.handle} was talking to them unless @${player.handle} directly tagged them. Do not write "you want me to", "mad I answered", "you dropped my name", "you said my name", "you tagged me", or other lines that insert this character into an exchange they were not part of.`;
         const defenseNote = backsHouseTeam(playerText, c) || isHouseTeamCallout(sourceText || post.text, c)
           ? ' HOUSE/TEAM STAKE: their house/team is being backed or insulted here. They should feel pulled back into the thread and answer with bite, agreement, or direct pushback instead of letting a random rival take over.'
           : '';

@@ -1578,6 +1578,15 @@ function mentionedCharactersInText(text = '', roster = []) {
   return (roster || []).filter(c => characterMentionedInText(text, c));
 }
 
+function replyTargetHandleFromText(text = '', fallbackHandle = '', roster = [], speaker = null) {
+  const speakerHandle = String(speaker?.handle || '').replace(/^@/, '').toLowerCase();
+  const handles = Array.from(String(text || '').matchAll(/@([a-z0-9_]+)/gi))
+    .map(m => m[1].toLowerCase())
+    .filter(handle => handle && handle !== speakerHandle);
+  const known = handles.find(handle => (roster || []).some(c => String(c?.handle || '').toLowerCase() === handle));
+  return known || String(fallbackHandle || '').replace(/^@/, '');
+}
+
 function teammateStakeInText(text = '', responder, roster = []) {
   return mentionedCharactersInText(text, roster).some(m => sameHouseOrTeam(responder, m));
 }
@@ -3340,6 +3349,11 @@ function fallbackGmzSpeculationLine(char, player, opts = {}) {
 function cleanSocialReplyText(raw = '', char, player, opts = {}) {
   opts = opts || {};
   const avoidTexts = [...(opts.avoidTexts || [])];
+  const silenceOnFailure = opts.failureMode === 'silence' || opts.silenceOnFailure === true;
+  const fail = (fallback) => {
+    if (silenceOnFailure) return '';
+    return typeof fallback === 'function' ? fallback() : fallback;
+  };
   if (opts.feed) avoidTexts.push(recentFeedDialogueText(opts.feed, { limit: opts.feedAvoidLimit || 8 }));
   const botHandle = opts.bot?.handle ? escapeRegExp(opts.bot.handle.replace(/^@/, '')) : null;
   const botStripped = botHandle
@@ -3350,76 +3364,76 @@ function cleanSocialReplyText(raw = '', char, player, opts = {}) {
     .replace(/^comment:\s*/i, '')
     .trim();
   if (looksLikeMadeItWorseSubjectMisread(clean, opts)) {
-    if (opts.bot) return fallbackBotLine(opts.bot, opts);
-    if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
-    return fallbackChatLine(char, player, false, avoidTexts);
+    if (opts.bot) return fail(() => fallbackBotLine(opts.bot, opts));
+    if (char) return fail(() => fallbackDialogueContractLine(char, player, avoidTexts));
+    return fail(() => fallbackChatLine(char, player, false, avoidTexts));
   }
   if (looksLikePracticeContextDrift(clean, char, { ...opts, avoidTexts })) {
-    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
-    if (char) return fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts });
-    return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
+    if (opts.bot) return fail(() => fallbackBotLine(opts.bot, { ...opts, avoidTexts }));
+    if (char) return fail(() => fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts }));
+    return fail(() => fallbackBotLine(opts.bot, { ...opts, avoidTexts }));
   }
   if (looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts })) {
-    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
-    if (char && isPracticeTrashTalkContext({ ...opts, avoidTexts })) return fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts });
-    if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
-    return fallbackChatLine(char, player, false, avoidTexts);
+    if (opts.bot) return fail(() => fallbackBotLine(opts.bot, { ...opts, avoidTexts }));
+    if (char && isPracticeTrashTalkContext({ ...opts, avoidTexts })) return fail(() => fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts }));
+    if (char) return fail(() => fallbackDialogueContractLine(char, player, avoidTexts));
+    return fail(() => fallbackChatLine(char, player, false, avoidTexts));
   }
   if (looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts })) {
-    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
-    if (char && isPracticeTrashTalkContext({ ...opts, avoidTexts })) return fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts });
-    if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
-    return fallbackChatLine(char, player, false, avoidTexts);
+    if (opts.bot) return fail(() => fallbackBotLine(opts.bot, { ...opts, avoidTexts }));
+    if (char && isPracticeTrashTalkContext({ ...opts, avoidTexts })) return fail(() => fallbackPracticeTrashTalkLine(char, player, { ...opts, avoidTexts }));
+    if (char) return fail(() => fallbackDialogueContractLine(char, player, avoidTexts));
+    return fail(() => fallbackChatLine(char, player, false, avoidTexts));
   }
-  if (opts.bot && looksLikeBotPatternSlop(clean, opts.bot, opts)) return fallbackBotLine(opts.bot, opts);
+  if (opts.bot && looksLikeBotPatternSlop(clean, opts.bot, opts)) return fail(() => fallbackBotLine(opts.bot, opts));
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
-    return fallbackUnsupportedBlameLine(char, player, false, avoidTexts);
+    return fail(() => fallbackUnsupportedBlameLine(char, player, false, avoidTexts));
   }
   if (char && looksLikeSilasCamaraderieMisread(clean, char, opts)) {
-    return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
+    return fail(() => fallbackFlatThreadLine(char, player, { ...opts, avoidTexts }));
   }
   if (char && looksLikeSilasPublicSoftness(clean, char)) {
-    return fallbackDialogueContractLine(char, player, avoidTexts);
+    return fail(() => fallbackDialogueContractLine(char, player, avoidTexts));
   }
   if (looksLikeDetailDemandInsteadOfSpeculation(clean, { ...opts, avoidTexts })) {
-    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
-    if (char) return fallbackGmzSpeculationLine(char, player, { ...opts, avoidTexts });
-    return fallbackChatLine(char, player, false, avoidTexts);
+    if (opts.bot) return fail(() => fallbackBotLine(opts.bot, { ...opts, avoidTexts }));
+    if (char) return fail(() => fallbackGmzSpeculationLine(char, player, { ...opts, avoidTexts }));
+    return fail(() => fallbackChatLine(char, player, false, avoidTexts));
   }
   if (char && (looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts))) {
-    return fallbackFlatThreadLine(char, player, { ...opts, avoidTexts });
+    return fail(() => fallbackFlatThreadLine(char, player, { ...opts, avoidTexts }));
   }
   if (char && looksLikeDeadAirReply(clean)) {
-    return fallbackPublicBanterLine(char, player, avoidTexts, opts);
+    return fail(() => fallbackPublicBanterLine(char, player, avoidTexts, opts));
   }
   if (char && looksLikeInterrogationSpiral(clean)) {
-    return fallbackPublicBanterLine(char, player, avoidTexts, opts);
+    return fail(() => fallbackPublicBanterLine(char, player, avoidTexts, opts));
   }
   if (char && (looksLikeHardDefensiveBanterDodge(clean) || (opts.playfulBanter && looksLikeDefensiveBanterDodge(clean)))) {
-    return fallbackPublicBanterLine(char, player, avoidTexts, opts);
+    return fail(() => fallbackPublicBanterLine(char, player, avoidTexts, opts));
   }
   if (char && looksLikeSideParticipantSelfInsertion(clean, char, opts)) {
-    return fallbackSideParticipantLine(char, player, opts);
+    return fail(() => fallbackSideParticipantLine(char, player, opts));
   }
   if (char && (isSelfNarration(clean, char) || looksLikeSelfPronounDrift(clean, char, opts))) {
-    return fallbackSelfReferenceLine(char, player);
+    return fail(() => fallbackSelfReferenceLine(char, player));
   }
   if (char && looksLikeDetachedParticipantReply(clean, char, opts)) {
-    return fallbackParticipantIncludedLine(char, player, opts);
+    return fail(() => fallbackParticipantIncludedLine(char, player, opts));
   }
   if (char && violatesCharacterDialogueContract(clean, char)) {
-    return fallbackDialogueContractLine(char, player, avoidTexts);
+    return fail(() => fallbackDialogueContractLine(char, player, avoidTexts));
   }
   if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeCrypticVomit(clean, opts.contextText || '') || hasDialoguePatternCollision(clean, avoidTexts) || looksLikeIdentityConfusion(clean, char) || clean.length > 360) {
-    if (opts.bot) return fallbackBotLine(opts.bot, { ...opts, avoidTexts });
+    if (opts.bot) return fail(() => fallbackBotLine(opts.bot, { ...opts, avoidTexts }));
     if (char && opts.playfulBanter) {
       const playfulFallback = fallbackPublicBanterLine(char, player, avoidTexts);
-      return hasDialoguePatternCollision(playfulFallback, avoidTexts) || violatesCharacterDialogueContract(playfulFallback, char)
+      return fail(() => hasDialoguePatternCollision(playfulFallback, avoidTexts) || violatesCharacterDialogueContract(playfulFallback, char)
         ? fallbackDialogueContractLine(char, player, avoidTexts)
-        : playfulFallback;
+        : playfulFallback);
     }
-    if (char) return fallbackDialogueContractLine(char, player, avoidTexts);
-    return fallbackChatLine(char, player, false, avoidTexts);
+    if (char) return fail(() => fallbackDialogueContractLine(char, player, avoidTexts));
+    return fail(() => fallbackChatLine(char, player, false, avoidTexts));
   }
   return clean;
 }
@@ -4941,24 +4955,18 @@ Each non-empty reply 6-24 words. Give every speaker a distinct social move and s
         const usedThreadTexts = [post.text || ''];
         charR1 = picked.map((c,i) => {
           const speakerHistory = speakerThreadHistory(c.id, 8);
-          const text = cleanSocialReplyText(parsed[i] || '', c, player, { feed, avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === authorId || directMentionIds.has(c.id), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], replyToHandle: author?.handle });
+          const text = cleanSocialReplyText(parsed[i] || '', c, player, { feed, avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === authorId || directMentionIds.has(c.id), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], replyToHandle: author?.handle, failureMode: 'silence' });
           usedThreadTexts.push(text);
           return {
             charId: c.id,
             text,
             likes: Math.floor(Math.random()*8000),
             timestamp: baseTs + 60000 + i*30000 + Math.floor(Math.random()*120000),
-            replyTo: author?.handle || char?.handle || player.handle,
+            replyTo: replyTargetHandleFromText(text, author?.handle || char?.handle || player.handle, [player, ...chars, GMZ_CHAR], c),
           };
         }).filter(c => c.text);
       } catch(e) {
-        charR1 = picked.slice(0, Math.min(3, picked.length)).map((c, i) => ({
-          charId: c.id,
-          text: fallbackDialogueContractLine(c, player, [post.text || '']),
-          likes: Math.floor(Math.random()*8000),
-          timestamp: baseTs + 60000 + i*30000 + Math.floor(Math.random()*120000),
-          replyTo: author?.handle || char?.handle || player.handle,
-        })).filter(c => c.text);
+        charR1 = [];
       }
 
       if (cancelled) return;
@@ -5110,7 +5118,7 @@ Return ONLY the reply text.`
               }],
               model: 'fast'
             });
-            const opText = cleanSocialReplyText(resOp, author, player, { feed, avoidTexts: [post.text, ...charR1.map(cc => cc.text)], playfulBanter: !!playfulThreadRule, selfSubject: true, contextText: `${post.text || ''} ${targetReply.text || ''}`, roster: [player, ...chars, GMZ_CHAR], replyToHandle: targetSpeaker.handle });
+            const opText = cleanSocialReplyText(resOp, author, player, { feed, avoidTexts: [post.text, ...charR1.map(cc => cc.text)], playfulBanter: !!playfulThreadRule, selfSubject: true, contextText: `${post.text || ''} ${targetReply.text || ''}`, roster: [player, ...chars, GMZ_CHAR], replyToHandle: targetSpeaker.handle, failureMode: 'silence' });
             if (!cancelled && opText) {
               setTimeout(() => {
                 if (cancelled) return;
@@ -5181,11 +5189,12 @@ Return ONLY the reply text. No other text.`
           if (cancelled) return;
           const clapback = {
             charId: fight.replier.id,
-            text: cleanSocialReplyText(res, fight.replier, player, { feed, avoidTexts: [post.text, ...charR1.map(cc => cc.text), fight.targetReply.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.replier.id === authorId || characterMentionedInText(post.text || '', fight.replier), contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR] }),
+            text: cleanSocialReplyText(res, fight.replier, player, { feed, avoidTexts: [post.text, ...charR1.map(cc => cc.text), fight.targetReply.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.replier.id === authorId || characterMentionedInText(post.text || '', fight.replier), contextText: `${post.text || ''} ${fight.targetReply.text || ''}`, roster: [player, ...chars, GMZ_CHAR], replyToHandle: fight.target.handle, failureMode: 'silence' }),
             likes: Math.floor(Math.random()*20000) + 2000, // clapbacks pop off
             timestamp: baseTs + 480000 + Math.floor(Math.random()*240000),
             replyTo: fight.target.handle,
           };
+          if (!clapback.text) throw new Error('empty autonomous clapback');
           // Drop it after the bot wave finishes, plus a beat
           setTimeout(() => {
             if (cancelled) return;
@@ -5248,7 +5257,7 @@ Write as ${responder.name}. If they would ignore this, return exactly SILENCE. O
 Return ONLY SILENCE or the reply text.` }],
                     model: 'fast'
                   });
-                  const botReply = cleanSocialReplyText(resBot, responder, player, { feed, avoidTexts: [post.text, clapback.text, botTarget.text], playfulBanter: !!playfulThreadRule, selfSubject: responder.id === authorId || characterMentionedInText(`${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, responder), contextText: `${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
+                  const botReply = cleanSocialReplyText(resBot, responder, player, { feed, avoidTexts: [post.text, clapback.text, botTarget.text], playfulBanter: !!playfulThreadRule, selfSubject: responder.id === authorId || characterMentionedInText(`${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, responder), contextText: `${post.text || ''} ${clapback.text || ''} ${botTarget.text || ''}`, roster: [player, ...chars, GMZ_CHAR], replyToHandle: bot?.handle, failureMode: 'silence' });
                   if (!cancelled && botReply && botReply.toUpperCase() !== 'SILENCE') {
                     setTimeout(() => {
                       if (cancelled) return;
@@ -5296,7 +5305,7 @@ Return ONLY SILENCE or the reply text.`
                   }],
                   model: 'fast'
                 });
-                const counterText = cleanSocialReplyText(res3, fight.target, player, { feed, avoidTexts: [post.text, fight.targetReply.text, clapback.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.target.id === authorId || characterMentionedInText(`${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, fight.target), contextText: `${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, roster: [player, ...chars, GMZ_CHAR] });
+                const counterText = cleanSocialReplyText(res3, fight.target, player, { feed, avoidTexts: [post.text, fight.targetReply.text, clapback.text], playfulBanter: !!playfulThreadRule, selfSubject: fight.target.id === authorId || characterMentionedInText(`${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, fight.target), contextText: `${post.text || ''} ${fight.targetReply.text || ''} ${clapback.text || ''}`, roster: [player, ...chars, GMZ_CHAR], replyToHandle: fight.replier.handle, failureMode: 'silence' });
                 if (!cancelled && counterText && counterText.toUpperCase() !== 'SILENCE') {
                   const counter = {
                     charId: fight.target.id,
@@ -5769,14 +5778,14 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
       const replies = responders.map((c, i) => {
         const speakerHistory = speakerThreadHistory(c.id, 8);
         const safeDefaultReply = defaultReplyHandle !== c.handle ? defaultReplyHandle : (player.handle !== c.handle ? player.handle : author?.handle || '');
-        const text = cleanSocialReplyText(parsed[i] || '', c, player, { feed, avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, c), contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, latestUserText: playerText, roster: [player, ...chars, GMZ_CHAR], replyToHandle: safeDefaultReply });
+        const text = cleanSocialReplyText(parsed[i] || '', c, player, { feed, avoidTexts: [...usedThreadTexts, speakerHistory].filter(Boolean), playfulBanter: !!playfulThreadRule, selfSubject: c.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, c), contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, latestUserText: playerText, roster: [player, ...chars, GMZ_CHAR], replyToHandle: safeDefaultReply, failureMode: 'silence' });
         usedThreadTexts.push(text);
         return {
           charId: c.id,
           text,
           likes: Math.floor(Math.random()*12000),
           timestamp: baseTs + 90000 + i*45000 + Math.floor(Math.random()*45000),
-          replyTo: defaultReplyHandle,
+          replyTo: replyTargetHandleFromText(text, defaultReplyHandle, [player, ...chars, GMZ_CHAR], c),
           nestedReply: false,
         };
       }).filter(r => r.text);
@@ -10237,8 +10246,10 @@ ${embarrassingPost ? 'This is a public embarrassment, bad look, messy callout, o
 Write ONE short reply (1 sentence, in character). Use the pronouns listed above exactly. Tag @${char.handle} directly. No quotes, just the reply text.
 ` }]
                 });
-                const replyText = cleanSocialReplyText(replyRaw, replier, player, { feed, avoidTexts: [recentContext, cleanText], selfSubject: replierIsMentioned, contextText: cleanText || '', roster: [player, ...chars, GMZ_CHAR] });
-                setFeed(f => f.map(p => p.id === newPost.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
+                const replyText = cleanSocialReplyText(replyRaw, replier, player, { feed, avoidTexts: [recentContext, cleanText], selfSubject: replierIsMentioned, contextText: cleanText || '', roster: [player, ...chars, GMZ_CHAR], replyToHandle: char.handle, failureMode: 'silence' });
+                if (replyText) {
+                  setFeed(f => f.map(p => p.id === newPost.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
+                }
               } catch(e) {}
             }, 12000 + Math.random()*13000);
           }

@@ -644,6 +644,7 @@ SCENE RULES:
 - Do not invent major backstory unless supplied.
 - Preserve relationships, pronouns, house/team, and private/public boundaries.
 - Avoid polished monologues unless the scene explicitly calls for it.
+- Avoid filler non-responses: leaning back, raising eyebrows, almost smiling, watching, looking over, pausing, waiting, or saying nothing are not scene answers unless paired with a specific line or a concrete action that changes the moment.
 ${buildCompactAntiAiRules()}
 ${includePrivateCanon ? KERES_HAVOC_ROWAN_CANON : ''}
 `;
@@ -2009,6 +2010,7 @@ function normalizeFlyOnWallOutput(text, presentChars = []) {
   const dialogueRx = /^\s*@?([A-Za-z][A-Za-z0-9_]*(?:\s+[A-Za-z][A-Za-z0-9_]*)?)\s*:\s*(.+?)\s*$/;
   const messages = [];
   let narrationBuffer = [];
+  let skippedSceneReply = false;
   const flushNarration = () => {
     const narration = narrationBuffer.join('\n').trim();
     narrationBuffer = [];
@@ -2036,11 +2038,16 @@ function normalizeFlyOnWallOutput(text, presentChars = []) {
     const speaker = match ? charBySpeaker(match[1]) : null;
     if (speaker) {
       flushNarration();
+      const text = cleanSceneReply(match[2].replace(/^["'“”]+|["'“”]+$/g, '').trim(), speaker, []);
+      if (!text) {
+        skippedSceneReply = true;
+        return;
+      }
       const t = now + messages.length;
       messages.push({
         role: 'char',
         charId: speaker.id,
-        text: match[2].replace(/^["'“”]+|["'“”]+$/g, '').trim(),
+        text,
         mode: 'fly_on_wall',
         id: t,
         timestamp: t,
@@ -2052,7 +2059,9 @@ function normalizeFlyOnWallOutput(text, presentChars = []) {
   });
   flushNarration();
 
-  return messages.length ? messages : [{
+  if (messages.length) return messages;
+  if (skippedSceneReply) return [];
+  return [{
     role: 'scene',
     charId: null,
     text: raw,
@@ -2087,55 +2096,47 @@ function normalizeFlyOnWallBeats(rawText, presentChars = []) {
       action ? `[${action}]` : '',
       dialogue,
     ].filter(Boolean).join(' ').trim();
-    if (!text) return null;
+    const clean = cleanSceneReply(text, speaker, []);
+    if (!clean) return null;
     const t = now + i;
     return {
       role: 'char',
       charId: speaker.id,
-      text,
+      text: clean,
       mode: 'fly_on_wall',
       id: t,
       timestamp: t,
       ts: t,
     };
   }).filter(Boolean);
-  return beats.length ? beats : normalizeFlyOnWallOutput(cleanFlyOnWallSceneText(rawText), chars);
+  if (beats.length) return beats;
+  if (parsed.length) return [];
+  return normalizeFlyOnWallOutput(cleanFlyOnWallSceneText(rawText), chars);
 }
 
-const SCENE_FALLBACKS = {
-  havoc:  ['*leans back, says nothing yet.*', 'try that again.', '*raises an eyebrow.*'],
-  silas:  ['*doesn\'t look up immediately.*', 'be specific.', '*waits.*'],
-  callum: ['*exhales once.*', 'that\'s your version.', '*looks away briefly.*'],
-  briar:  ['*sets something down deliberately.*', 'say it properly.', '*says nothing yet.*'],
-  rowan:  ['*almost smiles.*', 'interesting choice.', '*watches you.*'],
-  milo:   ['*opens his mouth, closes it.*', 'wait, say that again.', '*looks alarmed.*'],
-  elara:  ['*looks at you for a moment.*', 'careful.', '*says nothing, which is worse.*'],
-  theo:   ['*visibly files this away.*', 'noted.', '*tilts his head.*'],
-  jude:   ['*glances over.*', 'sure.', '*says nothing useful.*'],
-  tamsin: ['*pauses before answering.*', 'go on.', '*considers this.*'],
-};
+function looksLikeSceneNonResponse(text = '') {
+  const raw = String(text || '').trim();
+  const lower = raw.toLowerCase().replace(/[’]/g, "'");
+  const actionOnly = !lower.replace(/\*[^*]*\*/g, '').replace(/\[[^\]]*\]/g, '').trim();
+  const normalized = lower
+    .replace(/[\*\[\]".,!?]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (/^(?:try that again|interesting choice|careful|noted|sure|go on|be specific|that's your version|that is your version)$/.test(normalized)) return true;
+  if (!actionOnly) return false;
+  return /\b(?:leans?\s+back|raises?\s+(?:an\s+)?eyebrows?|almost\s+smiles?|watches\s+you|looks\s+at\s+you|glances?\s+over|says?\s+nothing|waits?|pauses?|considers\s+this|tilts?\s+his\s+head|tilts?\s+her\s+head|exhales?\s+once|looks?\s+away)\b/i.test(normalized);
+}
 
 function cleanSceneReply(text = '', char, avoidTexts = []) {
   const clean = cleanSceneText(text);
-  const pool = SCENE_FALLBACKS[char?.id] || ['*pauses.*', '*glances over.*', '*says nothing.*'];
   const needsFallback =
     !clean
     || looksLikePromptLeak(clean)
     || looksLikeBannedFlatPhrase(clean)
+    || looksLikeSceneNonResponse(clean)
     || violatesCharacterDialogueContract(clean, char)
     || hasDialoguePatternCollision(clean, avoidTexts);
-  if (!needsFallback) return clean;
-  const start = Math.floor(Math.random() * pool.length);
-  for (let i = 0; i < pool.length; i++) {
-    const candidate = pool[(start + i) % pool.length];
-    if (!fallbackWasUsed(char?.id, candidate)
-        && !hasDialoguePatternCollision(candidate, avoidTexts)) {
-      trackFallback(char?.id, candidate);
-      return candidate;
-    }
-  }
-  trackFallback(char?.id, pool[start]);
-  return pool[start];
+  return needsFallback ? '' : clean;
 }
 
 function escapeRegExp(text = '') {
@@ -7344,7 +7345,7 @@ RELEVANT RECENT CONTEXT:
 ${timelineContext}
 
 Return ONLY a JSON array of beat objects like:
-[{"handle":"havocfang","action":"He leans back against the bedframe, jaw working once.","dialogue":"say the actual thing, rowan."}]
+[{"handle":"havocfang","action":"His jaw works once.","dialogue":"say the actual thing, rowan."}]
 
 Use exact handles from the present-character roster. No notes. No explanations. No second-person narration. No spying/listening frame.`;
 }
@@ -7654,19 +7655,22 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
           console.log('[Meanwhile] loading false');
           return;
         }
-        const res = await window.claude.complete({
-          label: 'scene opening',
-          messages:[{ role:'user', content: buildScenePrompt('') + '\n\nOpen the scene with 1-2 short lines from the invited character(s). Return ONLY a JSON array of objects like [{"handle":"havocfang","text":"*He leans against the wall.* You picked a dramatic spot."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. Hints at inner state through physical tells only. Short and atmospheric.' }]
-        });
-        const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
-        const usedSceneTexts = msgs.map(m => m.text || '').filter(Boolean);
-        const openers = parsed.slice(0,2).map((m, i) => {
-          const speaker = participants.find(c => c.handle === String(m.handle || '').replace('@','')) || participants[i] || primaryChar;
-          const text = cleanSceneReply(m.text || '', speaker, usedSceneTexts);
-          usedSceneTexts.push(text);
-          return { role:'char', charId:speaker.id, text, id: Date.now() + i, ts: Date.now() };
-        }).filter(m => m.text);
-        setMsgs(openers.length ? openers : [{ role:'char', charId:primaryChar.id, text:'*glances over, saying nothing for a moment.*', id: Date.now(), ts: Date.now() }]);
+        let openers = [];
+        for (let attempt = 0; attempt < 2 && !openers.length; attempt++) {
+          const res = await window.claude.complete({
+            label: 'scene opening',
+            messages:[{ role:'user', content: buildScenePrompt('') + `\n\nOpen the scene with 1-2 short lines from the invited character(s). Return ONLY a JSON array of objects like [{"handle":"havocfang","text":"You picked a dramatic spot."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. No narration. Avoid placeholder reaction beats like leaning back, raising eyebrows, almost smiling, watching, looking over, pausing, waiting, or saying nothing unless attached to a specific spoken choice. If nobody has a grounded opening move, return [].${attempt ? '\nThe previous attempt failed because it used a generic non-response. Regenerate with a specific grounded line or return [].' : ''}` }]
+          });
+          const parsed = parseJsonArrayFromText(res);
+          const usedSceneTexts = msgs.map(m => m.text || '').filter(Boolean);
+          openers = parsed.slice(0,2).map((m, i) => {
+            const speaker = participants.find(c => c.handle === String(m.handle || '').replace('@','')) || participants[i] || primaryChar;
+            const text = cleanSceneReply(m.text || '', speaker, usedSceneTexts);
+            if (text) usedSceneTexts.push(text);
+            return { role:'char', charId:speaker.id, text, id: Date.now() + i, ts: Date.now() };
+          }).filter(m => m.text);
+        }
+        setMsgs(openers);
       } catch(e) {
         if (isFlyOnWall) {
           console.error('[Meanwhile] error', e);
@@ -7686,7 +7690,7 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
           console.log('[Meanwhile] loading false');
           return;
         }
-        setMsgs([{ role:'char', charId:primaryChar.id, text: '*glances over, saying nothing for a moment.*', id: Date.now(), ts: Date.now() }]);
+        setMsgs([]);
       }
       setLoading(false);
     }
@@ -7738,18 +7742,21 @@ ${history ? `\nCONVERSATION SO FAR:\n${history}` : ''}
       const history = [...msgs, userMsg].map(m =>
         m.role === 'user' ? `${player.name}: ${m.text}` : `${getSceneChar(m.charId)?.name}: ${m.text}`
       ).join('\n');
-      const res = await window.claude.complete({
-        label: 'scene reply',
-        messages:[{ role:'user', content: buildScenePrompt(history, userMsg.text) + `\n\nRespond to: ${userMsg.text}\nChoose the character or characters who would naturally answer. In a group scene, not everyone needs to speak every turn, but if the player directly names one participant, that participant answers first. More than one may jump in only if the moment invites it.\nReturn ONLY a JSON array of 1-3 objects like [{"handle":"rowancade","text":"..."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. No narration. No inner monologue spelled out.` }]
-      });
-      const parsed = JSON.parse(res.trim().replace(/^```json\n?|\n?```$/g,''));
-      const usedSceneTexts = msgs.map(m => m.text || '').filter(Boolean);
-      const replies = parsed.slice(0,3).map((m, i) => {
-        const speaker = participants.find(c => c.handle === String(m.handle || '').replace('@','')) || participants[i] || primaryChar;
-        const text = cleanSceneReply(m.text || '', speaker, usedSceneTexts);
-        usedSceneTexts.push(text);
-        return { role:'char', charId:speaker.id, text, id: Date.now()+1+i, ts: Date.now() };
-      }).filter(m => m.text);
+      let replies = [];
+      for (let attempt = 0; attempt < 2 && !replies.length; attempt++) {
+        const res = await window.claude.complete({
+          label: 'scene reply',
+          messages:[{ role:'user', content: buildScenePrompt(history, userMsg.text) + `\n\nRespond to: ${userMsg.text}\nChoose the character or characters who would naturally answer. In a group scene, not everyone needs to speak every turn, but if the player directly names one participant, that participant answers first. More than one may jump in only if the moment invites it.\nReturn ONLY a JSON array of 0-3 objects like [{"handle":"rowancade","text":"..."}]. Use exact handles from the roster. Format actions in *third person asterisks*, then dialogue as plain text with NO quote marks. No narration. No inner monologue spelled out. Avoid placeholder reaction beats like leaning back, raising eyebrows, almost smiling, watching, looking over, pausing, waiting, or saying nothing unless attached to a specific spoken choice. If no one has a grounded response to this exact moment, return [].${attempt ? '\nThe previous attempt failed because it used a generic non-response. Regenerate with a specific grounded reply or return [].' : ''}` }]
+        });
+        const parsed = parseJsonArrayFromText(res);
+        const usedSceneTexts = msgs.map(m => m.text || '').filter(Boolean);
+        replies = parsed.slice(0,3).map((m, i) => {
+          const speaker = participants.find(c => c.handle === String(m.handle || '').replace('@','')) || participants[i] || primaryChar;
+          const text = cleanSceneReply(m.text || '', speaker, usedSceneTexts);
+          if (text) usedSceneTexts.push(text);
+          return { role:'char', charId:speaker.id, text, id: Date.now()+1+i, ts: Date.now() };
+        }).filter(m => m.text);
+      }
       if (replies.length) setMsgs(prev => [...prev, ...replies].slice(-SCENE_MAX_MESSAGES));
     } catch(e) {}
     setLoading(false);

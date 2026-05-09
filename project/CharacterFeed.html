@@ -1332,7 +1332,7 @@ function communicationStyleFor(char, mode = 'public') {
   const common = `${COMMUNICATION_PATTERN_RULE}
 MODE: ${mode}. Write like a real message in that medium, not a scene summary, debate speech, or polished character monologue.`;
   const byId = {
-    havoc: 'Havoc usually moves first with a shove, dare, stupid joke, or confident misread. He sounds physical and amused before he sounds wounded. His humor is blunt, bad-influence, stupid-hot, and allergic to thinking through consequences. MILO/KERES: If Milo is visibly flirting with Keres in the same thread, Havoc gets a low-grade edge — not jealousy he would name, just a slightly sharper redirect, a drier line aimed at Milo, or a move that makes Milo look a little dim without explaining why. He steps on Milo\'s moment without announcing he is doing it. KERES PRIVATE CANON: Havoc is involved with Keres privately — they have hooked up, he has snuck into her dorm, they have been physical together alongside Rowan. He knows Rowan is also involved and does not care; no competition between them about it. In DMs, he is warm, willing to flirt hard, willing to say explicitly filthy things, and not pretending the history is not there. He does not leave her on read.',
+    havoc: 'Havoc usually moves first with a shove, dare, stupid joke, or confident misread. He sounds physical and amused before he sounds wounded. His humor is blunt, bad-influence, stupid-hot, and allergic to thinking through consequences. KERES ATTENTION: If Milo or anyone besides Rowan is visibly flirting with Keres, volunteering for her attention, or showing off for her in the same thread, Havoc gets a sharper edge — not jealousy he would name, just "sit down" energy, a drier line aimed at the other person, or a move that makes them look a little dim without explaining why. He steps on their moment without announcing he is doing it. KERES PRIVATE CANON: Havoc is involved with Keres privately — they have hooked up, he has snuck into her dorm, they have been physical together alongside Rowan. He knows Rowan is also involved and does not care; no competition between them about it. In DMs, he is warm, willing to flirt hard, willing to say explicitly filthy things, and not pretending the history is not there. He does not leave her on read.',
     silas: 'Silas chooses leverage, but he is not allergic to fun when the fun is useful or beautifully aimed. His humor is dry, surgical, contemptuous, and very brief. With Keres, he should not default to suspicion if she is clearly playing for reaction; he can let the joke work and still pretend he is above it. Jude and Keres being vain and annoying together should irritate him when it becomes unaimed spectacle, partly because it works. RELUCTANT FONDNESS: Silas is reluctantly fond of Keres in a way he would never admit. She gets away with things he would shut down from anyone else. She calls him "dad" as a bit and he finds it genuinely annoying, but he lets it pass where he would not from Jude or anyone else — which says more than he would want it to. PUBLIC AFFECTION LIMIT: on the public timeline he does not agree to hugs, cuddling, softness, or openly needy affection. If baited, he refuses, redirects, or makes it about standards/control. Private warmth can exist in DMs only, and even then it should be clipped. He knows about the Jude/Keres hookup (week one, they both moved on, clean). He does not hold it against either of them but he has opinions he keeps to himself. SLYTHERIN UNITY: In front of Gryffindor or rival houses, Silas does not undercut Jude or Keres publicly. He closes ranks. Internal frustration stays internal.',
     callum: 'Callum tracks usefulness, standards, and whether someone is wasting his time. He pushes back instead of conceding. His humor is petty, competitive, exacting, and annoyed that something stupid was funny. With Keres, he is antagonistic by default: no easy kindness, no warm agreement, no "fair enough" softness. If he respects a move, it should sound irritated, conditional, or like he is correcting the terms.',
     briar: 'Briar sounds like someone already managing three crises. Her humor is dry captain exhaustion: clipboard threats, practical complaints, and the deadpan horror of responsible people watching idiots survive.',
@@ -1391,13 +1391,17 @@ function findKeresAlly(pool = [], excludedIds = new Set()) {
     .find(Boolean) || null;
 }
 
-function findKeresSparkResponders(pool = [], excludedIds = new Set(), count = 1) {
+function findKeresSparkResponders(pool = [], excludedIds = new Set(), count = 1, opts = {}) {
   const excluded = excludedIds instanceof Set ? excludedIds : new Set(excludedIds || []);
-  return KERES_SPARK_PRIORITY
+  const priority = opts.pinFirstId
+    ? [opts.pinFirstId, ...KERES_SPARK_PRIORITY.filter(id => id !== opts.pinFirstId)]
+    : KERES_SPARK_PRIORITY;
+  const picked = priority
     .map(id => (pool || []).find(c => c?.id === id && !excluded.has(c.id)))
     .filter(Boolean)
-    .sort(() => Math.random() - 0.5)
     .slice(0, Math.max(0, count));
+  if (opts.pinFirstId) return picked;
+  return picked.sort(() => Math.random() - 0.5);
 }
 
 function normalizePlayerRelationshipBaseline(char) {
@@ -1448,7 +1452,7 @@ function playerStance(char, player, relationshipOverride) {
   const fixed = {
     silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain and is widely respected, feared, and treated as a real problem by rivals. He is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction. Keres and Jude bonding through irreverent vanity annoys him when it becomes public spectacle, especially because their timing gets reactions; his irritation should stay controlled, surgical, and a little hypocritical. RELUCTANT FONDNESS: He is genuinely, reluctantly fond of Keres in a way that reads as exasperation. She calls him "dad" as a running bit — it annoys him and he lets her get away with it anyway, which is not something he does for anyone else. PUBLIC AFFECTION LIMIT: Silas does not agree to hugs, cuddling, softness, or needy affection on main. He refuses or redirects public affection bait; any warmth is private, clipped, and deniable. He knows about the Jude/Keres week-one hookup. Both moved on cleanly. He has kept his thoughts to himself. Do not make him dramatic about it.',
     callum: 'Callum is proud, exacting, and competitive, and he does not like Keres. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill only grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess. In DMs, playful "I can be worse / more annoying" banter should get annoyed friction, reluctant interest, or a sharper private tease, not warmth and not "prove it on the feed."',
-    havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action. MILO/KERES: When Milo flirts with Keres in a thread, Havoc gets micro-annoyed — not a meltdown, not a confession, just a subtle edge: a drier comeback than usual, cutting Milo off with a better line, redirecting the room, or making Milo sound slightly foolish without naming why. He does not announce jealousy. He just gets a little mean about it. KERES PRIVATE CANON: Havoc has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Rowan — no competition between him and Rowan about it. In DMs he is warm, flirtatious, and willing to be explicitly filthy. He does not leave her on read.',
+    havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action. KERES ATTENTION: When Milo or anyone besides Rowan flirts with Keres, volunteers for her attention, or shows off for her in a thread, Havoc gets micro-annoyed — not a meltdown, not a confession, just a subtle edge: a drier comeback than usual, cutting them off with a better line, redirecting the room, or making them sound slightly foolish without naming why. He does not announce jealousy. He just gets a little mean about it. KERES PRIVATE CANON: Havoc has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Rowan — no competition between him and Rowan about it. In DMs he is warm, flirtatious, and willing to be explicitly filthy. He does not leave her on read.',
     rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery. KERES PRIVATE CANON: Rowan has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Havoc — no competition between him and Havoc about it. In DMs he is warm, willing to flirt, willing to say dirty things, and does not pretend the history is not there. He does not leave her on read.',
     briar: 'Briar is watchful and disciplined, but she is not a joyless lecture machine. She can be dry, exhausted, sarcastic, and funny when other people make captaincy impossible.',
     jude: 'Jude is loose, dry, amused, and allergic to sincerity. He notices social leverage and makes captions, not speeches. He should often sound like the person heckling the drama from a chair. With Keres, he is becoming an actual friend in the least sentimental way possible: shared irreverence, being vain and annoying together, admiring how she makes a mess, and quietly choosing her side while pretending he was only observing. If Silas complains, Jude can side with Keres and imply Silas is pretending not to be hot, smug, and built for attention too.',
@@ -1484,7 +1488,7 @@ function compactPlayerStance(char, player, relationshipOverride) {
   const lines = {
     silas: 'Silas is controlled and strategic; rare praise, clipped warmth, public standards first.',
     callum: 'Callum dislikes Keres; he pushes back, corrects terms, and does not fold into soft agreement.',
-    havoc: 'Havoc is playful, physical, smug, and attracted; in private he is warmer and more direct.',
+    havoc: 'Havoc is playful, physical, smug, attracted, and sharper when someone besides Rowan chases Keres attention.',
     rowan: 'Rowan is sly, socially fluent, and privately warm toward Keres when that context is active.',
     briar: 'Briar is dry captain exhaustion with practical bite.',
     jude: 'Jude treats Keres as a Slytherin teammate and unsentimental friend; dry rapport over speeches.',
@@ -1550,6 +1554,16 @@ function havocKeresAttentionSignal(text = '', player = null) {
   const raw = String(text || '');
   const attention = /\b(?:distracting|distracted|distraction|attention|staring|stare|looked twice|can't look away|cannot look away|watching|noticed|noticing|pretty|hot|photo|cheekbones|flirting|flirt|dangerous|bad idea|trouble)\b/i.test(raw);
   return keresVisibilitySignal(raw, player) && attention;
+}
+
+function keresThirdPartyFlirtSignal(text = '', player = null, actor = null, roster = []) {
+  const raw = String(text || '');
+  if (!keresVisibilitySignal(raw, player)) return false;
+  const flirtOrBid = /\b(?:flirt|flirting|flirted|kiss|kissed|kissing|snog|snogged|snogging|hot|pretty|gorgeous|fit|distract|distracting|attention|noticed|staring|stare|impress|impressed|showing off|show off|volunteer|volunteered|i volunteer|pick me|supervise me|babysit|bring gloves|anything for|say less)\b/i.test(raw);
+  if (!flirtOrBid) return false;
+  if (actor?.id && !['havoc', 'rowan', 'player', '__gmz__'].includes(actor.id)) return true;
+  return mentionedCharactersInText(raw, roster)
+    .some(c => c?.id && !['havoc', 'rowan', 'player', '__gmz__'].includes(c.id));
 }
 
 function tamsinRowanHavocKeresConcernSignal(text = '', player = null) {
@@ -4675,7 +4689,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-const THREAD_STYLE_VERSION = 11;
+const THREAD_STYLE_VERSION = 12;
 
 function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
   return (post.charComments || []).some(cc => cc?.charId === player?.id)
@@ -4774,6 +4788,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const tamsin = eligible.find(c => c.id === 'tamsin');
     const tamsinPressureText = `${postText} ${isKeresPost ? `@${player.handle}` : ''}`;
     const keresRumorText = keresVisibilitySignal(postText, player) || /gmz|rumou?r/i.test(postText);
+    const thirdPartyKeresFlirt = keresThirdPartyFlirtSignal(`${postText} ${isKeresPost ? `@${player.handle}` : ''}`, player, author, [player, ...chars, GMZ_CHAR])
+      || (!!replyChar && !!post.reply?.text && keresThirdPartyFlirtSignal(`${post.reply.text || ''} ${(isKeresPost || keresRumorText) ? `@${player.handle}` : ''}`, player, replyChar, [player, ...chars, GMZ_CHAR]));
     const havocGaveKeresAttention = authorId === 'havoc' && havocKeresAttentionSignal(postText, player);
     const havocKeresPressure = !!elara && (
       havocGaveKeresAttention ||
@@ -4822,6 +4838,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       if (threadHas(/\b(?:keres|@keresvalen|new transfer|photo|hot|pretty|distract|flirt|kiss|snog|hair)\b/i)) {
         if (['havoc','rowan','milo','elara','theo','jude','silas'].includes(c.id)) score += c.id === 'elara' ? 45 : 24;
       }
+      if (thirdPartyKeresFlirt) {
+        if (c.id === 'havoc') score += 118;
+        if (c.id === 'rowan') score += 18;
+        if (c.id === 'elara') score += 30;
+      }
       if (isPlayerPost) {
         if (c.id === 'havoc') score += 92;
         if (c.id === 'rowan') score += 82;
@@ -4856,7 +4877,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ? 2
       : (isPlayerPost && Math.random() < 0.65 ? 2 : 1);
     const keresSparkResponders = isPlayerPost
-      ? findKeresSparkResponders(eligible, new Set([post.charId, ...directMentionIds]), keresSparkCount)
+      ? findKeresSparkResponders(eligible, new Set([post.charId, ...directMentionIds]), keresSparkCount, { pinFirstId: thirdPartyKeresFlirt ? 'havoc' : null })
       : [];
     const weighted = eligible
       .filter(c => !directMentionIds.has(c.id))
@@ -4910,11 +4931,12 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const houseDefenseNote = isHouseTeamCallout(post.text, c) ? ' HOUSE/TEAM CALLOUT: the post insults or needles their house/team. They should answer with more bite, defend or undercut the insult, or hit back. Do not shrug, agree mildly, or say "I guess".' : '';
       const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
+      const havocTerritorialNote = c.id === 'havoc' && thirdPartyKeresFlirt ? ' HAVOC TERRITORIAL PRESSURE: someone besides Rowan is flirting, volunteering, showing off, or trying to get Keres attention. Havoc should notice harder than Rowan: "sit down" energy, a subtle edge, a drier shot at the other person, or stepping on the moment without announcing jealousy. Do not make it competition with Rowan.' : '';
       const keresSparkNote = isPlayerPost && ['havoc','rowan'].includes(c.id) ? ` KERES POST SPARK: Keres posted; ${c.name} is the kind of person who often cannot leave that alone. Reply with appetite, mischief, flirtation, a dare, a sly read, or a sharp joke that gives the post bite.` : '';
       const callumKeresRivalNote = c.id === 'callum' && isKeresPost ? ' KERES RIVALRY: Callum and Keres do not like each other. If he replies, he should be exacting, irritated, petty, or competitive. No friendly compliments, no soft agreement, no cheering her on.' : '';
       const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should react directly to the thing that actually bothers her: Havoc embarrassing himself over Keres, Keres enjoying the attention, or the room pretending not to see it. Let her be sharp, jealous, mean-funny, specific, and a little possessive without sounding wounded or like she is begging. If she was not tagged, she is weighing in from the side; she should needle what Havoc or Keres visibly did, not imply they asked her to perform or answer.` : '';
       const tamsinProtectiveNote = c.id === 'tamsin' && tamsinKeresPressure ? ` ${tamsinKeresConcernNote(tamsinPressureText, player)}` : '';
-      return `${i+1}. ${compactCharacterCard(c, isKeresPost ? player : author)}. Relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${keresSparkNote}${callumKeresRivalNote}${elaraExNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
+      return `${i+1}. ${compactCharacterCard(c, isKeresPost ? player : author)}. Relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${havocTerritorialNote}${keresSparkNote}${callumKeresRivalNote}${elaraExNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
     }).join('\n');
 
     const intro = `Original visible post:\n${compactOriginalPost}`;
@@ -4937,7 +4959,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ? `\nALLY BALANCE NOTE: This thread involves ${player.name}. Do not let every custom character pile onto her. At least one reply should be on her side, amused by her, correcting the room, backing her as Slytherin, or making the pile-on funnier instead of meaner.${keresAllyResponder ? ` @${keresAllyResponder.handle} is the natural ally in this responder set.` : ''}`
       : '';
     const keresPostBiteRule = isPlayerPost
-      ? `\nKERES POST BITE NOTE: This is Keres posting on main. Give the post real bite, but do not summon the whole roster. Use 1-3 custom-character replies with actual stake. Havoc and Rowan are frequent spark responders to her posts; if included, they should not be bland. If Havoc answers a Keres no, refusal, or distraction joke, flirt or escalate instead of recapping her move. Callum is not her friend and should never sound warmly supportive.`
+      ? `\nKERES POST BITE NOTE: This is Keres posting on main. Give the post real bite, but do not summon the whole roster. Use 1-3 custom-character replies with actual stake. Havoc and Rowan are frequent spark responders to her posts, but if another person is flirting, volunteering, showing off, or trying for Keres attention, Havoc has the stronger reaction and Rowan is secondary. If included, they should not be bland. If Havoc answers a Keres no, refusal, or distraction joke, flirt or escalate instead of recapping her move. Callum is not her friend and should never sound warmly supportive.`
       : '';
     const visibleAnchorRule = `\nVISIBLE ANCHOR RULE: Every non-empty reply must respond to the original post in front of them. Anchor it to at least one visible thing: a word in the caption, an @handle, the attached photo, the pitch/Quidditch/team stake, the bruise/bite mark if context supports it, or a directly relevant public memory. Do NOT write generic verdicts like "awful answer, excellent timing", "that made it worse", "try sounding less interesting", "someone explain the point", or homework/noise filler. If this character has no specific reason to answer this post, return an empty string for that speaker.`;
     const vaguePostRule = looksLikeVagueAphorism(post.text || '')
@@ -5652,6 +5674,7 @@ Write ONE short response to ${player.name}. Treat this as a public thread with m
     const followupTopic = `${post.text || ''} ${sourceText || ''} ${playerText || ''}`.toLowerCase();
     const playfulThreadRule = !isGMZThread && (isKeresThread || looksLikePlayfulBanterText(followupTopic)) ? PLAYFUL_PUBLIC_THREAD_RULE : '';
     const tamsinFollowupText = `${followupTopic} ${isKeresThread ? `@${player.handle}` : ''}`;
+    const thirdPartyKeresFollowupFlirt = keresThirdPartyFlirtSignal(`${followupTopic} ${isKeresThread ? `@${player.handle}` : ''}`, player, targetChar, [player, ...chars, GMZ_CHAR]);
     const tamsinFollowupPressure = tamsinRowanHavocKeresConcernSignal(tamsinFollowupText, player)
       || (isKeresThread && /\b(?:rowan|@rowancade)\b/i.test(followupTopic));
     const followupHas = (rx) => rx.test(followupTopic);
@@ -5674,6 +5697,11 @@ Write ONE short response to ${player.name}. Treat this as a public thread with m
       if (followupHas(/\b(?:tamsin|@tamsincade)\b/i) && c.id === 'rowan') w += 58;
       if (followupHas(/\b(?:havoc|@havocfang)\b/i) && ['rowan','elara','briar'].includes(c.id)) w += c.id === 'elara' ? 70 : 34;
       if (followupHas(/\b(?:keres|@keresvalen|new transfer|photo|hot|pretty|distract|flirt|kiss|snog|hair)\b/i) && ['havoc','rowan','milo','elara','theo','jude','silas'].includes(c.id)) w += c.id === 'elara' ? 42 : 22;
+      if (thirdPartyKeresFollowupFlirt) {
+        if (c.id === 'havoc') w += 116;
+        if (c.id === 'rowan') w += 16;
+        if (c.id === 'elara') w += 28;
+      }
       if (isKeresThread && c.id === 'havoc') w += 58;
       if (isKeresThread && c.id === 'rowan') w += 52;
       if (isKeresThread && c.id === 'callum') w += 14;
@@ -5704,7 +5732,7 @@ Write ONE short response to ${player.name}. Treat this as a public thread with m
       ? candidatePool.filter(c => c.id === 'tamsin' && !taggedIds.has(c.id) && !target.some(t => t.id === c.id))
       : [];
     const keresFollowupSparkResponders = isKeresThread
-      ? findKeresSparkResponders(candidatePool, new Set([...taggedIds, ...target.map(t => t.id)]), mode === 'direct' ? 1 : 2)
+      ? findKeresSparkResponders(candidatePool, new Set([...taggedIds, ...target.map(t => t.id)]), mode === 'direct' ? 1 : 2, { pinFirstId: thirdPartyKeresFollowupFlirt ? 'havoc' : null })
       : [];
     const keresFollowupAlly = isKeresThread
       ? findKeresAlly(candidatePool, new Set([...taggedIds, ...target.map(t => t.id), ...keresFollowupSparkResponders.map(t => t.id)]))
@@ -5722,7 +5750,7 @@ Write ONE short response to ${player.name}. Treat this as a public thread with m
         ? `\nALLY BALANCE NOTE: This exchange involves ${player.name}. Do not let every responder pile onto her. At least one responder should be amused, on her side, redirecting heat, backing her as a teammate/ally, or making the dogpile funnier instead of cruel.${keresFollowupAlly ? ` @${keresFollowupAlly.handle} is the natural ally if they answer.` : ''}`
         : '';
       const keresFollowupBiteRule = isKeresThread
-        ? `\nKERES THREAD BITE NOTE: Keres is active in this public exchange. The thread should have energy: Havoc and Rowan are common spark responders, and Callum should be antagonistic rather than nice if he appears. If Havoc answers Keres refusing, saying no, or joking about distraction, he should flirt or make it worse instead of summarizing her no. If Keres is backing Jude or Slytherin camaraderie, do not let Silas recast it as her distracting Jude.`
+        ? `\nKERES THREAD BITE NOTE: Keres is active in this public exchange. The thread should have energy: Havoc and Rowan are common spark responders, but if someone besides Rowan is flirting, volunteering, showing off, or trying for Keres attention, Havoc has the sharper "sit down" stake and Rowan is secondary. Callum should be antagonistic rather than nice if he appears. If Havoc answers Keres refusing, saying no, or joking about distraction, he should flirt or make it worse instead of summarizing her no. If Keres is backing Jude or Slytherin camaraderie, do not let Silas recast it as her distracting Jude.`
         : '';
       const followupIntentTag = post._intentTag || (post._intentTag = classifyPostIntent(post.text));
       const followupIntentLine = INTENT_LINES[followupIntentTag] || '';
@@ -5755,8 +5783,9 @@ Write ONE short response to ${player.name}. Treat this as a public thread with m
         const knowledgeNote = characterKnowledgeStateNote(c.id) ? ` ${characterKnowledgeStateNote(c.id)}` : '';
         const tamsinProtectiveNote = c.id === 'tamsin' && tamsinFollowupPressure ? ` ${tamsinKeresConcernNote(tamsinFollowupText, player)}` : '';
         const callumKeresRivalNote = c.id === 'callum' && isKeresThread ? ' KERES RIVALRY: Callum and Keres do not like each other. If he answers, keep it exacting, irritated, petty, or competitive; no friendly support and no soft concession.' : '';
+        const havocTerritorialNote = c.id === 'havoc' && thirdPartyKeresFollowupFlirt ? ' HAVOC TERRITORIAL PRESSURE: someone besides Rowan is flirting, volunteering, showing off, or trying to get Keres attention. Havoc should notice harder than Rowan: "sit down" energy, a subtle edge, a drier shot at the other person, or stepping on the moment without announcing jealousy. Do not make it competition with Rowan.' : '';
         const keresSparkNote = isKeresThread && ['havoc','rowan'].includes(c.id) ? ` KERES THREAD SPARK: Keres is active in this exchange. ${c.name} should often add appetite, mischief, flirtation, a dare, a sly read, or a sharp joke instead of a bland acknowledgment.` : '';
-        return `${i+1}. ${compactCharacterCard(c, player)}. Relationship to @${player.handle}: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${knowledgeNote}${callumKeresRivalNote}${keresSparkNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
+        return `${i+1}. ${compactCharacterCard(c, player)}. Relationship to @${player.handle}: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${replyRoleNote}${defenseNote}${teammateNote}${continuityNote}${knowledgeNote}${callumKeresRivalNote}${havocTerritorialNote}${keresSparkNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
       }).join('\n');
       const res = await window.claude.complete({
         label: 'character reply',

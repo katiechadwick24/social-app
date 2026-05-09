@@ -177,10 +177,13 @@ function normalizeOpenAIMessages(messages) {
 }
 
 // ── OpenAI API proxy ──────────────────────────────────────────────
-function callOpenAI(messages, modelTier) {
+function callOpenAI(messages, modelTier, maxOutputTokensOverride) {
   return new Promise((resolve, reject) => {
     const selectedModel = modelTier === 'fast' ? OPENAI_MODEL_FAST : OPENAI_MODEL;
-    const maxOutputTokens = Number.isFinite(OPENAI_MAX_OUTPUT_TOKENS)
+    const requestedOutputTokens = Number(maxOutputTokensOverride);
+    const maxOutputTokens = Number.isFinite(requestedOutputTokens) && requestedOutputTokens > 0
+      ? Math.min(4096, Math.max(128, Math.floor(requestedOutputTokens)))
+      : Number.isFinite(OPENAI_MAX_OUTPUT_TOKENS)
       ? OPENAI_MAX_OUTPUT_TOKENS
       : 300;
     const normalizedMessages = normalizeOpenAIMessages(messages);
@@ -264,7 +267,7 @@ function handleAiProxy(req, res, routeLabel) {
         }));
         return;
       }
-      const { messages, model } = JSON.parse(raw);
+      const { messages, model, maxOutputTokens } = JSON.parse(raw);
       if (!checkDailyAiLimit()) {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Daily AI request limit reached. Try again tomorrow.' }));
@@ -284,7 +287,7 @@ function handleAiProxy(req, res, routeLabel) {
       } else if (inputSize.estimatedTokens > 8000) {
         console.warn(`[AI request warning] ${routeLabel}: ~${inputSize.estimatedTokens} input tokens`);
       }
-      const text = await callOpenAI(messages, model);
+      const text = await callOpenAI(messages, model, maxOutputTokens);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ text }));
     } catch(e) {

@@ -93,7 +93,7 @@
 
   // Wire up window.claude to the local server proxy
   window.claude = {
-    complete: async function({ messages, model, label }) {
+    complete: async function({ messages, model, label, maxOutputTokens }) {
       const requestLabel = label || 'unlabeled AI request';
       warnPromptBudget(requestLabel, messages, PROMPT_BUDGET_TARGETS[requestLabel] || 7000);
       summarizeAiRequest(requestLabel, messages, model);
@@ -101,7 +101,7 @@
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model }),
+        body: JSON.stringify({ messages, model, maxOutputTokens }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -7272,9 +7272,9 @@ const SCENE_VIBES = [
   { id:'more',     label:'Something more…',   emoji:'🔥', color:'#e91e8c' },
 ];
 const FLY_ON_WALL_LENGTHS = [
-  { id:'short', label:'Short', instruction:'4-6 beats, focused on one charged exchange' },
-  { id:'medium', label:'Medium', instruction:'7-10 beats, with a clear turn in the conversation' },
-  { id:'long', label:'Long', instruction:'11-15 beats, with multiple emotional beats but no filler' },
+  { id:'short', label:'Short', instruction:'6-8 beats, focused on one charged exchange', minBeats:6, maxBeats:8, contextDetails:2 },
+  { id:'medium', label:'Medium', instruction:'10-14 beats, with a clear turn in the conversation', minBeats:10, maxBeats:14, contextDetails:3 },
+  { id:'long', label:'Long', instruction:'18-24 beats, with several turns, interruptions, and consequences without filler', minBeats:18, maxBeats:24, contextDetails:5 },
 ];
 const FLY_ON_WALL_CANON_IMPACTS = [
   { id:'none', label:'none' },
@@ -7439,14 +7439,18 @@ function buildFlyOnWallTimelineContext({
     : 'TIMELINE CONTEXT: No directly relevant saved timeline context. Do not invent established history.';
 }
 
-function buildFlyOnWallScenePrompt({ presentChars, topic, location, tone, length, canonImpact, player, feed = [], dms = {}, groupChats = [], eventLog = [] }) {
+function buildFlyOnWallScenePrompt({ presentChars, topic, userContext = '', location, tone, length, canonImpact, player, feed = [], dms = {}, groupChats = [], eventLog = [] }) {
   const chars = (presentChars || []).filter(c => c && c.id !== 'player' && c.id !== '__gmz__');
-  const playerRelevant = topicMentionsPlayer(topic, player);
+  const promptTopic = String(topic || '').trim();
+  const promptContext = String(userContext || '').trim();
+  const combinedPromptContext = [promptTopic, promptContext].filter(Boolean).join('\n');
+  const playerRelevant = topicMentionsPlayer(combinedPromptContext, player);
   const roster = chars.map(c => `${compactCharacterCard(c)}\nVoice lane: ${dialogueContractSummaryFor(c)}`).join('\n\n');
-  const lengthSpec = FLY_ON_WALL_LENGTHS.find(l => l.id === length)?.instruction || FLY_ON_WALL_LENGTHS[1].instruction;
+  const lengthConfig = FLY_ON_WALL_LENGTHS.find(l => l.id === length) || FLY_ON_WALL_LENGTHS[1];
+  const lengthSpec = lengthConfig.instruction;
   const privateCanonAllowed = playerRelevant && chars.length > 0 && chars.every(c => ['havoc', 'rowan'].includes(c.id));
   const includePrivateCanon = privateCanonAllowed && shouldIncludeKeresHavocRowanCanon('scene', [...chars, player]);
-  const timelineContext = buildFlyOnWallTimelineContext({ presentChars: chars, topic, location, tone, player, feed, dms, groupChats, eventLog });
+  const timelineContext = buildFlyOnWallTimelineContext({ presentChars: chars, topic: combinedPromptContext, location, tone, player, feed, dms, groupChats, eventLog });
   return `Write a private character cutaway scene.
 
 ${buildCoreRules()}
@@ -7469,6 +7473,8 @@ MEANWHILE CUTAWAY MODE:
 - Present characters can discuss absent people, including Keres, if relevant.
 - Characters cannot know private information they were not present for.
 - Public knowledge, public rumors/speculation, visible feed posts, team dynamics, and established relationships may influence the conversation.
+- The user's topic and context are the spine of the scene. Use those details before generic app memory.
+- For this requested length, incorporate at least ${lengthConfig.contextDetails} concrete details from USER TOPIC / USER CONTEXT across the scene. Do not dump them all in one recap; let characters argue about, dodge, weaponize, misunderstand, or react to them.
 - Keep dialogue character-specific and socially alive.
 - Reveal dynamics through jokes, dodges, disagreement, silence, and what they refuse to say.
 - Do not invent major canon unless the user specifically asks or canon impact is full.
@@ -7476,13 +7482,14 @@ MEANWHILE CUTAWAY MODE:
 - Use scene-chat formatting: small physical actions in [brackets], then dialogue as plain text.
 - No quote marks around dialogue. No asterisks.
 - Each beat should be one speaker taking one small action, saying one line, or both.
-- The requested length below is a beat count, not a word count.
+- The requested length below is a required beat count, not a word count. Do not stop after a short exchange if "Long" was selected.
 
 LOCATION: ${truncateText(location || 'A private campus location', 220)}
 TONE: ${truncateText(tone || 'private, tense, character-driven', 160)}
-LENGTH: ${lengthSpec}
+LENGTH: ${lengthSpec}. Return between ${lengthConfig.minBeats} and ${lengthConfig.maxBeats} beat objects.
 CANON IMPACT REQUESTED: ${canonImpact || 'none'}
-TOPIC: ${truncateText(topic || 'Let the present characters talk privately about what is on their minds.', 700)}
+USER TOPIC: ${truncateText(promptTopic || 'Let the present characters talk privately about what is on their minds.', 900)}
+USER CONTEXT: ${truncateText(promptContext || 'No extra user context supplied.', length === 'long' ? 2600 : 1700)}
 
 RELEVANT RECENT CONTEXT:
 ${timelineContext}
@@ -7765,7 +7772,8 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
         if (isFlyOnWall) {
           const messages = [{ role:'user', content: buildFlyOnWallScenePrompt({
             presentChars: participants,
-            topic: topic || context,
+            topic,
+            userContext: context,
             location: location || displaySetting.label,
             tone: tone || displayVibe.label,
             length,
@@ -7776,18 +7784,45 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
             groupChats,
             eventLog,
           }) }];
+          const lengthConfig = FLY_ON_WALL_LENGTHS.find(l => l.id === length) || FLY_ON_WALL_LENGTHS[1];
+          const meanwhileOutputTokens = length === 'long' ? 2400 : length === 'medium' ? 1600 : 1000;
           warnPromptBudget("meanwhile cutaway scene", messages, 8000);
           console.log('[Meanwhile] before API call', {
             label: 'meanwhile cutaway scene',
             messageCount: messages.length,
             promptChars: String(messages[0]?.content || '').length,
+            maxOutputTokens: meanwhileOutputTokens,
           });
           const res = await window.claude.complete({
             label: 'meanwhile cutaway scene',
             messages,
+            maxOutputTokens: meanwhileOutputTokens,
           });
           console.log('[Meanwhile] AI returned', res);
-          const normalized = normalizeFlyOnWallBeats(res, participants);
+          let normalized = normalizeFlyOnWallBeats(res, participants);
+          if (normalized.length > 0 && normalized.length < lengthConfig.minBeats) {
+            const priorBeats = normalized.map(m => {
+              const speaker = participants.find(c => c.id === m.charId);
+              return `${speaker?.handle || 'scene'}: ${m.text}`;
+            }).join('\n');
+            const continuationMessages = [{
+              role:'user',
+              content: `${messages[0].content}
+
+The first pass only produced ${normalized.length} beats. Continue the same cutaway from the last beat below and add ${lengthConfig.minBeats - normalized.length} to ${Math.max(lengthConfig.minBeats - normalized.length, lengthConfig.maxBeats - normalized.length)} additional beat objects. Keep using USER TOPIC and USER CONTEXT, and bring in concrete details that have not appeared yet.
+
+ALREADY WRITTEN BEATS:
+${priorBeats}
+
+Return ONLY a JSON array of additional beat objects.`
+            }];
+            const continuation = await window.claude.complete({
+              label: 'meanwhile cutaway scene',
+              messages: continuationMessages,
+              maxOutputTokens: Math.max(900, Math.floor(meanwhileOutputTokens * 0.75)),
+            });
+            normalized = [...normalized, ...normalizeFlyOnWallBeats(continuation, participants)].slice(0, lengthConfig.maxBeats);
+          }
           console.log('[Meanwhile] normalized messages', normalized);
           setMsgs(prev => {
             const next = [...prev, ...normalized].slice(-SCENE_MAX_MESSAGES);

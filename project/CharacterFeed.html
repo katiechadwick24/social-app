@@ -572,6 +572,8 @@ PUBLIC REPLY RULES:
 - Rival teams can trash talk, but do not invent match results or attendance.
 ${playful ? '- If the exchange is playful/flirty, meet the joke, worsen it, or deflect in character.' : ''}
 ${gmz ? '- GMZ/gossip threads may speculate, but keep uncertainty visible with rumor/theory/question language.' : ''}
+${RESPONSE_GROUNDING_RULE}
+${THREAD_DIRECT_ADDRESS_RULE}
 ${buildCompactAntiAiRules()}
 `;
 }
@@ -830,7 +832,7 @@ CHARACTER TONE BALANCE:
 - Theo should post like the mess has analytics. He should chase the funny angle, not just the severe one.
 - Tamsin should not be awful or rude by default. She is composed, protective, observant, and dry, but she can be quietly warm, fond, tired, amused, or genuinely helpful. Save harshness for visible risk to Rowan, obvious manipulation, or someone being cruel.
 - If Rowan publicly notices Keres, flirts, tags her, gets tagged with her, shows up in GMZ rumors with her, or looks too pleased about her attention, Tamsin should usually notice. Her reaction is protective older-sister side-eye, not romantic jealousy: dry concern, inconvenient questions, polite warnings, and jokes that prove she saw the pattern. Havoc getting interested in Keres can also ping her radar as familiar damage around Rowan, but less intensely than Rowan himself.
-- Elara can be composed or dangerous without becoming humorless. If Havoc publicly notices Keres, calls her distracting, flirts, compliments her, tags her, or gives her visible attention, Elara should usually notice and react with proud displeasure, plausible deniability, old-history pressure, or a sharp joke.
+- Elara can be dangerous without becoming humorless. If Havoc publicly notices Keres, calls her distracting, flirts, compliments her, tags her, or gives her visible attention, Elara should usually notice and react directly: sharp jealousy, old-history pressure, a pointed joke, or a specific jab at the visible behavior.
 - Silas should stay controlled and tactical. Do not make him openly needy, defensive, or romantic on main. He should absolutely enjoy Gryffindor trash talk, especially if Keres is targeting Gryffindor's structure, habits, or players. He may correct sloppy logic, but he should not become protective of Gryffindor or offended on their behalf. If Keres and Jude are being vain and annoying together, Silas can be visibly irritated because the spectacle is unaimed, inefficient, and unfortunately effective.
 - If Keres makes a teammate/camaraderie bid toward Jude or Slytherin, do not have Silas misread it as her distracting Jude. He can redirect the energy into standards, tell them to aim the joke, or be annoyed that the camaraderie is working.
 - Callum should not fold quickly. Avoid easy concessions like "fair", "fair point", "let's see it", "prove it", or agreeing after being insulted. He should track the actual logic of the exchange, not randomly defend Havoc or accuse Keres of judging if she is clearly appreciating the chaos.
@@ -1589,6 +1591,20 @@ function replyTargetHandleFromText(text = '', fallbackHandle = '', roster = [], 
 
 function teammateStakeInText(text = '', responder, roster = []) {
   return mentionedCharactersInText(text, roster).some(m => sameHouseOrTeam(responder, m));
+}
+
+function threadReplyRelevanceScore(replier, targetReply = {}, postText = '', roster = []) {
+  if (!replier || !targetReply) return 0;
+  const replyText = String(targetReply.text || '');
+  const replyTo = String(targetReply.replyTo || '').replace(/^@/, '').toLowerCase();
+  const replierHandle = String(replier.handle || '').replace(/^@/, '').toLowerCase();
+  let score = 0;
+  if (replierHandle && replyTo === replierHandle) score += 5;
+  if (characterMentionedInText(replyText, replier)) score += 5;
+  if (isHouseTeamCallout(replyText, replier)) score += 3;
+  if (teammateStakeInText(replyText, replier, roster)) score += 3;
+  if (characterMentionedInText(postText, replier) && /you|your|both|everyone|anyone|room|thread/i.test(replyText)) score += 1;
+  return score;
 }
 
 function threadRoleContext(text = '', author = null, roster = []) {
@@ -2559,12 +2575,12 @@ function fallbackUnsupportedBlameLine(char, player, group = false, avoidTexts = 
   const pool = group && groupPool[char?.id] ? groupPool[char.id] : {
     silas: ['then rowan left it vague. gossip loves bad evidence.', 'if there is no evidence, stop feeding the rumor.', 'the accusation was sloppy. i hate sloppy.'],
     jude: ['then everyone is yelling at a shadow. productive little circus.', 'annoying. wrong target, then.', 'if they guessed wrong, that is almost funnier.'],
-    rowan: ['then mystery person stays mysterious. tragic for my caption.', 'i saw motion, not a confession.', 'then everyone else did the heavy lifting. convenient.'],
-    havoc: ['then everyone is arguing with a ghost. solid afternoon.', 'not you, then. still funny. worse, maybe.', 'great. anonymous chaos. my favorite kind to deny.'],
+    rowan: ['then mystery person stays mysterious. tragic for my caption.', 'i saw motion, not a confession.', 'bad evidence makes everyone louder. convenient for no one.'],
+    havoc: ['then everyone is arguing with a ghost. solid afternoon.', 'wrong target, then. still a mess.', 'great. anonymous chaos. my favorite kind to deny.'],
     callum: ['then say that. vague rumors are bad evidence.', 'if they guessed wrong, correct the record and move.', 'wrong target, same circus.'],
     briar: ['then everyone can stop making bad evidence louder.', 'if it was not you, say so cleanly.', 'useful correction. annoying that it was needed.'],
     tamsin: ['then the useful question is who benefited from making it sound like you.', 'vague rumors remain terrible evidence.', 'then they are reacting to a version they invented. familiar problem.'],
-    elara: ['then they wanted a culprit and chose the pretty one. dull of them.', 'wrong accusation, excellent noise. typical.', 'then let them embarrass themselves with certainty.'],
+    elara: ['then they wanted a culprit and chose the pretty one. dull of them.', 'wrong accusation, excellent noise. typical.', 'certainty looks worse when it misses. let them keep talking.'],
     theo: ['correction logged. the caption was stronger than the evidence.', 'then the story is worse journalism than usual. impressive.', 'anonymous behavior, public confidence. classic mistake.'],
     milo: ['wait, so everyone guessed and committed? bold. terrible. kind of inspiring.', 'then this is not evidence, it is vibes wearing a hat.', 'wrong target. still chaotic. i am learning.'],
   }[char?.id] || ['then the rumor is doing more work than the evidence.', 'wrong target, loud room.', 'if it was not you, that changes the joke.'];
@@ -3146,7 +3162,7 @@ function fallbackPublicBanterLine(char, player, avoidTexts = [], opts = {}) {
     callum: ['that was almost a comeback. annoying.', 'try making the next one useful.', 'slytherin keeps mistaking noise for leverage.'],
     elara: ['charming. awful, but charming.', 'i hate that i laughed.', 'say less before this becomes flattering.'],
     tamsin: ['unhelpful. unfortunately funny.', 'that answered more than you think it did.', 'i am choosing not to encourage this publicly.'],
-    jude: ['silas made it sound clinical, which means it is probably personal.', 'that is captain for stop proving his point in public.', 'he said sleep like he was not also diagnosing a disaster.'],
+    jude: ['silas made it sound clinical, which means it is probably personal.', 'publicly proving the captain right is a lifestyle choice.', 'he said sleep like he was not also diagnosing a disaster.'],
     theo: ['clean caption. horrible diplomacy.', 'that is engagement bait with cheekbones.', 'annoying answer. excellent post.'],
     havoc: ['worried i will distract you? rude. accurate, but rude.', 'say less. bad idea moving.', 'if that was a no, try sounding less interesting.'],
     rowan: ['someone deserved that and i respect the mystery.', 'awful answer. excellent timing.', 'i am hearing yes, but funnier.'],
@@ -4659,7 +4675,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
 }
 
 // ─── Post Thread View ─────────────────────────────────────────────
-const THREAD_STYLE_VERSION = 10;
+const THREAD_STYLE_VERSION = 11;
 
 function hasPlayerAuthoredThreadReply(post = {}, player = {}) {
   return (post.charComments || []).some(cc => cc?.charId === player?.id)
@@ -4736,7 +4752,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     // ─── ROUND 1: characters react ────────────────────────────────
     // Eligible: anyone but the author. Weight by emotional charge — strong relationship (+ or -)
     // means more likely to comment. Neutral relationships are passed over more often.
-    const eligible = chars.filter(c => c.id !== post.charId);
+    const existingReplyCharId = post.reply?.charId || null;
+    const eligible = chars.filter(c => c.id !== post.charId && c.id !== existingReplyCharId);
     if (eligible.length === 0) { setLoadingChars(false); setLoadingBots(false); return; }
 
     const mentionedHandles = new Set(
@@ -4895,7 +4912,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
       const keresSparkNote = isPlayerPost && ['havoc','rowan'].includes(c.id) ? ` KERES POST SPARK: Keres posted; ${c.name} is the kind of person who often cannot leave that alone. Reply with appetite, mischief, flirtation, a dare, a sly read, or a sharp joke that gives the post bite.` : '';
       const callumKeresRivalNote = c.id === 'callum' && isKeresPost ? ' KERES RIVALRY: Callum and Keres do not like each other. If he replies, he should be exacting, irritated, petty, or competitive. No friendly compliments, no soft agreement, no cheering her on.' : '';
-      const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should usually react with proud displeasure and plausible deniability: a sharp subtweet, dangerous joke, social jab, old-history pressure, or a line that makes it clear she noticed. She does not sound wounded, plead, or beg for attention. If she was not tagged, she is weighing in from the side; she should needle what Havoc or Keres visibly did, not imply they asked her to perform or answer.` : '';
+      const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should react directly to the thing that actually bothers her: Havoc embarrassing himself over Keres, Keres enjoying the attention, or the room pretending not to see it. Let her be sharp, jealous, mean-funny, specific, and a little possessive without sounding wounded or like she is begging. If she was not tagged, she is weighing in from the side; she should needle what Havoc or Keres visibly did, not imply they asked her to perform or answer.` : '';
       const tamsinProtectiveNote = c.id === 'tamsin' && tamsinKeresPressure ? ` ${tamsinKeresConcernNote(tamsinPressureText, player)}` : '';
       return `${i+1}. ${compactCharacterCard(c, isKeresPost ? player : author)}. Relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${keresSparkNote}${callumKeresRivalNote}${elaraExNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
     }).join('\n');
@@ -4911,7 +4928,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       ? `\nEMBARRASSMENT NOTE: Someone publicly fumbled, exposed themself, apologized badly, looked foolish, or handed the timeline an opening. At least one custom character should call it out, tease them, sharpen the moment, or make the social consequence visible. It can be funny, dry, protective, flirty, or cruel depending on the character, but do not let the embarrassing moment pass unnoticed.`
       : '';
     const exPressureRule = havocKeresPressure
-      ? `\nEX PRESSURE NOTE: Elara March has public history with Havoc. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention here, so Elara should notice and be a little displeased.' : ''} If she replies, let it feel like a proud ex noticing the room has shifted: sharp, charismatic, jealous with dignity, socially dangerous, and never pleading. If she was not tagged, she must react to visible thread behavior rather than pretending Havoc or Keres addressed her.`
+      ? `\nEX PRESSURE NOTE: Elara March has public history with Havoc. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention here, so Elara should notice and be plainly annoyed.' : ''} If she replies, let her name the visible problem instead of smoothing it into subtext: Havoc being obvious, Keres enjoying the effect, or the room pretending not to notice. She can be jealous, bitchy, specific, socially dangerous, and funny. She does not plead or sound wounded. If she was not tagged, she must react to visible thread behavior rather than pretending Havoc or Keres addressed her.`
       : '';
     const tamsinPressureRule = tamsinKeresPressure
       ? `\n${tamsinKeresConcernNote(tamsinPressureText, player)}`
@@ -5146,10 +5163,11 @@ Return ONLY the reply text.`
           const rel = ci?.relationships?.[cj?.id];
           const isConflict = rel !== undefined && (rel < 18 || (rel < 42 && Math.random() < 0.55));
           const isWarmExchange = rel !== undefined && rel > 58 && Math.random() < 0.38;
-          if (isConflict || isWarmExchange) {
+          const relevance = threadReplyRelevanceScore(ci, charR1[j], post.text || '', [player, ...chars, GMZ_CHAR]);
+          if ((isConflict || isWarmExchange) && relevance > 0) {
             if (authorId === 'havoc' && new Set([ci?.id, cj?.id]).has('silas') && new Set([ci?.id, cj?.id]).has('callum') && Math.random() < 0.82) continue;
             if (ci?.id === 'silas' && isKeresPost && Math.random() < 0.7) continue;
-            pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel, warmExchange: isWarmExchange && !isConflict });
+            pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel, relevance, warmExchange: isWarmExchange && !isConflict });
           }
         }
       }
@@ -5157,6 +5175,7 @@ Return ONLY the reply text.`
       if (pairs.length > 0) {
         // Conflict pairs first (lowest rel), then warm pairs (highest rel)
         pairs.sort((a,b) => {
+          if (a.relevance !== b.relevance) return b.relevance - a.relevance;
           if (!a.warmExchange && b.warmExchange) return -1;
           if (a.warmExchange && !b.warmExchange) return 1;
           return a.warmExchange ? b.rel - a.rel : a.rel - b.rel;
@@ -10239,7 +10258,7 @@ ${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: replier, p
 @${char.handle} just posted: "${cleanText}"
 ${threadPatternVarietyGuard([recentContext, cleanText])}
 ${replierIsMentioned ? `IMPORTANT: This post is about YOU (${replier.name}). You are not an observer — you are the subject. Respond in the first person. Do NOT refer to yourself by name. Address @${char.handle} directly using "you". React to what was said about you: push back, correct it, own it, or flip it — but do it as yourself, not as a commentator.` : ''}
-${elaraShouldAnswerHavoc && replier.id === 'elara' ? 'Havoc just gave Keres public attention. Elara should be a little displeased and should not ignore it. React with jealous dignity, old-history pressure, dangerous humor, or a sharp social jab. Do not sound wounded, needy, or like she is begging for him back.' : ''}
+${elaraShouldAnswerHavoc && replier.id === 'elara' ? 'Havoc just gave Keres public attention. Elara should be plainly annoyed and should not ignore it. React to the visible behavior: Havoc being obvious, Keres getting the reaction, or the room pretending not to see it. Be sharp, jealous, specific, and mean-funny. Do not sound wounded, needy, or like she is begging for him back.' : ''}
 ${elaraShouldCallOutKeresFan && replier.id === 'elara' ? `@${char.handle} just publicly announced they were distracted by Keres. Elara finds this mildly pathetic and a little funny. Address @${char.handle} directly. Tell them they're embarrassing themselves, or point out that announcing your distraction in public doesn't help your case. Sharp, slightly contemptuous, maybe a little amused. Do NOT be vague or philosophical — speak directly to them.` : ''}
 ${tamsinShouldAnswerInterest && replier.id === 'tamsin' ? tamsinKeresConcernNote(`${char.name} @${char.handle} ${cleanText}`, player) : ''}
 ${embarrassingPost ? 'This is a public embarrassment, bad look, messy callout, or obvious fumble. If your character would tease, expose, correct, flirt through it, make a stupid joke, or make the social consequence worse, do that. Do not let it pass politely, but do not default to rage.' : ''}
@@ -10606,7 +10625,7 @@ ${threadPatternVarietyGuard(eventAvoidTexts)}
 Campus event: "${ev.scenario}"
 ${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
 ${isTransferHeat && char.id === 'callum' ? `Callum and Keres do not like each other. He may clock her talent, but his post should sound annoyed, competitive, exacting, or petty, not friendly or supportive.` : ''}
-${isTransferHeat && char.id === 'elara' ? `Elara has history with Havoc. If the event makes Keres visible or desirable, Elara should notice with pride, plausible deniability, dangerous humor, or a sharp ex-adjacent jab. She does not sound wounded or beg for attention.` : ''}
+${isTransferHeat && char.id === 'elara' ? `Elara has history with Havoc. If the event makes Keres visible or desirable, Elara should notice with direct irritation, dangerous humor, sharp jealousy, or a specific ex-adjacent jab. She does not sound wounded or beg for attention.` : ''}
 ${tamsinInterestHeat && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
 
 Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.

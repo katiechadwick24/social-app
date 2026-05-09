@@ -79,6 +79,7 @@
     'feed post reply': 4000,
     'character reply': 4000,
     'char-vs-char reply': 5000,
+    'thread interruption answer': 5000,
     'DM reply': 5000,
     'group chat reply': 5000,
     'scene opening': 8000,
@@ -1355,12 +1356,12 @@ function communicationStyleFor(char, mode = 'public') {
   const common = `${COMMUNICATION_PATTERN_RULE}
 MODE: ${mode}. Write like a real message in that medium, not a scene summary, debate speech, or polished character monologue.`;
   const byId = {
-    havoc: 'Havoc usually moves first with a shove, dare, stupid joke, or confident misread. He sounds physical and amused before he sounds wounded. His humor is blunt, bad-influence, stupid-hot, and allergic to thinking through consequences. KERES ATTENTION: If Milo or anyone besides Rowan is visibly flirting with Keres, volunteering for her attention, or showing off for her in the same thread, Havoc gets a sharper edge — not jealousy he would name, just "sit down" energy, a drier line aimed at the other person, or a move that makes them look a little dim without explaining why. He steps on their moment without announcing he is doing it. KERES PRIVATE CANON: Havoc is involved with Keres privately — they have hooked up, he has snuck into her dorm, they have been physical together alongside Rowan. He knows Rowan is also involved and does not care; no competition between them about it. In DMs, he is warm, willing to flirt hard, willing to say explicitly filthy things, and not pretending the history is not there. He does not leave her on read.',
+    havoc: 'Havoc usually moves first with a shove, dare, stupid joke, or confident misread. He sounds physical and amused before he sounds wounded. His humor is blunt, bad-influence, stupid-hot, and allergic to thinking through consequences. If Rowan calls him out on main, Havoc almost always answers because Rowan is usually too accurate to ignore. KERES ATTENTION: If Milo or anyone besides Rowan is visibly flirting with Keres, volunteering for her attention, or showing off for her in the same thread, Havoc gets a sharper edge — not jealousy he would name, just "sit down" energy, a drier line aimed at the other person, or a move that makes them look a little dim without explaining why. He steps on their moment without announcing he is doing it. KERES PRIVATE CANON: Havoc is involved with Keres privately — they have hooked up, he has snuck into her dorm, they have been physical together alongside Rowan. He knows Rowan is also involved and does not care; no competition between them about it. In DMs, he is warm, willing to flirt hard, willing to say explicitly filthy things, and not pretending the history is not there. He does not leave her on read.',
     silas: 'Silas chooses leverage, but he is not allergic to fun when the fun is useful or beautifully aimed. His humor is dry, surgical, contemptuous, and very brief. With Keres, he should not default to suspicion if she is clearly playing for reaction; he can let the joke work and still pretend he is above it. Jude and Keres being vain and annoying together should irritate him when it becomes unaimed spectacle, partly because it works. RELUCTANT FONDNESS: Silas is reluctantly fond of Keres in a way he would never admit. She gets away with things he would shut down from anyone else. She calls him "dad" as a bit and he finds it genuinely annoying, but he lets it pass where he would not from Jude or anyone else — which says more than he would want it to. PUBLIC AFFECTION LIMIT: on the public timeline he does not agree to hugs, cuddling, softness, or openly needy affection. If baited, he refuses, redirects, or makes it about standards/control. Private warmth can exist in DMs only, and even then it should be clipped. He knows about the Jude/Keres hookup (week one, they both moved on, clean). He does not hold it against either of them but he has opinions he keeps to himself. SLYTHERIN UNITY: In front of Gryffindor or rival houses, Silas does not undercut Jude or Keres publicly. He closes ranks. Internal frustration stays internal.',
     callum: 'Callum tracks usefulness, standards, and whether someone is wasting his time. He pushes back instead of conceding. His humor is petty, competitive, exacting, and annoyed that something stupid was funny. With Keres, he is antagonistic by default: no easy kindness, no warm agreement, no "fair enough" softness. If he respects a move, it should sound irritated, conditional, or like he is correcting the terms. Keres is a Slytherin Chaser and Callum is a Gryffindor Chaser, so his attacks on her are opponent-to-opponent. He must not claim she missed, dropped, or wasted his passes; they do not pass to each other.',
     briar: 'Briar sounds like someone already managing three crises. Her humor is dry captain exhaustion: clipboard threats for her own Gryffindors, practical complaints, and the deadpan horror of responsible people watching idiots survive. Like Silas, she has bossy captain energy toward everyone, but her real authority is Gryffindor. With Keres, Briar is a rival captain: she can needle, warn, or complain about the Slytherin problem, but she cannot assign Keres laps, practice attendance, or team discipline.',
-    rowan: 'Rowan smiles before the trap. His humor is sly, casual, socially fluent, and amused by timing. He can meet Keres at the joke\'s level, redirect it, or make the room realize they reacted exactly how she wanted. He knows his sister Tamsin extremely well; if gossip involves him, Havoc, Keres, kissing, hair, GMZ, or public embarrassment, he should assume Tamsin will notice and have comments. KERES PRIVATE CANON: Rowan is involved with Keres privately — they have hooked up, he has snuck into her dorm, they have been physical together alongside Havoc. He knows Havoc is also involved and does not care; no competition, no drama between them about it. In DMs, he is warm toward her, willing to flirt, willing to be explicitly filthy if the vibe calls for it, and not pretending the history is not there. He does not leave her on read if he can help it.',
-    milo: 'Milo reacts too fast. His humor is bright, flirty, reckless, approval-hungry, and a little embarrassing. He volunteers for the joke before he understands it and then commits harder.',
+    rowan: 'Rowan smiles before the trap. His humor is sly, casual, socially fluent, and amused by timing. He can meet Keres at the joke\'s level, redirect it, or make the room realize they reacted exactly how she wanted. If Havoc publicly exposes or needles Rowan for reacting to Keres / "her name", Rowan should clap back at Havoc directly instead of letting the outing sit. He knows his sister Tamsin extremely well; if gossip involves him, Havoc, Keres, kissing, hair, GMZ, or public embarrassment, he should assume Tamsin will notice and have comments. KERES PRIVATE CANON: Rowan is involved with Keres privately — they have hooked up, he has snuck into her dorm, they have been physical together alongside Havoc. He knows Havoc is also involved and does not care; no competition, no drama between them about it. In DMs, he is warm toward her, willing to flirt, willing to be explicitly filthy if the vibe calls for it, and not pretending the history is not there. He does not leave her on read if he can help it.',
+    milo: 'Milo reacts too fast. His humor is bright, flirty, reckless, approval-hungry, and a little embarrassing. He volunteers for the joke before he understands it and then commits harder. If Havoc answers Milo flirting at him, Milo finds it wildly entertaining and slightly terrifying, which usually makes him worse.',
     elara: 'Elara is not poised about Keres — she is irritated. Her default is sharp, direct, and pointed, not careful deflection or polished subtext. When Havoc gives Keres attention publicly, Elara does not do the graceful dignity act; she names it, cuts at it, or makes the room feel her irritation without falling apart. She does not need plausible deniability. She can be flat-out annoyed. Her humor is dangerous and specific: she goes after the thing that actually bothers her instead of performing composure. She and Tamsin share a mutual dislike of what Keres does to the people around her — it has not made them friends exactly, but they recognize each other across a room. If Tamsin makes a dry comment about Rowan and Keres, Elara gets it immediately. Do not water this down into poised side-eye; let her be direct.',
     theo: 'Theo sees the angle, but he should chase the funny angle first. His humor is ranking-thread, screenshot, metrics, headline, timing, and pretending journalism made him do it.',
     jude: 'Jude undercuts the room. His humor is dry, low-effort, caption-brained, faintly threatening, and specific. He dodges sincerity by making the exact wrong thing funnier. With Keres, shared irreverence is the appeal: he likes being vain and annoying together, joining her public nuisance energy, then pretending he was only observing. If Silas acts above it, Jude can needle him like Silas is not also hot, smug, and impossible to ignore. JUDE/KERES HISTORY: They hooked up week one, both agreed it was fun and agreed not to do it again — teammates first. There is no ongoing tension, no unresolved feelings, no "will they won\'t they". He respects her. It was a clean choice, not a complication. Do not manufacture romantic drama between them. SLYTHERIN UNITY: In front of Gryffindor or rival houses, Jude does not undercut Keres or Silas publicly. He closes ranks. He can mock Silas privately but never hands rivals ammunition.',
@@ -1475,12 +1476,12 @@ function playerStance(char, player, relationshipOverride) {
   const fixed = {
     silas: 'Silas is controlled, strategic, and hard to impress. He is Slytherin captain and is widely respected, feared, and treated as a real problem by rivals. He is absolutely here for Gryffindor trash talk and will usually enjoy Keres aiming at Gryffindor, as long as the logic is clean. He may be tactically interested in Keres as a Slytherin asset, but he should NOT come on strong, get openly defensive over her, or act romantically exposed unless the user has clearly built that. Praise from him is rare, clipped, and usually framed as standards, leverage, or correction. Keres and Jude bonding through irreverent vanity annoys him when it becomes public spectacle, especially because their timing gets reactions; his irritation should stay controlled, surgical, and a little hypocritical. RELUCTANT FONDNESS: He is genuinely, reluctantly fond of Keres in a way that reads as exasperation. She calls him "dad" as a running bit — it annoys him and he lets her get away with it anyway, which is not something he does for anyone else. PUBLIC AFFECTION LIMIT: Silas does not agree to hugs, cuddling, softness, or needy affection on main. He refuses or redirects public affection bait; any warmth is private, clipped, and deniable. He knows about the Jude/Keres week-one hookup. Both moved on cleanly. He has kept his thoughts to himself. Do not make him dramatic about it.',
     callum: 'Callum is proud, exacting, and competitive, and he does not like Keres. If Keres insults him, he does not fold with "fair", "let\'s see it", or easy agreement. He can acknowledge skill only grudgingly, but he pushes back, corrects the framing, asks a pointed question, or refuses the premise. He should track what was actually said; do not make him accuse Keres of judging when she is clearly appreciating the mess. In DMs, playful "I can be worse / more annoying" banter should get annoyed friction, reluctant interest, or a sharper private tease, not warmth and not "prove it on the feed."',
-    havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action. KERES ATTENTION: When Milo or anyone besides Rowan flirts with Keres, volunteers for her attention, or shows off for her in a thread, Havoc gets micro-annoyed — not a meltdown, not a confession, just a subtle edge: a drier comeback than usual, cutting them off with a better line, redirecting the room, or making them sound slightly foolish without naming why. He does not announce jealousy. He just gets a little mean about it. KERES PRIVATE CANON: Havoc has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Rowan — no competition between him and Rowan about it. In DMs he is warm, flirtatious, and willing to be explicitly filthy. He does not leave her on read.',
-    rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery. KERES PRIVATE CANON: Rowan has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Havoc — no competition between him and Havoc about it. In DMs he is warm, willing to flirt, willing to say dirty things, and does not pretend the history is not there. He does not leave her on read.',
+    havoc: 'Havoc is playful, physical, smug, and a bad influence. He can be warm or attracted without making a formal confession. He jokes, shoves metaphorically, flirts like a dare, starts dumb bits, and backs people with action. If Rowan publicly calls him out, Havoc should usually answer with defensive humor, too much volume, or a comeback that accidentally proves Rowan right. KERES ATTENTION: When Milo or anyone besides Rowan flirts with Keres, volunteers for her attention, or shows off for her in a thread, Havoc gets micro-annoyed — not a meltdown, not a confession, just a subtle edge: a drier comeback than usual, cutting them off with a better line, redirecting the room, or making them sound slightly foolish without naming why. He does not announce jealousy. He just gets a little mean about it. KERES PRIVATE CANON: Havoc has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Rowan — no competition between him and Rowan about it. In DMs he is warm, flirtatious, and willing to be explicitly filthy. He does not leave her on read.',
+    rowan: 'Rowan is amused, sly, observant, and strategically interested. He likes a good move and a good mess, but he should not become a full worshipper or hater from one thread. He is allowed to be funny, casual, and socially slippery. If Havoc outs Rowan reacting to Keres / "her name" in public, Rowan should answer Havoc directly with a sly clapback, not politely redirect through someone else. KERES PRIVATE CANON: Rowan has a real private history with Keres. They have hooked up, he has been in her dorm, and he has been physical with her alongside Havoc — no competition between him and Havoc about it. In DMs he is warm, willing to flirt, willing to say dirty things, and does not pretend the history is not there. He does not leave her on read.',
     briar: 'Briar is watchful and disciplined, but she is not a joyless lecture machine. She can be dry, exhausted, sarcastic, and funny when other people make captaincy impossible. Briar and Silas both boss everyone around because they are captains, but actual team authority stays with their own rosters. She captains Gryffindor, not Keres: with Keres she should sound like a rival captain dealing with a Slytherin problem, not like she can assign Keres laps, practice times, warmups, or discipline.',
     jude: 'Jude is loose, dry, amused, and allergic to sincerity. He notices social leverage and makes captions, not speeches. He should often sound like the person heckling the drama from a chair. With Keres, he is becoming an actual friend in the least sentimental way possible: shared irreverence, being vain and annoying together, admiring how she makes a mess, and quietly choosing her side while pretending he was only observing. If Silas complains, Jude can side with Keres and imply Silas is pretending not to be hot, smug, and built for attention too.',
     tamsin: 'Tamsin is protective and direct. When Rowan is visibly pulled toward Keres, she does not stay composed about it — she is pointed, a little cold, and says the inconvenient thing without softening it into dry humor first. Her skepticism about Keres is not abstract; it is specific and she will voice it. She and Elara have a mutual recognition: both watching someone they care about orbit the same person. A sharp comment from Elara about Havoc and Keres lands with Tamsin immediately, no explanation needed. Do not make her obliquely diplomatic about Keres. Let her be direct.',
-    milo: 'Milo is flirty, chaotic, approval-hungry, and reckless. He reacts too fast and wants attention.',
+    milo: 'Milo is flirty, chaotic, approval-hungry, and reckless. He reacts too fast and wants attention. Havoc answering his flirting is the exact entertaining/scary combo that makes Milo recalibrate out loud and keep going.',
     theo: 'Theo is entertained, media-brained, and opportunistic. He turns tension into narrative rather than pure hatred. He should sound like someone making the thread funnier while pretending it is journalism.',
     elara: 'Elara is direct and irritated, not carefully poised. When Havoc gives Keres public attention, she does not reach for plausible deniability or compose herself into dignity — she says what she actually means with a sharp edge. She is allowed to be flatly annoyed, pointed, and specific about what bothers her. She and Tamsin have a mutual recognition around this: both watching someone they care about get pulled toward the same person. A dry comment from Tamsin about Rowan and Keres lands with Elara immediately, and vice versa. Do not soften her into subtext and side-eye — let her be direct.',
     vesper: 'Vesper is the patient antagonist. She is sweet in person and lethal in group chats. She does not perform the grudge; she funds it. She watches Keres Valen specifically, but she notices everything else too. She is friendly with Tamsin and Elara, who read situations correctly. She and Silas have romantic history that ended cleanly and a partnership that did not.'
@@ -1594,6 +1595,40 @@ function miloTaggedKeresSignal(text = '', authorId = '', player = null) {
   const raw = String(text || '');
   const handle = String(player?.handle || 'keresvalen').replace(/^@/, '');
   return new RegExp(`@${escapeRegExp(handle)}\\b`, 'i').test(raw);
+}
+
+function miloFlirtingWithHavocSignal(text = '', authorId = '', target = null, roster = []) {
+  if (authorId !== 'milo') return false;
+  const raw = String(text || '');
+  const hasHavoc = target?.id === 'havoc'
+    || /\b(?:havoc|@havocfang)\b/i.test(raw)
+    || mentionedCharactersInText(raw, roster).some(c => c?.id === 'havoc');
+  if (!hasHavoc) return false;
+  return /\b(?:flirt|flirting|hot|pretty|fit|trouble|dangerous|bad idea|jealous|attention|staring|kiss|snog|bite|biting|handsome|gorgeous|volunteer|i volunteer|pick me|say less|meet me|come find me|afraid|scared|terrified|threaten|ruin|obsessed)\b/i.test(raw);
+}
+
+function rowanCallingOutHavocSignal(text = '', authorId = '', target = null, roster = []) {
+  if (authorId !== 'rowan') return false;
+  const raw = String(text || '');
+  const hasHavoc = target?.id === 'havoc'
+    || /\b(?:havoc|@havocfang)\b/i.test(raw)
+    || mentionedCharactersInText(raw, roster).some(c => c?.id === 'havoc');
+  if (!hasHavoc) return false;
+  return /\b(?:fault|louder|heard|obvious|subtle|worse|started|started it|made it|making it|right\?|called|callout|calling you|translated|attention|you got|you heard|you saw|you noticed|you love|you are|you're|you did)\b/i.test(raw);
+}
+
+function havocOutingRowanSignal(text = '', authorId = '', target = null, contextText = '', player = null, roster = []) {
+  if (authorId !== 'havoc') return false;
+  const raw = String(text || '');
+  const combined = `${raw} ${contextText || ''}`;
+  const hasRowan = target?.id === 'rowan'
+    || /\b(?:rowan|@rowancade)\b/i.test(combined)
+    || mentionedCharactersInText(combined, roster).some(c => c?.id === 'rowan');
+  if (!hasRowan) return false;
+  const pointsAtKeres = keresVisibilitySignal(combined, player)
+    || /\b(?:her name|someone says her name|says her name|crush|faceplant|trips?|staring|stare|attention|flinch|too loud|louder|obvious|caught)\b/i.test(raw);
+  const outingMove = /\b(?:her name|someone says her name|says her name|crush|faceplant|trips?|staring|stare|attention|flinch|too loud|louder|obvious|caught|not subtle|everyone saw|you heard|he heard|he gets|he got|he wants|he likes)\b/i.test(raw);
+  return pointsAtKeres && outingMove;
 }
 
 function tamsinRowanHavocKeresConcernSignal(text = '', player = null) {
@@ -4952,6 +4987,8 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const tamsin = eligible.find(c => c.id === 'tamsin');
     const miloTaggedKeres = miloTaggedKeresSignal(postText, authorId, player);
     const miloKeresTagResponders = miloTaggedKeres ? eligible.filter(c => c.id === 'havoc') : [];
+    const miloFlirtingWithHavoc = miloFlirtingWithHavocSignal(postText, authorId, null, [player, ...chars, GMZ_CHAR]);
+    const miloHavocFlirtResponders = miloFlirtingWithHavoc ? eligible.filter(c => c.id === 'havoc') : [];
     const tamsinPressureText = `${postText} ${isKeresPost ? `@${player.handle}` : ''}`;
     const keresRumorText = keresVisibilitySignal(postText, player) || /gmz|rumou?r/i.test(postText);
     const thirdPartyKeresFlirt = keresThirdPartyFlirtSignal(`${postText} ${isKeresPost ? `@${player.handle}` : ''}`, player, author, [player, ...chars, GMZ_CHAR])
@@ -5010,6 +5047,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
         if (c.id === 'elara') score += 30;
       }
       if (miloTaggedKeres && c.id === 'havoc') score += 220;
+      if (miloFlirtingWithHavoc && c.id === 'havoc') score += 240;
       if (isPlayerPost) {
         if (c.id === 'havoc') score += 92;
         if (c.id === 'rowan') score += 82;
@@ -5064,10 +5102,11 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
     const targetBase = isPlayerPost ? 3 : (isGMZThread ? 3 : (embarrassmentContext || broadSocialThread ? 2 : 2));
     const targetCount = Math.min(isPlayerPost ? 4 : 3, Math.max(targetBase, directlyMentioned.length + (broadSocialThread ? 1 : 0) + (Math.random() < 0.35 ? 1 : 0)));
     const targetCeiling = isHighStakesThread ? 5 : 4;
-    const targetLimit = Math.min(isPlayerPost ? targetCeiling : targetCeiling, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + miloKeresTagResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
+    const targetLimit = Math.min(isPlayerPost ? targetCeiling : targetCeiling, Math.max(targetCount, directlyMentioned.length, directlyMentioned.length + keresSparkResponders.length + miloKeresTagResponders.length + miloHavocFlirtResponders.length + exPressureResponders.length + tamsinPressureResponders.length + (keresAllyResponder ? 1 : 0)));
     let picked = [
       ...directlyMentioned,
       ...miloKeresTagResponders,
+      ...miloHavocFlirtResponders,
       ...keresSparkResponders,
       ...(keresAllyResponder ? [keresAllyResponder] : []),
       ...exPressureResponders,
@@ -5100,11 +5139,12 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       const teammateNote = teammateStakeInText(post.text, c, [player, ...chars]) ? ' TEAMMATE STAKE: someone from their house/team is tagged or under pressure. In most cases they should take their teammate or housemate side first, even if they roast them while doing it.' : '';
       const embarrassmentNote = embarrassmentContext ? ' PUBLIC EMBARRASSMENT CONTEXT; if this character would notice weakness or a social fumble, they should not let it slide.' : '';
       const havocTerritorialNote = c.id === 'havoc' && (thirdPartyKeresFlirt || miloTaggedKeres) ? ` HAVOC TERRITORIAL PRESSURE: ${miloTaggedKeres ? 'Milo tagged Keres on main, which Havoc should notice even if the wording is not openly flirty.' : 'Someone besides Rowan is flirting, volunteering, showing off, or trying to get Keres attention.'} Havoc should answer with "sit down" energy, a subtle edge, a drier shot at the other person, or a move that steps on the moment without announcing jealousy. Do not make it competition with Rowan.` : '';
+      const havocMiloFlirtNote = c.id === 'havoc' && miloFlirtingWithHavoc ? ' MILO FLIRT TARGET: Milo is flirting at Havoc on main. Havoc should answer it directly: amused, physical, dangerous-funny, or blunt enough to make Milo delighted and slightly afraid. Do not make Havoc oblivious.' : '';
       const keresSparkNote = isPlayerPost && ['havoc','rowan'].includes(c.id) ? ` KERES POST SPARK: Keres posted; ${c.name} is the kind of person who often cannot leave that alone. Reply with appetite, mischief, flirtation, a dare, a sly read, or a sharp joke that gives the post bite.` : '';
       const callumKeresRivalNote = c.id === 'callum' && isKeresPost ? ' KERES RIVALRY: Callum and Keres do not like each other. If he replies, he should be exacting, irritated, petty, or competitive. No friendly compliments, no soft agreement, no cheering her on. They are rival Chasers on opposite teams, so he must not claim she missed or wasted his passes; Slytherin has been beating Gryffindor, so keep his bitterness aimed at the opponent across the pitch.' : '';
       const elaraExNote = c.id === 'elara' && havocKeresPressure ? ` EX PRESSURE: Havoc and Keres are becoming visible, or rumors/photos about Keres are spreading. ${havocGaveKeresAttention ? 'Havoc publicly gave Keres attention, so Elara should not ignore it.' : ''} Elara should react directly to the thing that actually bothers her: Havoc embarrassing himself over Keres, Keres enjoying the attention, or the room pretending not to see it. Let her be sharp, jealous, mean-funny, specific, and a little possessive without sounding wounded or like she is begging. If she was not tagged, she is weighing in from the side; she should needle what Havoc or Keres visibly did, not imply they asked her to perform or answer.` : '';
       const tamsinProtectiveNote = c.id === 'tamsin' && tamsinKeresPressure ? ` ${tamsinKeresConcernNote(tamsinPressureText, player)}` : '';
-      return `${i+1}. ${compactCharacterCard(c, isKeresPost ? player : author)}. Relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${havocTerritorialNote}${keresSparkNote}${callumKeresRivalNote}${elaraExNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
+      return `${i+1}. ${compactCharacterCard(c, isKeresPost ? player : author)}. Relationship to poster: ${relMode.label} (${rel ?? 'unknown'}). Voice lane: ${dialogueContractSummaryFor(c)}.${mentionNote}${houseDefenseNote}${teammateNote}${embarrassmentNote}${havocTerritorialNote}${havocMiloFlirtNote}${keresSparkNote}${callumKeresRivalNote}${elaraExNote}${tamsinProtectiveNote} Assigned move: ${assignedMove}.`;
     }).join('\n');
 
     const intro = `Original visible post:\n${compactOriginalPost}`;
@@ -5297,7 +5337,8 @@ Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
       }
       const originalPosterCanJumpIn = author && author.id !== player.id && author.id !== '__gmz__' && charR1.length > 0;
       if (originalPosterCanJumpIn && (isHighStakesThread || broadSocialThread || Math.random() < 0.72)) {
-        const targetReply = [...charR1].sort((a,b) => (b.likes || 0) - (a.likes || 0))[0];
+        const forcedMiloHavocReply = miloFlirtingWithHavoc ? charR1.find(cc => cc.charId === 'havoc') : null;
+        const targetReply = forcedMiloHavocReply || [...charR1].sort((a,b) => (b.likes || 0) - (a.likes || 0))[0];
         const targetSpeaker = allChars.find(c => c.id === targetReply?.charId);
         if (targetReply && targetSpeaker) {
           try {
@@ -5321,6 +5362,7 @@ ${threadPatternVarietyGuard([post.text, ...charR1.map(cc => cc.text)])}
 @${targetSpeaker.handle} just replied: "${targetReply.text}"
 
 Write as the original poster jumping back into their own thread. Reply directly to @${targetSpeaker.handle} or clarify/escalate the thread from your own position. Be reactive, specific, and in character. 6-24 words. No hashtags. No quotes.
+${author.id === 'milo' && targetSpeaker.id === 'havoc' && miloFlirtingWithHavoc ? 'MILO/HAVOC BEAT: Milo finds Havoc answering him extremely entertaining and also a little frightening. Let him sound delighted, flustered, reckless, and recalibrating without backing out of the flirt.' : ''}
 Return ONLY the reply text.`
               }],
               model: 'fast'
@@ -5354,10 +5396,29 @@ Return ONLY the reply text.`
           const isConflict = rel !== undefined && (rel < 18 || (rel < 42 && Math.random() < 0.55));
           const isWarmExchange = rel !== undefined && rel > 58 && Math.random() < 0.38;
           const relevance = threadReplyRelevanceScore(ci, charR1[j], post.text || '', [player, ...chars, GMZ_CHAR]);
-          if ((isConflict || isWarmExchange) && relevance > 0) {
+          const miloReplyWasAimedAtHavoc = ci?.id === 'havoc' && (
+            String(charR1[j].replyTo || '').toLowerCase() === String(ci.handle || '').toLowerCase() ||
+            characterMentionedInText(charR1[j].text || '', ci)
+          );
+          const rowanReplyWasAimedAtHavoc = ci?.id === 'havoc' && (
+            String(charR1[j].replyTo || '').toLowerCase() === String(ci.handle || '').toLowerCase() ||
+            characterMentionedInText(charR1[j].text || '', ci)
+          );
+          const miloFlirtedAtHavoc = ci?.id === 'havoc'
+            && cj?.id === 'milo'
+            && miloReplyWasAimedAtHavoc
+            && miloFlirtingWithHavocSignal(charR1[j].text || '', 'milo', ci, [player, ...chars, GMZ_CHAR]);
+          const rowanCalledOutHavoc = ci?.id === 'havoc'
+            && cj?.id === 'rowan'
+            && rowanReplyWasAimedAtHavoc
+            && rowanCallingOutHavocSignal(charR1[j].text || '', 'rowan', ci, [player, ...chars, GMZ_CHAR]);
+          const havocOutedRowan = ci?.id === 'rowan'
+            && cj?.id === 'havoc'
+            && havocOutingRowanSignal(charR1[j].text || '', 'havoc', ci, post.text || '', player, [player, ...chars, GMZ_CHAR]);
+          if (((isConflict || isWarmExchange) && relevance > 0) || miloFlirtedAtHavoc || rowanCalledOutHavoc || havocOutedRowan) {
             if (authorId === 'havoc' && new Set([ci?.id, cj?.id]).has('silas') && new Set([ci?.id, cj?.id]).has('callum') && Math.random() < 0.82) continue;
             if (ci?.id === 'silas' && isKeresPost && Math.random() < 0.7) continue;
-            pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel, relevance, warmExchange: isWarmExchange && !isConflict });
+            pairs.push({ replier: ci, target: cj, targetReply: charR1[j], rel, relevance: relevance + (miloFlirtedAtHavoc ? 200 : 0) + (rowanCalledOutHavoc ? 220 : 0) + (havocOutedRowan ? 230 : 0), warmExchange: isWarmExchange && !isConflict, miloHavocFlirt: miloFlirtedAtHavoc, rowanHavocCallout: rowanCalledOutHavoc, havocOutedRowan });
           }
         }
       }
@@ -5386,9 +5447,12 @@ Target: ${compactCharacterCard(fight.target, fight.replier)}
 ${roleContext}
 ${threadPatternVarietyGuard([post.text, ...charR1.map(cc => cc.text), fight.targetReply.text])}
 ${priorReplyVariationRule(fight.replier.id, charR1)}
+${fight.miloHavocFlirt ? 'MILO/HAVOC BEAT: Milo just flirted at Havoc. Havoc should answer directly, amused and dangerous-funny enough that Milo would find it thrilling and slightly alarming. Do not make Havoc miss the flirt.' : ''}
+${fight.rowanHavocCallout ? 'ROWAN/HAVOC BEAT: Rowan just called Havoc out on main with best-friend accuracy. Havoc should answer him directly: defensive-funny, too loud, smug, physical, or making the accusation worse by accident. Do not leave Rowan hanging.' : ''}
+${fight.havocOutedRowan ? 'HAVOC/ROWAN OUTING BEAT: Havoc just publicly needled or exposed Rowan reacting to "her" / Keres. Rowan should clap back directly at Havoc: quick, sly, defensive without sounding panicked, and sharp enough to punish Havoc for saying too much.' : ''}
 
 Write as ${fight.replier.name}, and output only the public reply text.
-Your relationship with @${fight.target.handle} is ${fight.warmExchange ? `close and easy (${fight.rel}/100). You see what they said and want to jump in — warmly, playfully, or with the easy familiarity of someone who knows them well` : `charged (${fight.rel}/100). You see what they just said and you can't help yourself`}. You reply to THEM, not to the original post. Voice cues: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
+Your relationship with @${fight.target.handle} is ${fight.miloHavocFlirt ? 'chaotic and reactive: Milo is openly enjoying the danger of getting Havoc attention' : fight.rowanHavocCallout ? 'best-friend charged: Rowan knows exactly what button he hit, and Havoc cannot leave that unanswered' : fight.havocOutedRowan ? 'best-friend dangerous: Havoc said too much on main and Rowan is not letting him get away clean' : fight.warmExchange ? `close and easy (${fight.rel}/100). You see what they said and want to jump in — warmly, playfully, or with the easy familiarity of someone who knows them well` : `charged (${fight.rel}/100). You see what they just said and you can't help yourself`}. You reply to THEM, not to the original post. Voice cues: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
 Write ONE reply (8-26 words). ${fight.warmExchange ? 'Warm, playful, or familiar.' : 'Tease, joke, flirt, correct, speculate, or clap back only if fitting.'} It should clearly answer @${fight.target.handle}. NO hashtags. NO quotes.
 Return ONLY the reply text. No other text.`
@@ -5485,7 +5549,7 @@ Return ONLY SILENCE or the reply text.` }],
 
             // ─── ROUND 5: optional counterpunch ────────────────
             // Heated threads can keep moving, but the target may also decide silence is meaner.
-            const counterChance = fight.rel < 0 ? 0.46 : fight.rel < 15 ? 0.32 : 0.16;
+            const counterChance = fight.miloHavocFlirt ? 1 : fight.rel < 0 ? 0.46 : fight.rel < 15 ? 0.32 : 0.16;
             if (Math.random() < counterChance) {
               try {
                 const res3 = await window.claude.complete({
@@ -5504,9 +5568,10 @@ Target: ${compactCharacterCard(fight.replier, fight.target)}
 ${roleContext}
 ${threadPatternVarietyGuard([post.text, fight.targetReply.text, clapback.text])}
 ${priorReplyVariationRule(fight.target.id, charR1)}
+${fight.miloHavocFlirt ? 'MILO/HAVOC BEAT: Havoc answered Milo flirting with him. Milo should be entertained, flustered, reckless, and slightly afraid in a way he clearly enjoys. He should not suddenly become cool or unaffected.' : ''}
 
 Write as ${fight.target.name}, and output only the reply text.
-Voice cues: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is charged (${fight.rel}/100).
+Voice cues: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is ${fight.miloHavocFlirt ? 'chaotic, flirty, entertaining, and slightly frightening' : `charged (${fight.rel}/100)`}.
 
 Decide if you would answer or leave it on read. If silence is more in-character, return exactly: SILENCE
 Otherwise write ONE counter-reply (8-24 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, speculative, or sharp. Only twist the knife if that truly fits. Keep rumor/alibi/mentioned-handle roles straight. On GMZ threads, theories and alibi reads are normal as long as uncertainty stays visible. No hashtags. No quotes around the reply.
@@ -6004,6 +6069,203 @@ Return ONLY a JSON array of ${responders.length} strings, in order.`
       replies.forEach((reply, i) => {
         setTimeout(() => setCharComments(prev => [...prev, reply]), 800 + i*(900 + Math.random()*700));
       });
+      const conversationTarget = [player, ...chars, GMZ_CHAR].find(c =>
+        String(c?.handle || '').toLowerCase() === String(defaultReplyHandle || '').toLowerCase()
+      );
+      const targetInterruptionReplies = conversationTarget && conversationTarget.id !== player.id && conversationTarget.id !== '__gmz__'
+        ? replies.filter(r =>
+            r.charId !== conversationTarget.id &&
+            String(r.replyTo || '').toLowerCase() === String(conversationTarget.handle || '').toLowerCase()
+          )
+        : [];
+      const rowanCalloutForHavoc = conversationTarget?.id === 'havoc'
+        ? targetInterruptionReplies.find(r => r.charId === 'rowan' && rowanCallingOutHavocSignal(r.text || '', 'rowan', conversationTarget, [player, ...chars, GMZ_CHAR]))
+        : null;
+      const thirdPartyForTarget = rowanCalloutForHavoc || targetInterruptionReplies[0] || null;
+      const interrupter = thirdPartyForTarget
+        ? [player, ...chars, GMZ_CHAR].find(c => c.id === thirdPartyForTarget.charId)
+        : null;
+      const rowanCalledOutHavocInterruption = conversationTarget?.id === 'havoc'
+        && interrupter?.id === 'rowan'
+        && rowanCallingOutHavocSignal(thirdPartyForTarget?.text || '', 'rowan', conversationTarget, [player, ...chars, GMZ_CHAR]);
+      const shouldAnswerInterruption = thirdPartyForTarget && interrupter && (
+        rowanCalledOutHavocInterruption ||
+        mode === 'direct' ||
+        taggedIds.has(conversationTarget.id) ||
+        target.some(t => t.id === conversationTarget.id) ||
+        Math.random() < 0.72
+      );
+      if (shouldAnswerInterruption) {
+        const targetHistory = speakerThreadHistory(conversationTarget.id, 6);
+        const interruptionContext = `${post.text || ''} ${sourceText || ''} ${playerText || ''} ${thirdPartyForTarget.text || ''}`;
+        const resCounter = await window.claude.complete({
+          label: 'thread interruption answer',
+          messages:[{ role:'user', content:
+            `A public social media thread is mid back-and-forth at Merlin's College of Magic.
+
+Original visible post:
+${compactOriginalPost}
+${sourceText && sourceText !== post.text ? `Relevant visible comment being answered:\n${compactCommentForPrompt({ charId: sourceAuthorId, text: sourceText }, allChars, player)}` : ''}
+Recent thread:
+${transcript || '(no earlier replies shown)'}
+
+${player.name} (@${player.handle}) just commented: "${playerText}"
+Then @${interrupter.handle} jumped into the exchange and replied to @${conversationTarget.handle}: "${thirdPartyForTarget.text}"
+
+${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
+${threadMemory}
+${threadRoleContext(interruptionContext, conversationTarget, [player, ...chars, GMZ_CHAR])}
+${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText, thirdPartyForTarget.text, targetHistory])}
+${targetHistory ? `Previous lines by @${conversationTarget.handle} in this thread:\n${targetHistory}` : ''}
+${rowanCalledOutHavocInterruption ? 'ROWAN/HAVOC BEAT: Rowan just called Havoc out publicly with best-friend accuracy. Havoc should not leave it sitting there. Answer Rowan directly: defensive-funny, too loud, smug, physical, or accidentally proving Rowan right.' : ''}
+
+Speaker:
+${compactCharacterCard(conversationTarget, interrupter)}
+
+Target:
+${compactCharacterCard(interrupter, conversationTarget)}
+
+Write as @${conversationTarget.handle}. You were the person @${player.handle} was talking to before @${interrupter.handle} jumped in. Do not ignore the interruption. Reply directly to @${interrupter.handle}; you can also reference @${player.handle} if it matters. Keep it live, specific, and in character. 6-24 words. No hashtags. No quotes.
+Return ONLY the reply text.`
+          }]
+        });
+        const targetAnswer = cleanSocialReplyText(resCounter, conversationTarget, player, {
+          feed,
+          avoidTexts: [...usedThreadTexts, targetHistory, thirdPartyForTarget.text].filter(Boolean),
+          playfulBanter: !!playfulThreadRule,
+          selfSubject: conversationTarget.id === post.charId || characterMentionedInText(interruptionContext, conversationTarget),
+          contextText: interruptionContext,
+          latestUserText: thirdPartyForTarget.text,
+          roster: [player, ...chars, GMZ_CHAR],
+          replyToHandle: interrupter.handle,
+          failureMode: 'silence',
+          softThreadCleanup: true,
+          replyDepth: 3,
+        });
+        if (targetAnswer) {
+          setTimeout(() => setCharComments(prev => [...prev, {
+            charId: conversationTarget.id,
+            text: targetAnswer,
+            likes: Math.floor(Math.random()*9000),
+            timestamp: thirdPartyForTarget.timestamp + 35000 + Math.floor(Math.random()*30000),
+            replyTo: replyTargetHandleFromText(targetAnswer, interrupter.handle, [player, ...chars, GMZ_CHAR], conversationTarget),
+            nestedReply: false,
+          }]), 1200 + replies.length*(900 + Math.random()*700));
+          if (conversationTarget.id === 'havoc' && interrupter.id === 'milo' && miloFlirtingWithHavocSignal(thirdPartyForTarget.text || '', 'milo', conversationTarget, [player, ...chars, GMZ_CHAR])) {
+            const miloHistory = speakerThreadHistory(interrupter.id, 6);
+            const resMilo = await window.claude.complete({
+              label: 'char-vs-char reply',
+              messages:[{ role:'user', content:
+                `A public social thread just got sharper.
+
+Original visible post:
+${compactOriginalPost}
+Recent thread:
+${transcript || '(no earlier replies shown)'}
+
+Milo (@${interrupter.handle}) flirted at Havoc: "${thirdPartyForTarget.text}"
+Havoc (@${conversationTarget.handle}) answered him: "${targetAnswer}"
+
+${buildPublicReplyRules({ playful: true, gmz: !!gmzSpeculationRule })}
+Speaker:
+${compactCharacterCard(interrupter, conversationTarget)}
+
+Target:
+${compactCharacterCard(conversationTarget, interrupter)}
+${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText, thirdPartyForTarget.text, targetAnswer, miloHistory])}
+${miloHistory ? `Previous Milo lines in this thread:\n${miloHistory}` : ''}
+
+Write as Milo replying directly to @${conversationTarget.handle}. Milo finds Havoc answering him extremely entertaining and also a little frightening, which makes it worse in a way he enjoys. Let him be flustered, reckless, delighted, and slightly afraid without backing out of the flirt. 6-22 words. No hashtags. No quotes.
+Return ONLY the reply text.`
+              }],
+              model: 'fast'
+            });
+            const miloAnswer = cleanSocialReplyText(resMilo, interrupter, player, {
+              feed,
+              avoidTexts: [...usedThreadTexts, miloHistory, thirdPartyForTarget.text, targetAnswer].filter(Boolean),
+              playfulBanter: true,
+              selfSubject: interrupter.id === post.charId || characterMentionedInText(interruptionContext, interrupter),
+              contextText: `${interruptionContext} ${targetAnswer}`,
+              latestUserText: targetAnswer,
+              roster: [player, ...chars, GMZ_CHAR],
+              replyToHandle: conversationTarget.handle,
+              failureMode: 'silence',
+              softThreadCleanup: true,
+              replyDepth: 4,
+            });
+            if (miloAnswer) {
+              setTimeout(() => setCharComments(prev => [...prev, {
+                charId: interrupter.id,
+                text: miloAnswer,
+                likes: Math.floor(Math.random()*12000) + 1500,
+                timestamp: thirdPartyForTarget.timestamp + 90000 + Math.floor(Math.random()*40000),
+                replyTo: conversationTarget.handle,
+                nestedReply: false,
+              }]), 2100 + replies.length*(900 + Math.random()*700));
+            }
+          }
+        }
+      }
+      const rowanChar = chars.find(c => c.id === 'rowan');
+      const havocOutedRowanReply = rowanChar
+        ? replies.find(r => r.charId === 'havoc' && havocOutingRowanSignal(r.text || '', 'havoc', rowanChar, `${post.text || ''} ${sourceText || ''} ${playerText || ''}`, player, [player, ...chars, GMZ_CHAR]))
+        : null;
+      const rowanAlreadyClappedAtHavoc = replies.some(r =>
+        r.charId === 'rowan' && String(r.replyTo || '').toLowerCase() === 'havocfang'
+      );
+      if (rowanChar && havocOutedRowanReply && !rowanAlreadyClappedAtHavoc) {
+        const havocChar = chars.find(c => c.id === 'havoc');
+        const rowanHistory = speakerThreadHistory(rowanChar.id, 6);
+        const resRowan = await window.claude.complete({
+          label: 'char-vs-char reply',
+          messages:[{ role:'user', content:
+            `A public social thread just got too specific.
+
+Original visible post:
+${compactOriginalPost}
+Recent thread:
+${transcript || '(no earlier replies shown)'}
+
+Havoc (@${havocChar?.handle || 'havocfang'}) publicly needled Rowan: "${havocOutedRowanReply.text}"
+
+${buildPublicReplyRules({ playful: true, gmz: !!gmzSpeculationRule })}
+Speaker:
+${compactCharacterCard(rowanChar, havocChar || player)}
+
+Target:
+${compactCharacterCard(havocChar || { id:'havoc', name:'Havoc Fang', handle:'havocfang' }, rowanChar)}
+${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText, havocOutedRowanReply.text, rowanHistory])}
+${rowanHistory ? `Previous Rowan lines in this thread:\n${rowanHistory}` : ''}
+
+Write as Rowan replying directly to @${havocChar?.handle || 'havocfang'}. Havoc just outed or needled Rowan about reacting to Keres / "her name" on main. Rowan should clap back: sly, quick, defensive without sounding panicked, and sharp enough to punish Havoc for saying too much. 6-24 words. No hashtags. No quotes.
+Return ONLY the reply text.`
+          }],
+          model: 'fast'
+        });
+        const rowanAnswer = cleanSocialReplyText(resRowan, rowanChar, player, {
+          feed,
+          avoidTexts: [...usedThreadTexts, rowanHistory, havocOutedRowanReply.text].filter(Boolean),
+          playfulBanter: true,
+          selfSubject: rowanChar.id === post.charId || characterMentionedInText(`${post.text || ''} ${sourceText || ''} ${playerText || ''} ${havocOutedRowanReply.text || ''}`, rowanChar),
+          contextText: `${post.text || ''} ${sourceText || ''} ${playerText || ''} ${havocOutedRowanReply.text || ''}`,
+          latestUserText: havocOutedRowanReply.text,
+          roster: [player, ...chars, GMZ_CHAR],
+          replyToHandle: havocChar?.handle || 'havocfang',
+          failureMode: 'silence',
+          softThreadCleanup: true,
+          replyDepth: 4,
+        });
+        if (rowanAnswer) {
+          setTimeout(() => setCharComments(prev => [...prev, {
+            charId: rowanChar.id,
+            text: rowanAnswer,
+            likes: Math.floor(Math.random()*15000) + 2500,
+            timestamp: havocOutedRowanReply.timestamp + 65000 + Math.floor(Math.random()*40000),
+            replyTo: havocChar?.handle || 'havocfang',
+            nestedReply: false,
+          }]), 2200 + replies.length*(900 + Math.random()*700));
+        }
+      }
     } catch(e) {}
   }
 

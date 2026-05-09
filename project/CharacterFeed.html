@@ -4629,19 +4629,30 @@ function RelBar({ value }) {
 
 // ─── Bottom Nav ───────────────────────────────────────────────────
 function BottomNav({ tab, setTab, dmNotifs = {} }) {
+  const totalDmNotifs = Object.values(dmNotifs || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
   const tabs = [
-    { id:'feed', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></svg> },
-    { id:'activity', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="currentColor"/></svg> },
-    { id:'notifications', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/></svg> },
-    { id:'profile', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg> },
+    { id:'feed', label:'Feed', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></svg> },
+    { id:'activity', label:'Activity', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="currentColor"/></svg> },
+    { id:'messages', label:'Messages', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" fill="currentColor"/></svg>, badge: totalDmNotifs },
+    { id:'notifications', label:'Notifications', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/></svg> },
+    { id:'profile', label:'Profile', icon: <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg> },
   ];
   return (
     <div style={{display:'flex', borderTop:`1px solid ${C.border}`, background:C.bg, paddingBottom:bottomSafe(8), flexShrink:0}}>
       {tabs.map(t => (
-        <button key={t.id} onClick={() => setTab(t.id)} style={{
+        <button key={t.id} aria-label={t.label} title={t.label} onClick={() => setTab(t.id)} style={{
           flex:1, background:'none', border:'none', padding:'13px 0 10px', cursor:'pointer',
           color: tab === t.id ? '#fff' : C.muted, display:'flex', flexDirection:'column', alignItems:'center',
-        }}>{t.icon}</button>
+        }}>
+          <span style={{position:'relative', display:'inline-flex'}}>
+            {t.icon}
+            {!!t.badge && (
+              <span style={{position:'absolute', top:-7, right:-10, minWidth:18, height:18, borderRadius:999, background:'#e91e8c', color:'#fff', fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 5px', border:`2px solid ${C.bg}`}}>
+                {t.badge > 99 ? '99+' : t.badge}
+              </span>
+            )}
+          </span>
+        </button>
       ))}
     </div>
   );
@@ -9837,7 +9848,26 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
     });
   }
   function handleOpenChat(char) {
-    // Messages tab is retired.
+    if (!char) return;
+    pushNav();
+    setChatChar(char);
+    setActiveGroupChat(null);
+    setViewChar(null);
+    setThreadPost(null);
+    setEditChar(null);
+    setTab('messages');
+    setDmNotifs(n => ({ ...n, [char.id]: 0 }));
+  }
+  function handleOpenGroup(group) {
+    if (!group) return;
+    pushNav();
+    setActiveGroupChat(group);
+    setChatChar(null);
+    setViewChar(null);
+    setThreadPost(null);
+    setEditChar(null);
+    setTab('messages');
+    setDmNotifs(n => ({ ...n, [`group:${group.id}`]: 0 }));
   }
   function handleViewChar(char) { pushNav(); setViewChar(char); }
   function handleEditChar(char) { pushNav(); setEditChar(char); }
@@ -10692,7 +10722,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
     });
 
     setActiveEvent(null);
-    // DM tab is retired; custom events now resolve through feed/event log only.
+    // Custom events resolve through feed/event log; DMs are handled by the Messages tab.
     // GMZ only posts when the custom event explicitly names the gossip account.
     const shouldTriggerGMZ = /\b(?:gmz|@gmz|gossip account|anonymous tip)\b/i.test(`${ev.scenario || ''} ${ev.outcome || ''}`);
     if (shouldTriggerGMZ) {
@@ -10730,11 +10760,21 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
         <BottomNav tab={tab} setTab={t => { setTab(t); setActiveGroupChat(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );
+  } else if (chatChar) {
+    const liveChatChar = chatChar.id === GMZ_CHAR.id
+      ? GMZ_CHAR
+      : (chars.find(c => c.id === chatChar.id) || chatChar);
+    screenContent = (
+      <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+        <ChatScreen char={liveChatChar} player={player} allChars={[...chars, player, GMZ_CHAR]} feed={feed} dms={dms} eventLog={eventLog} groupChats={groupChats} setDms={setDms} onBack={goBack} onGMZTipSubmit={handleGMZTipSubmit} />
+        <BottomNav tab={tab} setTab={t => { setTab(t); setChatChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
+      </div>
+    );
   } else if (viewChar) {
     const liveViewChar = chars.find(c => c.id === viewChar.id) || (player.id === viewChar.id ? player : viewChar);
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} onBack={goBack} onDM={() => {}} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} onSceneEnd={handleSceneEnd} />
+        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} onBack={goBack} onDM={handleOpenChat} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} onSceneEnd={handleSceneEnd} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setViewChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );
@@ -10750,6 +10790,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
       switch(tab) {
         case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={() => {}} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
+        case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={handleOpenGroup} setGroupChats={setGroupChats} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
         case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} eventLog={eventLog} dms={dms} groupChats={groupChats} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;

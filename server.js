@@ -346,6 +346,31 @@ const server = http.createServer(async (req, res) => {
   if (req.url === '/api/state' && req.method === 'GET') {
     try {
       const data = fs.readFileSync(STATE_FILE, 'utf8');
+      // Merge profilePhoto fields from bundled save.json so photo updates
+      // always propagate to the disk state without wiping live data.
+      const bundledPath = path.join(__dirname, 'save.json');
+      try {
+        const bundled = JSON.parse(fs.readFileSync(bundledPath, 'utf8'));
+        const disk = JSON.parse(data);
+        let changed = false;
+        if (Array.isArray(bundled.chars) && Array.isArray(disk.chars)) {
+          bundled.chars.forEach(bc => {
+            if (!bc.profilePhoto) return;
+            const dc = disk.chars.find(c => c.id === bc.id);
+            if (dc && dc.profilePhoto !== bc.profilePhoto) { dc.profilePhoto = bc.profilePhoto; changed = true; }
+          });
+        }
+        if (bundled.player?.profilePhoto && disk.player && disk.player.profilePhoto !== bundled.player.profilePhoto) {
+          disk.player.profilePhoto = bundled.player.profilePhoto; changed = true;
+        }
+        if (changed) {
+          const merged = JSON.stringify(disk);
+          fs.writeFileSync(STATE_FILE, merged, 'utf8');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(merged);
+          return;
+        }
+      } catch(mergeErr) { /* non-fatal — serve original */ }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(data);
     } catch(e) {

@@ -613,6 +613,7 @@ function buildDmRules(includePrivateCanon = false) {
 ${buildCoreRules()}
 DM RULES:
 - Treat DM history as live conversation.
+- Track who opened the thread. If your character sent the first visible DM, Keres is replying to you; do not accuse her of initiating, bothering you, or barging into your DMs.
 - Respond to the other person's latest message directly.
 - DMs can be private, evasive, teasing, flirty, warm, sharp, or pressing.
 - Do not ask "what are you talking about?" if the topic is already established in the DM.
@@ -7239,6 +7240,38 @@ ${buildDmRules(includePrivateCanon)}
 The conversation that follows provides relevant recent context, then the DM history. Stay in character and output only the message.`;
 }
 
+function dmConversationOwnershipNote(char, player, dms = {}, latestUserText = '') {
+  const thread = Array.isArray(dms?.[char?.id]) ? dms[char.id].filter(m => m?.role === 'user' || m?.role === 'char') : [];
+  const first = thread[0];
+  const last = thread[thread.length - 1];
+  if (first?.role === 'char') {
+    const origin = first?.originContext ? ` Your opening context was: ${first.originContext}` : '';
+    const replyFrame = latestUserText
+      ? ` ${player.name}'s latest message is a reply to your DM, not a new intrusion.`
+      : '';
+    return `DM CONVERSATION OWNERSHIP:
+- You opened this DM thread first. Your earlier message was your own outreach.${origin}
+-${replyFrame || ` ${player.name} did not start this conversation unless a later message explicitly says she did.`}
+- Do not act annoyed that ${player.name} "DM'd you first", "came into your DMs", or demanded your attention when she is answering a thread you started.
+- If you feel defensive, be defensive about the topic, not about who initiated the DM.`;
+  }
+  if (first?.role === 'user') {
+    return `DM CONVERSATION OWNERSHIP:
+- ${player.name} opened this DM thread. You may react to being contacted if it fits your character, but track what she actually said.
+- Do not pretend you started this thread unless your own prior message in the visible DM history did that.`;
+  }
+  if (!thread.length && latestUserText) {
+    return `DM CONVERSATION OWNERSHIP:
+- This is the first message in this DM thread, so ${player.name} is opening the conversation.
+- React to her actual message, not to an invented earlier argument.`;
+  }
+  if (last?.role === 'char' && latestUserText) {
+    return `DM CONVERSATION OWNERSHIP:
+- ${player.name} is replying to your previous DM. Do not treat her reply as if she started a new fight out of nowhere.`;
+  }
+  return '';
+}
+
 function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], groupChats = [], latestUserText = '', dmIntent = '', dmSituation = '') {
   const involvedHandles = [char?.handle, player?.handle].filter(Boolean).map(h => String(h).toLowerCase());
   const recentPosts = [...feed].filter(p => {
@@ -7257,6 +7290,7 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
   const effectiveRel = effectivePlayerRelationship(char, eventLog, dms, groupChats).value;
   const effectiveRelMode = relationshipBehaviorMode(effectiveRel);
   const situationLine = dmSituation || dmSituationRulesFor(char, player, latestUserText);
+  const ownershipNote = dmConversationOwnershipNote(char, player, dms, latestUserText);
 
   const appMemory = recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars, channel:'dm', limit: 5 });
   const sceneContinuity = recentSceneContinuityForDM(char, player, eventLog);
@@ -7269,6 +7303,7 @@ function buildSystemPrompt(char, player, allChars, feed, dms, eventLog = [], gro
 
   return `${dmIntent}
 ${situationLine}
+${ownershipNote}
 ${compactPlayerStance(char, player, effectiveRel)}
 Relationship behavior mode with ${player.name}: ${effectiveRelMode.label}. Behavioral mode: ${effectiveRelMode.behavioral}
 Current effective relationship with ${player.name}, including this DM history: ${effectiveRel > 0 ? '+' : ''}${effectiveRel}%. Keep that relationship level consistent without mentioning the number.
@@ -10539,7 +10574,7 @@ Output ONLY the DM message. Do not say "I'm ready", "Understood", "I know the ru
       });
       const clean = cleanChatText(msg, triggerChar, player, false, { feed });
       if (!clean || clean.toUpperCase() === 'SILENCE') return;
-      const dmMsg = { role:'char', text: clean, id: Date.now() };
+      const dmMsg = { role:'char', text: clean, id: Date.now(), openedBy:'char', originContext: context };
       setDms(d => ({ ...d, [triggerChar.id]: [...(d[triggerChar.id]||[]), dmMsg] }));
       setDmNotifs(n => ({ ...n, [triggerChar.id]: (n[triggerChar.id]||0) + 1 }));
     } catch(e) {}
@@ -10574,7 +10609,7 @@ Output ONLY SILENCE or the DM message.` }
       });
       const clean = cleanChatText(msg, triggerChar, player, false, { feed });
       if (!clean || clean.toUpperCase() === 'SILENCE') return;
-      const dmMsg = { role:'char', text: clean, id: Date.now() };
+      const dmMsg = { role:'char', text: clean, id: Date.now(), openedBy:'char', originContext: `private intel: ${String(ev.scenario || '').slice(0, 180)}` };
       setDms(d => ({ ...d, [triggerChar.id]: [...(d[triggerChar.id]||[]), dmMsg] }));
       setDmNotifs(n => ({ ...n, [triggerChar.id]: (n[triggerChar.id]||0) + 1 }));
     } catch(e) {}

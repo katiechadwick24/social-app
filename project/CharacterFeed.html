@@ -9255,6 +9255,7 @@ function ComposeModal({ chars, player, onClose, onPost }) {
   const [selectedChar, setSelectedChar] = useState(player);
   const allChars = [player, ...chars];
   const fileRef = useRef(null);
+  const submittingRef = useRef(false);
 
   async function handlePhoto(e) {
     const file = e.target.files[0];
@@ -9265,14 +9266,17 @@ function ComposeModal({ chars, player, onClose, onPost }) {
   }
 
   function submit() {
+    if (submittingRef.current) return;
     if (!text.trim() && !photo) return;
+    submittingRef.current = true;
+    const postedAt = Date.now();
     onPost({
-      id: `post-${Date.now()}`,
+      id: `post-${postedAt}-${Math.random().toString(36).slice(2, 8)}`,
       charId: selectedChar.id,
       text: text.trim(),
       photo,
       likes: 0, reposts: 0, comments: 0,
-      timestamp: Date.now(),
+      timestamp: postedAt,
       reply: null,
     });
     onClose();
@@ -9286,9 +9290,9 @@ function ComposeModal({ chars, player, onClose, onPost }) {
           <div style={{color:C.text, fontSize:18, fontWeight:800, lineHeight:1.1}}>New Post</div>
           <div style={{color:C.muted, fontSize:12, marginTop:2}}>Create a timeline post</div>
         </div>
-        <button onClick={submit} disabled={!text.trim() && !photo} style={{
-          background: (text.trim() || photo) ? C.blue : C.card2, color:(text.trim() || photo) ? '#fff' : C.muted, border:'none',
-          borderRadius:12, padding:'8px 14px', minHeight:36, fontSize:14, fontWeight:800, cursor:(text.trim()||photo)?'pointer':'default',
+        <button onClick={submit} disabled={submittingRef.current || (!text.trim() && !photo)} style={{
+          background: (!submittingRef.current && (text.trim() || photo)) ? C.blue : C.card2, color:(!submittingRef.current && (text.trim() || photo)) ? '#fff' : C.muted, border:'none',
+          borderRadius:12, padding:'8px 14px', minHeight:36, fontSize:14, fontWeight:800, cursor:(!submittingRef.current && (text.trim()||photo))?'pointer':'default',
         }}>Post</button>
       </div>
 
@@ -10083,6 +10087,19 @@ function App() {
     return saved && saved.stateVersion === SAVE_STATE_VERSION;
   }
 
+  function playerPostSignature(post) {
+    if (!post || post.charId !== 'player') return '';
+    const text = String(post.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const photoKey = post.photo ? String(post.photo).slice(0, 80) : '';
+    return `${text}|${photoKey}`;
+  }
+
+  function playerPostSignatureSet(saved) {
+    return new Set((saved?.feed || [])
+      .map(playerPostSignature)
+      .filter(Boolean));
+  }
+
   function withStateVersion(state) {
     return {
       ...state,
@@ -10110,7 +10127,16 @@ function App() {
     const serverCurrent = isCurrentSave(serverState);
     const localCurrent = isCurrentSave(localState);
     if (serverCurrent && localCurrent) {
-      return (Number(localState.savedAt || 0) > Number(serverState.savedAt || 0)) ? localState : serverState;
+      const serverSavedAt = Number(serverState.savedAt || 0);
+      const localSavedAt = Number(localState.savedAt || 0);
+      const serverPlayerPosts = playerPostSignatureSet(serverState);
+      const localPlayerPosts = playerPostSignatureSet(localState);
+      const localHasPlayerPostMissingOnServer = [...localPlayerPosts].some(sig => !serverPlayerPosts.has(sig));
+      const localIsNotClearlyStale = !serverSavedAt || !localSavedAt || (serverSavedAt - localSavedAt) < 24 * 60 * 60 * 1000;
+      if (localHasPlayerPostMissingOnServer && localIsNotClearlyStale) {
+        return localState;
+      }
+      return (localSavedAt > serverSavedAt) ? localState : serverState;
     }
     if (localCurrent) return localState;
     if (serverCurrent) return serverState;

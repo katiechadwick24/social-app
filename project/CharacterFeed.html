@@ -10162,7 +10162,18 @@ function App() {
     const savedPlayer = normalizeCharacterIdentity(saved.player || player);
     if (saved.chars)      setCharsRaw(savedChars);
     if (saved.player)     setPlayerRaw(savedPlayer);
-    if (saved.feed)       setFeedRaw(repairPromptLeakPosts(saved.feed, savedChars, savedPlayer));
+    if (saved.feed) {
+      const repaired = repairPromptLeakPosts(saved.feed, savedChars, savedPlayer);
+      const seenTexts = new Set();
+      const deduped = repaired.filter(p => {
+        if (!p?.text) return true;
+        const key = p.text.trim().toLowerCase();
+        if (seenTexts.has(key)) return false;
+        seenTexts.add(key);
+        return true;
+      });
+      setFeedRaw(trimFeedPreservingPlayerPosts(deduped));
+    }
     if (saved.dms)        setDmsRaw(repairPromptLeakDms(saved.dms, savedChars, savedPlayer));
     if (saved.groupChats) setGroupChatsRaw(normalizeGroupChats(repairPromptLeakGroupChats(saved.groupChats, savedChars, savedPlayer)));
     setEventLogRaw(ensureCanonEventLog(saved.eventLog || []));

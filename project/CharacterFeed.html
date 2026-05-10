@@ -10195,6 +10195,8 @@ function App() {
   const feedRelationshipKeysRef = useRef(new Set());
   const feedRef = useRef([]);
   useEffect(() => { feedRef.current = feed; }, [feed]);
+  const gmzStateRef = useRef({ chars: [], player: null, eventLog: [] });
+  useEffect(() => { gmzStateRef.current = { chars, player, eventLog }; }, [chars, player, eventLog]);
 
   function cloneDefault(value) {
     return JSON.parse(JSON.stringify(value));
@@ -10976,6 +10978,122 @@ Write ONE short reply (1 sentence, in character). Use the pronouns listed above 
     // ── GMZ auto-posts ──────────────────────────────────────────
     // GMZ posts only reactively — see triggerGMZPost called from events/hot threads
     return () => { active = false; clearTimeout(nextTimer); };
+  }, [chars.length, editChar, activeEvent, activeMatch, composing]);
+
+  // ── Autonomous GMZ scoops ─────────────────────────────────────
+  // Fires every 45–90 min while the app is open, without any user input.
+  // Picks a story angle from relationship scores, canon events, or feed patterns.
+  useEffect(() => {
+    if (chars.length === 0 || editChar || activeEvent || activeMatch || composing) return;
+    let active = true;
+    let scoopTimer = null;
+
+    function buildGMZScoopContext() {
+      const { chars: currentChars, player: currentPlayer, eventLog: currentEventLog } = gmzStateRef.current;
+      const currentFeed = feedRef.current;
+      const allChars = [...currentChars, currentPlayer].filter(Boolean);
+
+      // Collect interesting relationship pairs from all chars
+      const tensionPairs = [];
+      const warmCrossHousePairs = [];
+      for (const char of currentChars) {
+        const rels = char.relationships || {};
+        for (const [targetId, score] of Object.entries(rels)) {
+          const resolvedId = targetId === 'player' ? currentPlayer?.id : targetId;
+          const target = allChars.find(c => c.id === resolvedId);
+          if (!target || target.id === char.id) continue;
+          if (score < -15) tensionPairs.push({ from: char, to: target, score });
+          if (score > 55 && char.house && target.house && char.house !== target.house) {
+            warmCrossHousePairs.push({ from: char, to: target, score });
+          }
+        }
+      }
+
+      const canonEvents = (currentEventLog || []).filter(e => e.type === 'event');
+      const recentHandles = [...new Set(
+        currentFeed.slice(0, 10).map(p => {
+          const c = allChars.find(x => x.id === p.charId);
+          return c ? `@${c.handle}` : null;
+        }).filter(Boolean)
+      )];
+
+      const locations = [
+        'the Astronomy Tower corridor after curfew',
+        'the pitch at an unusual hour',
+        'the library Restricted Section',
+        'Hogsmeade on a non-scheduled weekend',
+        'the Slytherin corridor at 2am',
+        'the Gryffindor common room steps',
+        'the Great Hall looking suspiciously pleased about something',
+      ];
+      const loc = locations[Math.floor(Math.random() * locations.length)];
+
+      // Weight the angle selection by what data is richest
+      const angles = [
+        tensionPairs.length > 0 && 'tension',
+        warmCrossHousePairs.length > 0 && 'spotted',
+        warmCrossHousePairs.length > 0 && 'rumor',
+        canonEvents.length > 0 && 'canon_followup',
+        recentHandles.length >= 2 && 'feed_pattern',
+        'wildcard',
+      ].filter(Boolean);
+      const angle = angles[Math.floor(Math.random() * angles.length)];
+
+      if (angle === 'tension' && tensionPairs.length) {
+        const pair = tensionPairs[Math.floor(Math.random() * tensionPairs.length)];
+        const flavors = [
+          `@${pair.from.handle} and @${pair.to.handle} have not been in the same room without something going sideways lately. GMZ sources are calling it unfinished business.`,
+          `Something shifted between @${pair.from.handle} and @${pair.to.handle} and campus has noticed. GMZ is watching the next interaction closely.`,
+          `The tension between @${pair.from.handle} and @${pair.to.handle} has a shape now. Sources say it did not start on the pitch.`,
+        ];
+        return flavors[Math.floor(Math.random() * flavors.length)];
+      }
+
+      if (angle === 'spotted' && warmCrossHousePairs.length) {
+        const pair = warmCrossHousePairs[Math.floor(Math.random() * warmCrossHousePairs.length)];
+        return `@${pair.from.handle} (${pair.from.house}) and @${pair.to.handle} (${pair.to.house}) were spotted near ${loc}. Cross-house. After hours. GMZ has questions and so does everyone else.`;
+      }
+
+      if (angle === 'rumor' && warmCrossHousePairs.length) {
+        const pair = warmCrossHousePairs[Math.floor(Math.random() * warmCrossHousePairs.length)];
+        return `Anonymous campus source claims @${pair.from.handle} and @${pair.to.handle} have been spending time together that neither of them has mentioned publicly. GMZ cannot confirm but cannot ignore it either.`;
+      }
+
+      if (angle === 'canon_followup' && canonEvents.length) {
+        const ev = canonEvents[Math.floor(Math.random() * canonEvents.length)];
+        const involvedHandles = (ev.chars || []).slice(0, 3).map(id => {
+          const c = allChars.find(x => x.id === id || (id === 'player' && x.id === currentPlayer?.id));
+          return c ? `@${c.handle}` : null;
+        }).filter(Boolean);
+        if (involvedHandles.length) {
+          return `Sources say the fallout from ${ev.title || 'recent campus events'} involving ${involvedHandles.join(', ')} is not as settled as it looks on the timeline. GMZ is still getting tips.`;
+        }
+      }
+
+      if (angle === 'feed_pattern' && recentHandles.length >= 2) {
+        const h1 = recentHandles[0];
+        const h2 = recentHandles[Math.floor(Math.random() * Math.min(recentHandles.length, 4))];
+        return `${h1} and ${h2} have both been unusually active on the timeline today. GMZ sources say it is not a coincidence.`;
+      }
+
+      // Wildcard: pick any char and make something up
+      const wildChar = currentChars[Math.floor(Math.random() * currentChars.length)];
+      return `GMZ has received multiple tips about @${wildChar?.handle || 'someone on campus'} this week. Details are still coming in but the pattern is interesting.`;
+    }
+
+    function scheduleScoop(delay) {
+      scoopTimer = setTimeout(async () => {
+        if (!active) return;
+        const context = buildGMZScoopContext();
+        await triggerGMZPost(context);
+        if (active) scheduleScoop(2700000 + Math.random() * 2700000); // 45–90 min
+      }, delay);
+    }
+
+    // First autonomous scoop after 20 min, then every 45–90 min
+    scheduleScoop(1200000);
+
+    return () => { active = false; clearTimeout(scoopTimer); };
   }, [chars.length, editChar, activeEvent, activeMatch, composing]);
 
   function handleSaveChar(data) {

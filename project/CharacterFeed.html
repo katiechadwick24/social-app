@@ -4651,8 +4651,6 @@ function normalizeCharactersIdentity(chars = []) {
 }
 const DEFAULT_DAY = 1;
 const SAVE_STATE_VERSION = 3;
-const DEFAULT_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
-const FRESH_SOCIAL_PRESENCE = { humor: 0, aura: 0, drama: 0 };
 const LOCAL_STATE_KEY = 'socials-app-state-v2';
 const LEGACY_LOCAL_STATE_KEYS = ['socials-app-state'];
 
@@ -7601,15 +7599,10 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
 }
 
 // ─── Profile Screen ───────────────────────────────────────────────
-function ProfileScreen({ player, chars, socialPresence, eventLog = [], dms = {}, groupChats = [], onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
+function ProfileScreen({ player, chars, eventLog = [], dms = {}, groupChats = [], onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
   const relationships = chars
     .map(c => ({ char: c, ...effectivePlayerRelationship(c, eventLog, dms, groupChats) }))
     .filter(r => r.hasRelationship);
-  const socialRows = [
-    ['😂','Humor',socialPresence?.humor ?? 0,'#4dabf7'],
-    ['⭐','Aura',socialPresence?.aura ?? 0,'#22c55e'],
-    ['🔥','Drama',socialPresence?.drama ?? 0,'#f97316'],
-  ];
 
   return (
     <div style={{flex:1, overflowY:'auto'}}>
@@ -7648,24 +7641,6 @@ function ProfileScreen({ player, chars, socialPresence, eventLog = [], dms = {},
         <button onClick={onResetGame} style={{width:'100%', marginTop:10, background:`${C.red}14`, border:`1px solid ${C.red}44`, color:C.red, borderRadius:12, padding:'13px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
           Start fresh
         </button>
-
-        {/* Social Presence */}
-        <div style={{marginTop:20}}>
-          <h3 style={{color:C.text, fontSize:15, fontWeight:700, marginBottom:10}}>Social Presence</h3>
-          <div style={{background:C.card2, borderRadius:12, padding:'14px'}}>
-            {socialRows.map(([icon,label,val,color]) => (
-              <div key={label} style={{marginBottom:14, lastChild:{marginBottom:0}}}>
-                <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
-                  <span style={{color:C.text, fontSize:13}}>{icon} {label}</span>
-                  <span style={{color:color, fontSize:12, fontWeight:700}}>{val}%</span>
-                </div>
-                <div style={{height:8, background:'#333', borderRadius:4, overflow:'hidden'}}>
-                  <div style={{width:`${Math.min((val/300)*100,100)}%`, height:'100%', background:color, borderRadius:4}}/>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* Relationships */}
         <div style={{marginTop:20}}>
@@ -9392,7 +9367,7 @@ function ComposeModal({ chars, player, onClose, onPost }) {
 }
 
 // ─── Event Modal ──────────────────────────────────────────────────
-function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, groupChats = [], onClose, onSubmit, onLog, onSocialPresenceGain }) {
+function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, groupChats = [], onClose, onSubmit, onLog }) {
   const [input, setInput] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -9506,21 +9481,11 @@ Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each
       });
       // Generate score changes
       const followerGain = Math.floor(xp * (1800 + Math.random() * 1200));
-      const statGain = +(Math.random() * 0.3 + 0.1).toFixed(2);
       const evType = currentEvent.type || 'gossip';
-      const socialGain = {
-        humor: +(statGain * (evType === 'tag' ? 1.2 : evType === 'opportunity' ? 0.9 : 1)).toFixed(2),
-        aura: +(statGain * (evType === 'opportunity' ? 1.3 : 0.8)).toFixed(2),
-        drama: +(statGain * (evType === 'scandal' ? 1.6 : evType === 'gossip' ? 1.2 : 0.7)).toFixed(2),
-      };
       const scoreChanges = [
         { icon:'✨', label:'Experience', value: xp, unit:'', flavor: evType === 'scandal' ? 'Chaos is a ladder, apparently.' : evType === 'tag' ? 'You answered the call.' : evType === 'opportunity' ? 'The window was open. You flew through it.' : 'Drama points well spent.' },
         { icon:'👥', label:'Followers', value: `+${(followerGain >= 1000 ? (followerGain/1000).toFixed(0)+'K' : followerGain)}`, unit:'', flavor: evType === 'scandal' ? 'Everyone loves a scandal.' : 'Word travels fast on campus.' },
-        { icon:'😂', label:'Humor', value: `+${socialGain.humor}`, unit:'%', flavor: 'Your wit is showing.' },
-        { icon:'⭐', label:'Aura', value: `+${socialGain.aura}`, unit:'%', flavor: 'Presence confirmed.' },
-        { icon:'🔥', label:'Drama', value: `+${socialGain.drama}`, unit:'%', flavor: evType === 'scandal' ? 'Mess travels beautifully.' : 'The timeline noticed.' },
       ];
-      onSocialPresenceGain && onSocialPresenceGain(socialGain);
       onLog && onLog({
         type: 'event',
         visibility: privateIntelMode ? 'private_intel' : 'public',
@@ -10167,7 +10132,6 @@ function App() {
     if (saved.groupChats) setGroupChatsRaw(normalizeGroupChats(repairPromptLeakGroupChats(saved.groupChats, savedChars, savedPlayer)));
     setEventLogRaw(ensureCanonEventLog(saved.eventLog || []));
     if (typeof saved.day === 'number') setDayRaw(saved.day);
-    if (saved.socialPresence) setSocialPresenceRaw(saved.socialPresence);
   }
 
   function chooseSavedState(serverState, localState) {
@@ -10227,7 +10191,6 @@ function App() {
   const [groupChats, setGroupChatsRaw] = useState(DEFAULT_GROUP_CHATS);
   const [eventLog, setEventLogRaw] = useState([]);
   const [day, setDayRaw] = useState(DEFAULT_DAY);
-  const [socialPresence, setSocialPresenceRaw] = useState(DEFAULT_SOCIAL_PRESENCE);
   const [stateLoaded, setStateLoaded] = useState(false);
   const feedRelationshipKeysRef = useRef(new Set());
 
@@ -10253,7 +10216,6 @@ function App() {
       groupChats: normalizeGroupChats(cloneDefault(DEFAULT_GROUP_CHATS)),
       eventLog: ensureCanonEventLog([]),
       day: DEFAULT_DAY,
-      socialPresence: preserveProfiles ? cloneDefault(FRESH_SOCIAL_PRESENCE) : cloneDefault(DEFAULT_SOCIAL_PRESENCE),
       stateVersion: SAVE_STATE_VERSION,
       savedAt: Date.now(),
     };
@@ -10292,23 +10254,22 @@ function App() {
   function setGroupChats(v) { setGroupChatsRaw(prev => typeof v==='function'?v(prev):v); }
   function setEventLog(v)   { setEventLogRaw(prev   => (typeof v==='function'?v(prev):v).slice(0,30)); }
   function setDay(v)        { setDayRaw(prev        => typeof v==='function'?v(prev):v); }
-  function setSocialPresence(v) { setSocialPresenceRaw(prev => typeof v==='function'?v(prev):v); }
 
   useEffect(() => {
     if (!stateLoaded) return;
-    serverSave({ chars, player, feed, dms, groupChats, eventLog, day, socialPresence });
-  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, socialPresence]);
+    serverSave({ chars, player, feed, dms, groupChats, eventLog, day });
+  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day]);
 
   useEffect(() => {
     if (!stateLoaded) return;
-    const flushSave = () => serverSaveNow({ chars, player, feed, dms, groupChats, eventLog, day, socialPresence });
+    const flushSave = () => serverSaveNow({ chars, player, feed, dms, groupChats, eventLog, day });
     window.addEventListener('pagehide', flushSave);
     window.addEventListener('beforeunload', flushSave);
     return () => {
       window.removeEventListener('pagehide', flushSave);
       window.removeEventListener('beforeunload', flushSave);
     };
-  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, socialPresence]);
+  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day]);
 
   useEffect(() => {
     if (!stateLoaded || !feed?.length) return;
@@ -10320,14 +10281,6 @@ function App() {
       setCharsRaw(prev => applyFeedRelationshipChanges(prev, scan.changes, player));
     }
   }, [stateLoaded, feed, chars, player]);
-
-  function addSocialPresence(gains) {
-    setSocialPresence(prev => ({
-      humor: Math.min(300, +(Number(prev?.humor || 0) + Number(gains?.humor || 0)).toFixed(2)),
-      aura: Math.min(300, +(Number(prev?.aura || 0) + Number(gains?.aura || 0)).toFixed(2)),
-      drama: Math.min(300, +(Number(prev?.drama || 0) + Number(gains?.drama || 0)).toFixed(2)),
-    }));
-  }
 
   function getCharsWithRelationshipLogChanges(list, scoreChanges = []) {
     const relChanges = scoreChanges
@@ -10369,7 +10322,7 @@ function App() {
   const [navStack, setNavStack] = useState([]); // navigation history for back buttons
 
   function handleResetGame() {
-    const ok = window.confirm('Start fresh? This clears the saved feed, DMs, activity log, social presence, and current relationships. Your profile and character edits stay.');
+    const ok = window.confirm('Start fresh? This clears the saved feed, DMs, activity log, and current relationships. Your profile and character edits stay.');
     if (!ok) return;
     const next = freshGameState({ preserveProfiles: true });
     setCharsRaw(next.chars);
@@ -10379,7 +10332,6 @@ function App() {
     setGroupChatsRaw(next.groupChats);
     setEventLogRaw(next.eventLog);
     setDayRaw(next.day);
-    setSocialPresenceRaw(next.socialPresence);
     setActiveGroupChat(null);
     setChatChar(null);
     setViewChar(null);
@@ -11443,7 +11395,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={() => {}} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={handleOpenGroup} setGroupChats={setGroupChats} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
-        case 'profile': return <ProfileScreen player={player} chars={chars} socialPresence={socialPresence} eventLog={eventLog} dms={dms} groupChats={groupChats} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
+        case 'profile': return <ProfileScreen player={player} chars={chars} eventLog={eventLog} dms={dms} groupChats={groupChats} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
         default: return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
       }
     })();
@@ -11464,7 +11416,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
           <LiveMatchModal match={activeMatch} chars={chars} player={player} onClose={() => setActiveMatch(null)} onPostToFeed={handleMatchPost} onMatchEnd={handleMatchEnd} />
         )}
         {activeEvent && (
-          <EventModal event={activeEvent} chars={chars} player={player} feed={feed} eventLog={eventLog} dms={dms} groupChats={groupChats} onClose={() => setActiveEvent(null)} onSubmit={handleEventSubmit} onLog={handleEventLog} onSocialPresenceGain={addSocialPresence} />
+          <EventModal event={activeEvent} chars={chars} player={player} feed={feed} eventLog={eventLog} dms={dms} groupChats={groupChats} onClose={() => setActiveEvent(null)} onSubmit={handleEventSubmit} onLog={handleEventLog} />
         )}
         {composing && (
           <ComposeModal chars={chars} player={player} onClose={() => setComposing(false)} onPost={post => {

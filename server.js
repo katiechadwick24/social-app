@@ -349,7 +349,21 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(data);
     } catch(e) {
-      // No save file yet — return empty object
+      // Disk file missing — seed from bundled save.json if it exists and STATE_FILE is elsewhere
+      const bundledPath = path.join(__dirname, 'save.json');
+      const usingDisk = path.resolve(STATE_FILE) !== path.resolve(bundledPath);
+      if (usingDisk) {
+        try {
+          const defaultData = fs.readFileSync(bundledPath, 'utf8');
+          JSON.parse(defaultData); // validate
+          fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+          fs.writeFileSync(STATE_FILE, defaultData, 'utf8');
+          console.log('[state] Seeded disk from bundled save.json');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(defaultData);
+          return;
+        } catch(e2) { /* fall through */ }
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end('{}');
     }

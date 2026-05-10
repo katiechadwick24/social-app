@@ -10230,6 +10230,8 @@ function App() {
   const [socialPresence, setSocialPresenceRaw] = useState(DEFAULT_SOCIAL_PRESENCE);
   const [stateLoaded, setStateLoaded] = useState(false);
   const feedRelationshipKeysRef = useRef(new Set());
+  const feedRef = useRef([]);
+  useEffect(() => { feedRef.current = feed; }, [feed]);
 
   function cloneDefault(value) {
     return JSON.parse(JSON.stringify(value));
@@ -10788,12 +10790,13 @@ Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the 
 
       const otherHandles = chars.filter(c => c.id !== char.id).map(c => `@${c.handle}`).join(', ');
       const promptPeople = [char, player, ...chars];
-      const recentContext = feed.slice(0,15).map(p => {
+      const currentFeed = feedRef.current;
+      const recentContext = currentFeed.slice(0,15).map(p => {
         const poster = [...chars, player].find(c => c.id === p.charId);
         return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
       }).join('\n');
-      const repeatGuard = phraseRepetitionGuard(feed, recentContext, { charId: char.id, dms, groupChats });
-      const recentFeedRaw = feed.slice(0,15).map(p => {
+      const repeatGuard = phraseRepetitionGuard(currentFeed, recentContext, { charId: char.id, dms, groupChats });
+      const recentFeedRaw = currentFeed.slice(0,15).map(p => {
         const poster = [...chars, player, GMZ_CHAR].find(c => c.id === p.charId);
         return `@${poster?.handle || '?'} ${p.text || ''}`;
       }).join('\n').toLowerCase();
@@ -10920,10 +10923,11 @@ Write ONE authentic social media post from ${char.name}'s perspective. Rules:
 
         const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content: prompt }] });
         if (!active) return;
-        const feedAvoidTexts = feed.slice(0,20).map(p => p.text).filter(Boolean);
-        let cleanText = cleanSocialPostText(raw, char, player, { feed, avoidTexts: [recentContext, ...feedAvoidTexts] });
-        // Hard duplicate guard: if this exact text already exists anywhere in the feed, use the fallback instead
-        if (feed.some(p => p.text && p.text.trim().toLowerCase() === cleanText.trim().toLowerCase())) {
+        const latestFeed = feedRef.current;
+        const feedAvoidTexts = latestFeed.slice(0,20).map(p => p.text).filter(Boolean);
+        let cleanText = cleanSocialPostText(raw, char, player, { feed: latestFeed, avoidTexts: [recentContext, ...feedAvoidTexts] });
+        // Hard duplicate guard: use feedRef.current (always fresh) to catch posts added since this effect was created
+        if (latestFeed.some(p => p.text && p.text.trim().toLowerCase() === cleanText.trim().toLowerCase())) {
           cleanText = fallbackPostForChar(char, player, feedAvoidTexts);
         }
         const newPost = {

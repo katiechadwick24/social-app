@@ -2749,6 +2749,34 @@ function fallbackPrivateDmProgressLine(char, player, avoidTexts = [], opts = {})
     }
     return '';
   };
+  if (/\b(?:thanks?|thank you).{0,40}\b(?:stay|stayed|staying)\b|\b(?:nice|liked)\s+that\s+you\s+stayed\b/i.test(latest)) {
+    return pick([
+      'you do not need to thank me for staying. i wanted to.',
+      'careful. you are making that sound sweeter than i planned.',
+      'i stayed because i meant to. that part was not an accident.',
+    ]);
+  }
+  if (/\b(?:what'?s|what is|why|how)\b.{0,80}\b(?:worked up|work(?:ed)? up|mood|bothering|got you|got into you)\b/i.test(latest)) {
+    return pick([
+      'you, partly. the rest is everyone else being loud about it.',
+      'you asking like you do not already know is rude, actually.',
+      'mostly you. annoyingly.',
+    ]);
+  }
+  if (/\bjealous\s+of\s+(?:whom|who|what)\b/i.test(latest)) {
+    return pick([
+      'you really do like dragging the honest answer out of people.',
+      'anything getting your attention while i am right here.',
+      'whoever made you ask that with that face.',
+    ]);
+  }
+  if (/\b(?:cuddl(?:e|ing)|excellent at cuddling|good at cuddling)\b/i.test(latest)) {
+    return pick([
+      'dangerous compliment to hand me in private.',
+      'keep saying that and i am going to assume you miss it.',
+      'that sounds like a trap and i still like it.',
+    ]);
+  }
   if (char?.id === 'rowan') {
     if (/\b(?:what'?s|what is|why|how)\b.{0,80}\b(?:worked up|work(?:ed)? up|mood|all worked|bothering|got you|got into you)\b/i.test(latest)) {
       return pick([
@@ -2766,7 +2794,42 @@ function fallbackPrivateDmProgressLine(char, player, avoidTexts = [], opts = {})
       ]);
     }
   }
+  if (char?.id === 'havoc') {
+    if (/\b(?:thanks?|thank you).{0,40}\b(?:stay|stayed|staying)\b|\b(?:nice|liked)\s+that\s+you\s+stayed\b/i.test(latest)) {
+      return pick([
+        'you do not need to thank me for staying. i wanted to.',
+        'careful. you say thanks like i did something noble.',
+        'i stayed because i wanted to. do not make it weird unless you mean to.',
+      ]);
+    }
+    if (/\b(?:what'?s|what is|why|how)\b.{0,80}\b(?:worked up|work(?:ed)? up|mood|bothering|got you|got into you)\b/i.test(latest)) {
+      return pick([
+        'you, mostly. and everyone else being loud about it second.',
+        'you asking like you do not already know is not helping.',
+        'the part where i was trying to be subtle and then you kept being you.',
+      ]);
+    }
+    if (/\bjealous\s+of\s+(?:whom|who|what)\b/i.test(latest)) {
+      return pick([
+        'whoever gets your attention while i am trying to act normal about it.',
+        'anything that makes you grin like that and is not me.',
+        'you really do like making me say the rude part out loud.',
+      ]);
+    }
+    if (/\b(?:cuddl(?:e|ing)|excellent at cuddling|good at cuddling)\b/i.test(latest)) {
+      return pick([
+        'keep saying that and i am going to assume you miss it.',
+        'dangerous thing to compliment if you are trying to keep me behaved.',
+        'and you are saying that like i am not supposed to use it against you later.',
+      ]);
+    }
+  }
   return '';
+}
+
+function dmNeedsRumorCorrectionContext(latestUserText = '') {
+  const latest = String(latestUserText || '').toLowerCase().replace(/[’]/g, "'");
+  return /\b(?:evidence|proof|rumou?r|rumor|guess(?:ed|ing)?|wrong|misread|misreading|reacting|reaction|fault|blame|culprit|accus(?:e|ed|ing)|den(?:y|ied|ial)|liked|unliked|deleted|rewrote|screenshotted|reposted|did(?:n'?| not) do that|where'?s the evidence|not my fault|everyone(?:\s+else)?\s+is\s+reacting)\b/i.test(latest);
 }
 
 function fallbackUnsupportedBlameLine(char, player, group = false, avoidTexts = [], opts = {}) {
@@ -2869,6 +2932,9 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
     return havocRowanPrivateGroupLine(char, player, opts.latestUserText || '') || fallbackChatLine(char, player, group, avoidTexts);
   }
   if (char && (looksLikeUnsupportedPlayerActionClaim(clean, opts.latestUserText || '', player) || looksLikeReactionBlameSpiral(clean))) {
+    if (!group && opts.channel === 'dm' && !dmNeedsRumorCorrectionContext(opts.latestUserText || '')) {
+      return getDmProgressFallback() || clean;
+    }
     return fallbackUnsupportedBlameLine(char, player, group, avoidTexts, opts);
   }
   if (char && looksLikeImpossibleCrossTeamPassClaim(clean, char, player)) {

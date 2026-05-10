@@ -2843,8 +2843,10 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
   const getDmProgressFallback = () => (!group && opts.channel === 'dm' && char
     ? fallbackPrivateDmProgressLine(char, player, avoidTexts, opts)
     : '');
+  const dmPatternCollision = (!group && opts.channel === 'dm' && char)
+    ? hasDialoguePatternCollision(clean, avoidTexts)
+    : false;
   if ((!group && opts.channel === 'dm' && char) && (
-    hasDialoguePatternCollision(clean, avoidTexts) ||
     /\bjealous\s+is\s+a\s+strong\s+word\b/i.test(clean) ||
     /\bcorrecting\s+the\s+angle\b/i.test(clean)
   )) {
@@ -2895,9 +2897,12 @@ function cleanChatText(text = '', char = null, player = null, group = false, opt
   if (char && violatesCharacterDialogueContract(clean, char)) {
     return fallbackDialogueContractLine(char, player, avoidTexts);
   }
-  if (char && hasDialoguePatternCollision(clean, avoidTexts)) {
+  if (char && (dmPatternCollision || hasDialoguePatternCollision(clean, avoidTexts))) {
     if (!group && opts.channel === 'dm') {
-      return getDmProgressFallback() || fallbackChatLine(char, player, group, avoidTexts);
+      // In DMs, preserving the live conversational answer is better than
+      // swapping in a detached fallback just because the sentence shape is
+      // similar to something earlier in the chat.
+      return clean;
     }
     return fallbackDialogueContractLine(char, player, avoidTexts);
   }
@@ -7355,7 +7360,11 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
           { role:'user', content: anchoredMessage },
         ]
       });
-      const dmAvoidTexts = newMsgs.slice(-12).map(m => m?.text).filter(Boolean);
+      const dmAvoidTexts = newMsgs
+        .filter(m => m?.role === 'char')
+        .slice(-6)
+        .map(m => m?.text)
+        .filter(Boolean);
       const charMsg = { role:'char', text: cleanChatText(reply, char, player, false, { feed, latestUserText: outgoingText, avoidTexts: dmAvoidTexts, recentMessages: newMsgs, channel:'dm' }), id: Date.now()+1 };
       setDms(d => ({ ...d, [char.id]: [...(d[char.id]||[]), charMsg].slice(-DM_MAX_MESSAGES) }));
     } catch(e) {

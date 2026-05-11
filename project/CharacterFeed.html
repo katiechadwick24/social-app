@@ -5037,9 +5037,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
   const char = allChars.find(c => c.id === post.charId);
   const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
   const safePostText = char ? cleanSocialPostText(post.text, char, player) : post.text;
-  const safePostReplyText = replyChar && post.reply?.text
-    ? cleanSocialReplyText(post.reply.text, replyChar, player)
-    : post.reply?.text;
+  const safePostReplyText = post.reply?.text || null;
   const playerRelFor = (c) => effectivePlayerRelationship(c, eventLog, dms, groupChats).value;
   const threadMemory = recentCompactMemoryContext({ feed, eventLog, groupChats, dms, player, allChars, channel:'public', limit: 4 });
   const compactOriginalPost = compactPostForPrompt(post, allChars, player);
@@ -5921,7 +5919,7 @@ ${player.name} (@${player.handle}) replied directly to your post: "${text}"
 Answer them. Do not ignore this. You own the original post, so respond from your own position instead of asking what the post means. Be reactive, specific, and in character. If they joke, flirt, roast, question, or challenge you, meet that energy. 6-26 words. No hashtags. No quotes.`
           }]
         });
-        let replyText = cleanSocialReplyText(res, targetChar, player, { feed, avoidTexts: [post.text, currentTranscript, priorTargetLines, text], playfulBanter: !!playfulThreadRule, selfSubject: true, contextText: `${post.text || ''} ${text || ''}`, latestUserText: text, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle });
+        let replyText = cleanSocialReplyText(res, targetChar, player, { feed, avoidTexts: [post.text, currentTranscript, priorTargetLines, text], playfulBanter: !!playfulThreadRule, selfSubject: true, contextText: `${post.text || ''} ${text || ''}`, latestUserText: text, roster: [player, ...chars, GMZ_CHAR], replyToHandle: player.handle, softThreadCleanup: true, replyDepth: 1 });
         if (!replyText || looksLikeDeadAirReply(replyText)) {
           replyText = fallbackPublicBanterLine(targetChar, player, [post.text, text].filter(Boolean));
         }
@@ -9867,7 +9865,7 @@ function NotificationsScreen({ chars, player, feed, onOpenThread, onCharClick })
     }
     if (post.reply?.charId && post.reply.charId !== player.id && (post.charId === player.id || mentionRe.test(post.reply.text || ''))) {
       const replier = allChars.find(c => c.id === post.reply.charId);
-      items.push({ id:`reply-${post.id}`, type:'reply', char:replier, text: post.charId === player.id ? 'replied to your post' : 'mentioned you in a reply', preview: replier ? cleanSocialReplyText(post.reply.text, replier, player) : post.reply.text, timestamp:(post.timestamp || Date.now()) + 1, post });
+      items.push({ id:`reply-${post.id}`, type:'reply', char:replier, text: post.charId === player.id ? 'replied to your post' : 'mentioned you in a reply', preview: post.reply.text, timestamp:(post.timestamp || Date.now()) + 1, post });
     }
     (post.charComments || []).forEach((cc, i) => {
       if (cc.charId === player.id) return;

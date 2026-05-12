@@ -10536,8 +10536,10 @@ function App() {
     // ?reset in the URL clears stale localStorage and reloads from server.
     // Handy on mobile where DevTools aren't available.
     if (new URLSearchParams(window.location.search).has('reset')) {
-      for (const key of [LOCAL_STATE_KEY, ...LEGACY_LOCAL_STATE_KEYS]) window.localStorage.removeItem(key);
       window.history.replaceState(null, '', window.location.pathname);
+      if (window.confirm('Clear cached save and reload from server? Your server save is not affected.')) {
+        for (const key of [LOCAL_STATE_KEY, ...LEGACY_LOCAL_STATE_KEYS]) window.localStorage.removeItem(key);
+      }
     }
     const localSaved = loadLocalState();
     if (isFileMode()) {
@@ -10554,8 +10556,6 @@ function App() {
       if (bestSaved) {
         applySavedState(bestSaved);
         if (bestSaved === localSaved) serverSaveNow(bestSaved);
-      } else if (saved && Object.keys(saved).length) {
-        serverSaveNow(freshGameState());
       }
       setStateLoaded(true);
     }).catch(() => {

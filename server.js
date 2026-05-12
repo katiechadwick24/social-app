@@ -407,10 +407,25 @@ const server = http.createServer(async (req, res) => {
     req.on('data', c => raw += c);
     req.on('end', () => {
       try {
-        // Validate JSON before writing
-        JSON.parse(raw);
+        const incoming = JSON.parse(raw);
+        // Reject saves that look like a blank/default wipe of real data.
+        // A save with 0 feed posts is only accepted when the existing file
+        // is also empty or missing — never let an empty state overwrite progress.
+        try {
+          const existing = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+          const existingFeed = (existing.feed || []).length;
+          const incomingFeed = (incoming.feed || []).length;
+          if (existingFeed > 5 && incomingFeed === 0) {
+            res.writeHead(409, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Rejected: incoming save has no feed posts but existing save does.' }));
+            return;
+          }
+          // Back up before overwriting so there is always a one-step recovery.
+          const bakPath = STATE_FILE.replace(/\.json$/, '') + '.bak.json';
+          try { fs.writeFileSync(bakPath, JSON.stringify(existing), 'utf8'); } catch(_) {}
+        } catch(_) { /* existing file missing or unreadable — allow fresh save */ }
         fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-        fs.writeFileSync(STATE_FILE, raw, 'utf8');
+        fs.writeFileSync(STATE_FILE, JSON.stringify(incoming), 'utf8');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end('{"ok":true}');
       } catch(e) {

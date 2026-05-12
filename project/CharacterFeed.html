@@ -7983,6 +7983,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
   const [vibe, setVibe] = useState(null);
   const [selectedIds, setSelectedIds] = useState([char.id]);
   const [context, setContext] = useState('');
+  const [customScenario, setCustomScenario] = useState('');
   const [flyTopic, setFlyTopic] = useState('');
   const [flyLocation, setFlyLocation] = useState('');
   const [flyTone, setFlyTone] = useState('');
@@ -7991,9 +7992,10 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
   const sceneChoices = chars.filter(c => c?.description && c.id !== 'player' && c.id !== '__gmz__');
   const selectedChars = sceneChoices.filter(c => selectedIds.includes(c.id));
   const isFlyOnWall = sceneMode === 'fly_on_wall';
+  const hasCustomScenario = customScenario.trim().length > 0;
   const canStart = isFlyOnWall
     ? selectedChars.length > 0 && !!(flyTopic.trim() || context.trim()) && !!((flyLocation || setting?.label || '').trim()) && !!((flyTone || vibe?.label || '').trim())
-    : setting && vibe && selectedChars.length > 0;
+    : selectedChars.length > 0 && (hasCustomScenario || (setting && vibe));
 
   function toggleSceneChar(id) {
     if (!isFlyOnWall && id === char.id) return;
@@ -8008,7 +8010,7 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
       setting,
       vibe,
       context: context.trim(),
-      topic: flyTopic.trim(),
+      topic: isFlyOnWall ? flyTopic.trim() : customScenario.trim(),
       location: (flyLocation || setting?.label || '').trim(),
       tone: (flyTone || vibe?.label || '').trim(),
       length: flyLength,
@@ -8108,10 +8110,27 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
           </>
         )}
 
-        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>WHERE</p>
+        {!isFlyOnWall && (
+          <>
+            <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:8}}>CUSTOM SCENARIO <span style={{color:C.muted, fontWeight:400, textTransform:'none', letterSpacing:0}}>(optional — skips preset pickers)</span></p>
+            <textarea
+              value={customScenario}
+              onChange={e => setCustomScenario(e.target.value)}
+              placeholder="Describe what's happening — the situation, what you want to play out, any setup details that matter. If filled, you can skip the WHERE and TONE grids below."
+              rows={3}
+              style={{
+                width:'100%', background:C.card2, border:`1.5px solid ${hasCustomScenario ? C.blue : C.border}`, borderRadius:12,
+                padding:'10px 12px', color:C.text, fontSize:13, resize:'vertical', outline:'none',
+                fontFamily:'inherit', lineHeight:1.5, marginBottom:18, boxSizing:'border-box',
+              }}
+            />
+          </>
+        )}
+
+        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>{hasCustomScenario && !isFlyOnWall ? 'WHERE (optional)' : 'WHERE'}</p>
         <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:18}}>
           {SCENE_SETTINGS.map(s => (
-            <button key={s.id} onClick={() => setSetting(s)} style={{
+            <button key={s.id} onClick={() => setSetting(s === setting ? null : s)} style={{
               display:'flex', alignItems:'center', gap:12, background: setting?.id===s.id ? `${C.blue}18` : C.card2,
               border:`1.5px solid ${setting?.id===s.id ? C.blue : C.border}`, borderRadius:12,
               padding:'10px 14px', cursor:'pointer', textAlign:'left', transition:'all 0.15s',
@@ -8125,10 +8144,10 @@ function SceneSetupModal({ char, chars = [], player, onClose, onStart }) {
           ))}
         </div>
 
-        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>TONE</p>
+        <p style={{color:C.muted, fontSize:12, fontWeight:600, letterSpacing:'0.06em', marginBottom:10}}>{hasCustomScenario && !isFlyOnWall ? 'TONE (optional)' : 'TONE'}</p>
         <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom:20}}>
           {SCENE_VIBES.map(v => (
-            <button key={v.id} onClick={() => setVibe(v)} style={{
+            <button key={v.id} onClick={() => setVibe(vibe?.id === v.id ? null : v)} style={{
               display:'flex', alignItems:'center', gap:6,
               background: vibe?.id===v.id ? `${v.color}20` : C.card2,
               border:`1.5px solid ${vibe?.id===v.id ? v.color : C.border}`,
@@ -8346,6 +8365,7 @@ ${latestText ? directResponseRoutingLine(latestText, participants, player) : ''}
 
 SCENE: ${displaySetting.label} — ${displaySetting.sub}
 TONE: ${displayVibe.label} ${displayVibe.emoji}
+${topic ? `SCENARIO: ${topic}` : ''}
 ${context ? `SCENE CONTEXT: ${context}` : ''}
 
 RESPONSE FORMAT — follow this exactly:
@@ -10597,7 +10617,7 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
           participants: participants.map(c => c.id).filter(Boolean),
           title: `Meanwhile cutaway: ${label}`,
           text: `${sceneMeta.tone || vibe?.label || 'Private cutaway'} at ${sceneMeta.location || 'a private location'}. Canon impact: ${sceneMeta.canonImpact}. Last beat: ${sceneMemory}`,
-          relationshipApplied: false,
+          relationshipApplied: true,
           sceneMemory,
           sceneMode: 'fly_on_wall',
           canonImpact: sceneMeta.canonImpact,
@@ -10606,14 +10626,30 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
       }
       return;
     }
+    // Compute relationship deltas from scene content and apply immediately
+    const sceneParticipants = participants.filter(c => c && c.id !== 'player' && c.id !== '__gmz__');
+    const relDeltas = sceneParticipants.map(c => ({
+      id: c.id,
+      delta: scoreSceneRelationshipForChar(c, messages, vibe),
+    })).filter(u => u.delta !== 0);
+    if (relDeltas.length > 0) {
+      setChars(prev => prev.map(char => {
+        const upd = relDeltas.find(u => u.id === char.id);
+        if (!upd) return char;
+        const current = Number(char.relationships?.player || 0);
+        const next = Math.max(-100, Math.min(100, +(current + upd.delta).toFixed(2)));
+        return { ...char, relationships: { ...(char.relationships || {}), player: next } };
+      }));
+    }
+    const sceneTopic = sceneMeta?.topic ? ` Scenario: ${sceneMeta.topic}.` : '';
     setEventLog(log => [{
       id: `scene-${Date.now()}`,
       type: 'scene',
       visibility: 'private_scene',
       participants: ['player', ...participants.map(c => c.id).filter(Boolean)],
       title: `Scene ended: ${label}`,
-      text: `${vibe?.label || 'Scene'} with ${label}.${sceneMemory ? ` Last beat: ${sceneMemory}` : ''}`,
-      relationshipApplied: false,
+      text: `${vibe?.label || 'Scene'} with ${label}.${sceneTopic}${sceneMemory ? ` Last beat: ${sceneMemory}` : ''}`,
+      relationshipApplied: true,
       sceneMemory,
       timestamp: Date.now(),
     }, ...log]);

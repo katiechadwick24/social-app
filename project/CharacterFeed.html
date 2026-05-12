@@ -10528,6 +10528,12 @@ function App() {
 
   // Load saved state from server on startup
   useEffect(() => {
+    // ?reset in the URL clears stale localStorage and reloads from server.
+    // Handy on mobile where DevTools aren't available.
+    if (new URLSearchParams(window.location.search).has('reset')) {
+      for (const key of [LOCAL_STATE_KEY, ...LEGACY_LOCAL_STATE_KEYS]) window.localStorage.removeItem(key);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
     const localSaved = loadLocalState();
     if (isFileMode()) {
       if (isCurrentSave(localSaved)) {

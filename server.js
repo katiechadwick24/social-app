@@ -344,24 +344,24 @@ const server = http.createServer(async (req, res) => {
 
   // ── Load saved game state ─────────────────────────────────────
   if (req.url === '/api/state' && req.method === 'GET') {
+    // save.seed.json is the committed fallback; save.json is the live runtime file.
+    const seedPath = path.join(__dirname, 'save.seed.json');
     try {
       const data = fs.readFileSync(STATE_FILE, 'utf8');
-      // Merge profilePhoto fields from bundled save.json so photo updates
-      // always propagate to the disk state without wiping live data.
-      const bundledPath = path.join(__dirname, 'save.json');
+      // Merge profilePhoto fields from seed so photo updates propagate without wiping live data.
       try {
-        const bundled = JSON.parse(fs.readFileSync(bundledPath, 'utf8'));
+        const seed = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
         const disk = JSON.parse(data);
         let changed = false;
-        if (Array.isArray(bundled.chars) && Array.isArray(disk.chars)) {
-          bundled.chars.forEach(bc => {
+        if (Array.isArray(seed.chars) && Array.isArray(disk.chars)) {
+          seed.chars.forEach(bc => {
             if (!bc.profilePhoto) return;
             const dc = disk.chars.find(c => c.id === bc.id);
             if (dc && dc.profilePhoto !== bc.profilePhoto) { dc.profilePhoto = bc.profilePhoto; changed = true; }
           });
         }
-        if (bundled.player?.profilePhoto && disk.player && disk.player.profilePhoto !== bundled.player.profilePhoto) {
-          disk.player.profilePhoto = bundled.player.profilePhoto; changed = true;
+        if (seed.player?.profilePhoto && disk.player && disk.player.profilePhoto !== seed.player.profilePhoto) {
+          disk.player.profilePhoto = seed.player.profilePhoto; changed = true;
         }
         if (changed) {
           const merged = JSON.stringify(disk);
@@ -374,21 +374,17 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(data);
     } catch(e) {
-      // Disk file missing — seed from bundled save.json if it exists and STATE_FILE is elsewhere
-      const bundledPath = path.join(__dirname, 'save.json');
-      const usingDisk = path.resolve(STATE_FILE) !== path.resolve(bundledPath);
-      if (usingDisk) {
-        try {
-          const defaultData = fs.readFileSync(bundledPath, 'utf8');
-          JSON.parse(defaultData); // validate
-          fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-          fs.writeFileSync(STATE_FILE, defaultData, 'utf8');
-          console.log('[state] Seeded disk from bundled save.json');
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(defaultData);
-          return;
-        } catch(e2) { /* fall through */ }
-      }
+      // STATE_FILE missing — seed it from save.seed.json so fresh deploys start with real data.
+      try {
+        const defaultData = fs.readFileSync(seedPath, 'utf8');
+        JSON.parse(defaultData); // validate
+        fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+        fs.writeFileSync(STATE_FILE, defaultData, 'utf8');
+        console.log('[state] Seeded save.json from save.seed.json');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(defaultData);
+        return;
+      } catch(e2) { /* fall through */ }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end('{}');
     }

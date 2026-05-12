@@ -7779,7 +7779,7 @@ function ChatScreen({ char, player, allChars, feed, dms, eventLog = [], groupCha
 }
 
 // ─── Profile Screen ───────────────────────────────────────────────
-function ProfileScreen({ player, chars, eventLog = [], dms = {}, groupChats = [], onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame }) {
+function ProfileScreen({ player, chars, eventLog = [], dms = {}, groupChats = [], onEditChar, onCreateChar, onCharClick, onShowLog, onResetGame, onSaveBackup }) {
   const relationships = chars
     .map(c => ({ char: c, ...effectivePlayerRelationship(c, eventLog, dms, groupChats) }))
     .filter(r => r.hasRelationship);
@@ -7818,9 +7818,14 @@ function ProfileScreen({ player, chars, eventLog = [], dms = {}, groupChats = []
           </button>
         </div>
 
-        <button onClick={onResetGame} style={{width:'100%', marginTop:10, background:`${C.red}14`, border:`1px solid ${C.red}44`, color:C.red, borderRadius:12, padding:'13px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
-          Start fresh
-        </button>
+        <div style={{display:'flex', gap:8, marginTop:10}}>
+          <button onClick={onSaveBackup} style={{flex:1, background:`${C.card2}`, border:`1px solid ${C.border}`, color:C.text, borderRadius:12, padding:'13px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
+            💾 Save backup
+          </button>
+          <button onClick={onResetGame} style={{flex:1, background:`${C.red}14`, border:`1px solid ${C.red}44`, color:C.red, borderRadius:12, padding:'13px', fontSize:14, fontWeight:700, cursor:'pointer'}}>
+            Start fresh
+          </button>
+        </div>
 
         {/* Relationships */}
         <div style={{marginTop:20}}>
@@ -10660,6 +10665,22 @@ function App() {
   const currentMatch = MATCH_SCHEDULE.find(m => m.day === day && m.status !== 'played');
   const [navStack, setNavStack] = useState([]); // navigation history for back buttons
 
+  async function handleSaveBackup() {
+    try {
+      const data = await fetch('/api/state').then(r => r.json());
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.href = url;
+      a.download = `save-${ts}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      alert('Backup failed — try again.');
+    }
+  }
+
   function handleResetGame() {
     const ok = window.confirm('Start fresh? This clears the saved feed, DMs, activity log, and current relationships. Your profile and character edits stay.');
     if (!ok) return;
@@ -11893,7 +11914,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={() => {}} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={handleOpenGroup} setGroupChats={setGroupChats} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
-        case 'profile': return <ProfileScreen player={player} chars={chars} eventLog={eventLog} dms={dms} groupChats={groupChats} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} />;
+        case 'profile': return <ProfileScreen player={player} chars={chars} eventLog={eventLog} dms={dms} groupChats={groupChats} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} onSaveBackup={handleSaveBackup} />;
         default: return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
       }
     })();

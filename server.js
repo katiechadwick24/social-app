@@ -344,14 +344,34 @@ const server = http.createServer(async (req, res) => {
 
   // ── Load saved game state ─────────────────────────────────────
   if (req.url === '/api/state' && req.method === 'GET') {
-    // save.seed.json is the committed fallback; save.json is the live runtime file.
+    // save.seed.json is the committed fallback; save.json / STATE_FILE is the live runtime file.
     const seedPath = path.join(__dirname, 'save.seed.json');
+
+    function serveSeed(reason) {
+      try {
+        const seedData = fs.readFileSync(seedPath, 'utf8');
+        const parsed = JSON.parse(seedData); // validate seed too
+        const clean = JSON.stringify(parsed);
+        // Write the seed back to STATE_FILE so next request reads a real file.
+        try { fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true }); fs.writeFileSync(STATE_FILE, clean, 'utf8'); } catch(_) {}
+        console.log(`[state] Serving seed (${reason})`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(clean);
+      } catch(seedErr) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('{}');
+      }
+    }
+
     try {
       const data = fs.readFileSync(STATE_FILE, 'utf8');
+      // Always validate before serving — never send raw corrupt data to the client.
+      let disk;
+      try { disk = JSON.parse(data); } catch(_) { return serveSeed('STATE_FILE invalid JSON'); }
+
       // Merge profilePhoto fields from seed so photo updates propagate without wiping live data.
       try {
         const seed = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
-        const disk = JSON.parse(data);
         let changed = false;
         if (Array.isArray(seed.chars) && Array.isArray(disk.chars)) {
           seed.chars.forEach(bc => {
@@ -370,23 +390,13 @@ const server = http.createServer(async (req, res) => {
           res.end(merged);
           return;
         }
-      } catch(mergeErr) { /* non-fatal — serve original */ }
+      } catch(mergeErr) { /* non-fatal — serve validated disk data */ }
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(data);
+      res.end(JSON.stringify(disk));
     } catch(e) {
-      // STATE_FILE missing — seed it from save.seed.json so fresh deploys start with real data.
-      try {
-        const defaultData = fs.readFileSync(seedPath, 'utf8');
-        JSON.parse(defaultData); // validate
-        fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-        fs.writeFileSync(STATE_FILE, defaultData, 'utf8');
-        console.log('[state] Seeded save.json from save.seed.json');
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(defaultData);
-        return;
-      } catch(e2) { /* fall through */ }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end('{}');
+      // STATE_FILE missing or unreadable — seed from save.seed.json.
+      serveSeed('STATE_FILE missing');
     }
     return;
   }

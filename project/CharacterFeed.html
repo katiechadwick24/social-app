@@ -10553,7 +10553,12 @@ function App() {
         serverSaveNow(freshGameState());
       }
       setStateLoaded(true);
-    }).catch(() => setStateLoaded(true));
+    }).catch(() => {
+      // Server unreachable or returned unparseable data — never wipe progress.
+      // Fall back to localStorage if it has a valid save.
+      if (isCurrentSave(localSaved)) applySavedState(localSaved);
+      setStateLoaded(true);
+    });
   }, []);
 
   // Wrapped setters normalize and trim state only. Persistence runs from the

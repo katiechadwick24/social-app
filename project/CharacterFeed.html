@@ -3374,8 +3374,8 @@ function looksLikeInterrogationSpiral(text = '') {
     || /\b(?:that'?s|that is)\s+not\s+an\s+answer\b/i.test(lower);
 }
 
-function looksLikeBannedFlatPhrase(text = ‘’) {
-  const lower = String(text || ‘’).toLowerCase().replace(/[‘]/g, "’");
+function looksLikeBannedFlatPhrase(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[‘]/g, "’");
   return /\bgo\s+off\b/i.test(lower)
     || /\bfair\b/i.test(lower)
     || /\bmate\b/i.test(lower)

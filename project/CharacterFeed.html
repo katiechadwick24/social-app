@@ -8593,16 +8593,90 @@ function cleanProfileFeelingText(raw = '', char, rel = 0) {
   return clean;
 }
 
-function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats = [], onBack, onDM, feed, allChars, onOpenThread, onSceneEnd }) {
+function CharProfileScreen({ char, player, eventLog = [], dms = {}, groupChats = [], setDms, onBack, onDM, feed, allChars, onOpenThread, onSceneEnd }) {
   const { hasRelationship: hasPlayerRel, value: rel } = effectivePlayerRelationship(char, eventLog, dms, groupChats);
-  const [following, setFollowing] = useState(false);
   const [chemOpen, setChemOpen] = useState(false);
   const [chemistry, setChemistry] = useState('default');
   const [feelingExpanded, setFeelingExpanded] = useState(false);
   const [feeling, setFeeling] = useState(null);
   const [feelingLoading, setFeelingLoading] = useState(false);
+  const [reachOutLoading, setReachOutLoading] = useState(false);
   const [showSceneSetup, setShowSceneSetup] = useState(false);
   const [activeScene, setActiveScene] = useState(null); // {setting, vibe}
+
+  async function handleReachOut() {
+    if (reachOutLoading) return;
+    setReachOutLoading(true);
+    try {
+      const involvedHandles = [char.handle, player.handle].map(h => String(h).toLowerCase());
+      const recentFeedContext = feed
+        .filter(p => {
+          const text = `${p.text || ''} ${p.reply?.text || ''}`.toLowerCase();
+          return involvedHandles.some(h => text.includes(`@${h}`));
+        })
+        .slice(0, 4)
+        .map(p => {
+          const poster = allChars.find(c => c.id === p.charId);
+          const lines = [`@${poster?.handle || p.charId}: "${p.text}"`];
+          if (p.reply) {
+            const replier = allChars.find(c => c.id === p.reply.charId);
+            lines.push(`  ↳ @${replier?.handle || p.reply.charId}: "${p.reply.text}"`);
+          }
+          return lines.join('\n');
+        })
+        .join('\n');
+
+      const recentEvents = (eventLog || [])
+        .filter(e => e.participants?.includes(char.id) || e.participants?.includes('player'))
+        .slice(-3)
+        .map(e => e.summary || e.title || '')
+        .filter(Boolean)
+        .join('; ');
+
+      const existingDms = (dms[char.id] || []).slice(-3);
+      const recentDmSnippet = existingDms.length
+        ? existingDms.map(m => `${m.role === 'user' ? player.name : char.name}: "${String(m.text || '').slice(0, 100)}"`).join(' / ')
+        : '';
+
+      const effectiveRel = effectivePlayerRelationship(char, eventLog, dms, groupChats).value;
+      const includePrivateCanon = shouldIncludeKeresHavocRowanCanon('dm', [char, player]);
+      const privateOrbitRule = privateOrbitRelationshipRule(char, player, effectiveRel, 'private DM');
+      const dmSituation = dmSituationRulesFor(char, player, '');
+
+      const contextPrompt = [
+        dmSituation,
+        privateOrbitRule,
+        includePrivateCanon ? `${KERES_HAVOC_ROWAN_CANON}\n${HAVOC_PRIVATE_INTIMACY_RULE}` : '',
+        recentFeedContext ? `\nRECENT PUBLIC FEED:\n${recentFeedContext}` : '',
+        recentEvents ? `\nRECENT EVENTS: ${recentEvents}` : '',
+        recentDmSnippet ? `\nMOST RECENT DMs: ${recentDmSnippet}` : '',
+        `\nWrite ONE opening DM from ${char.name} to ${player.name} initiating contact right now. Pull from the above context — react to something on the feed, follow up on a scene or event, want to hang out, or just feel like reaching out. Keep it short (1-2 sentences, occasionally 3). Do NOT open with asking where she is. Do NOT default to sexual. It can be easy, funny, a running joke, a genuine invitation, something on your mind. Sound exactly like yourself.`,
+      ].filter(Boolean).join('\n');
+
+      const stablePreamble = buildStableCharacterPreamble(char, allChars, player);
+      const reply = await window.claude.complete({
+        label: 'reach out',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: stablePreamble, cache_control: { type: 'ephemeral' } }] },
+          { role: 'user', content: contextPrompt },
+          { role: 'user', content: buildDMCharacterAnchor(char) },
+        ]
+      });
+
+      const charMsg = {
+        role: 'char',
+        text: cleanChatText(reply, char, player, false, { feed, latestUserText: '', channel: 'dm' }),
+        id: Date.now(),
+      };
+      if (setDms) {
+        setDms(d => ({ ...d, [char.id]: [...(d[char.id] || []), charMsg].slice(-DM_MAX_MESSAGES) }));
+      }
+    } catch(e) {
+      // fall through and open DMs anyway
+    }
+    setReachOutLoading(false);
+    if (onDM) onDM(char);
+  }
 
   // Only show Scene button for real AI characters (not bots/GMZ)
   const isAIChar = !!char.description && char.id !== '__gmz__';
@@ -8755,13 +8829,15 @@ Only output the JSON array, nothing else.` }]
         <p style={{color:C.text, fontSize:14, marginTop:6, lineHeight:1.5}}>{char.bio}</p>
         <p style={{marginTop:6, fontSize:14}}><strong style={{color:C.text}}>{fmt(char.followers)}</strong> <span style={{color:C.muted}}>Followers</span></p>
 
-        {/* Following / Scene */}
+        {/* Reach Out / Scene */}
         <div style={{display:'flex', gap:10, marginTop:14}}>
-          <button onClick={() => setFollowing(f=>!f)} style={{
-            flex:1, background: following ? C.card2 : 'none',
-            border:`1.5px solid ${C.border}`, color:C.text,
-            borderRadius:26, padding:'12px 10px', fontSize:15, fontWeight:700, cursor:'pointer',
-          }}>{following ? 'Following ✓' : 'Follow'}</button>
+          {isAIChar && (
+            <button onClick={handleReachOut} disabled={reachOutLoading} style={{
+              flex:1, background: reachOutLoading ? C.card2 : 'none',
+              border:`1.5px solid ${C.border}`, color: reachOutLoading ? C.muted : C.text,
+              borderRadius:26, padding:'12px 10px', fontSize:15, fontWeight:700, cursor: reachOutLoading ? 'default' : 'pointer',
+            }}>{reachOutLoading ? 'Reaching out…' : 'Reach Out'}</button>
+          )}
           {isAIChar && (
             <button onClick={() => setShowSceneSetup(true)} style={{
               flex:1, background:`${C.purple}20`, border:`1.5px solid ${C.purple}44`, color:C.purple,
@@ -11521,7 +11597,7 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
     const liveViewChar = chars.find(c => c.id === viewChar.id) || (player.id === viewChar.id ? player : viewChar);
     screenContent = (
       <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} onBack={goBack} onDM={handleOpenChat} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} onSceneEnd={handleSceneEnd} />
+        <CharProfileScreen char={liveViewChar} player={player} eventLog={eventLog} dms={dms} groupChats={groupChats} setDms={setDms} onBack={goBack} onDM={handleOpenChat} feed={feed} allChars={[...chars, player]} onOpenThread={post => { pushNav(); setThreadPost(post); setViewChar(null); }} onSceneEnd={handleSceneEnd} />
         <BottomNav tab={tab} setTab={t => { setTab(t); setViewChar(null); setNavStack([]); }} dmNotifs={dmNotifs} />
       </div>
     );

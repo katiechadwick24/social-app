@@ -7899,9 +7899,10 @@ const SCENE_VIBES = [
   { id:'more',     label:'Something more…',   emoji:'🔥', color:'#e91e8c' },
 ];
 const FLY_ON_WALL_LENGTHS = [
-  { id:'short', label:'Short', instruction:'6-8 beats, focused on one charged exchange', minBeats:6, maxBeats:8, contextDetails:2 },
-  { id:'medium', label:'Medium', instruction:'10-14 beats, with a clear turn in the conversation', minBeats:10, maxBeats:14, contextDetails:3 },
-  { id:'long', label:'Long', instruction:'18-24 beats, with several turns, interruptions, and consequences without filler', minBeats:18, maxBeats:24, contextDetails:5 },
+  { id:'short',    label:'Short',    instruction:'6-8 beats, focused on one charged exchange',                                                          minBeats:6,  maxBeats:8,  contextDetails:2 },
+  { id:'medium',   label:'Medium',   instruction:'10-14 beats, with a clear turn in the conversation',                                                  minBeats:10, maxBeats:14, contextDetails:3 },
+  { id:'long',     label:'Long',     instruction:'26-36 beats, with several turns, interruptions, and real consequences — no filler, no padding',        minBeats:26, maxBeats:36, contextDetails:5 },
+  { id:'extended', label:'Extended', instruction:'44-56 beats, full arc with escalation, a breaking point, and a landing — every beat must earn its place', minBeats:44, maxBeats:56, contextDetails:7 },
 ];
 const FLY_ON_WALL_CANON_IMPACTS = [
   { id:'none', label:'none' },
@@ -8116,7 +8117,7 @@ TONE: ${truncateText(tone || 'private, tense, character-driven', 160)}
 LENGTH: ${lengthSpec}. Return between ${lengthConfig.minBeats} and ${lengthConfig.maxBeats} beat objects.
 CANON IMPACT REQUESTED: ${canonImpact || 'none'}
 USER TOPIC: ${truncateText(promptTopic || 'Let the present characters talk privately about what is on their minds.', 900)}
-USER CONTEXT: ${truncateText(promptContext || 'No extra user context supplied.', length === 'long' ? 2600 : 1700)}
+USER CONTEXT: ${truncateText(promptContext || 'No extra user context supplied.', (length === 'long' || length === 'extended') ? 2600 : 1700)}
 
 RELEVANT RECENT CONTEXT:
 ${timelineContext}
@@ -8431,7 +8432,7 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
             eventLog,
           }) }];
           const lengthConfig = FLY_ON_WALL_LENGTHS.find(l => l.id === length) || FLY_ON_WALL_LENGTHS[1];
-          const meanwhileOutputTokens = length === 'long' ? 2400 : length === 'medium' ? 1600 : 1000;
+          const meanwhileOutputTokens = length === 'extended' ? 5200 : length === 'long' ? 3600 : length === 'medium' ? 1600 : 1000;
           warnPromptBudget("meanwhile cutaway scene", messages, 8000);
           console.log('[Meanwhile] before API call', {
             label: 'meanwhile cutaway scene',
@@ -8543,8 +8544,8 @@ RESPONSE FORMAT — follow this exactly:
 - Dialogue is plain text with NO quote marks. Never wrap spoken words in " " or curly quotes.
 - Thoughts are NEVER stated directly. At most a very brief physical tell that hints at them: *something flickers across her face* — not "she thinks" or "she wonders".
 - A response might be just dialogue, just an action, or both — whatever feels natural.
-- Keep it SHORT: 1-2 lines total. This is live conversation, not a story. No paragraph blocks.
-- Do not write stage-play beats like "Pauses." or long narrated reactions. Use one small physical action at most.
+- Length: 1-3 lines is the default. For a charged, intimate, or high-tension moment (flirty, fight, something more) you may write up to 4-5 lines if the beat genuinely earns it — action beat plus dialogue plus a reaction. Never pad. Never write a wall of prose.
+- Do not write stage-play beats like "Pauses." or long narrated reactions. Keep physical actions tight and specific.
 - Stay completely in character for whoever is speaking. Let the group chemistry matter.
 - Use the pronouns listed above exactly. Do not misgender anyone.
 - Treat house/team/player status like fixed identity. If someone is not on a Quidditch team, do not write them as a player. If someone mentions their own house or team, they use we/us/our.

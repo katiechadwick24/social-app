@@ -420,6 +420,14 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({ error: 'Rejected: incoming save has no feed posts but existing save does.' }));
             return;
           }
+          // Reject saves with an older savedAt than what is already on disk.
+          const existingTs = Number(existing.savedAt || 0);
+          const incomingTs = Number(incoming.savedAt || 0);
+          if (existingTs > 0 && incomingTs > 0 && incomingTs < existingTs) {
+            res.writeHead(409, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Rejected: incoming save is older than current save.' }));
+            return;
+          }
           // Back up before overwriting so there is always a one-step recovery.
           const bakPath = STATE_FILE.replace(/\.json$/, '') + '.bak.json';
           try { fs.writeFileSync(bakPath, JSON.stringify(existing), 'utf8'); } catch(_) {}

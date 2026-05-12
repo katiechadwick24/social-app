@@ -84,7 +84,7 @@
     'group chat reply': 5000,
     'scene opening': 8000,
     'scene reply': 8000,
-    'meanwhile cutaway scene': 8000,
+    'meanwhile cutaway scene': 14000,
     'repair/regeneration': 7000,
     'fallback rewrite': 4000,
     'profile feeling': 3000,
@@ -8384,7 +8384,7 @@ function SceneChatScreen({ char, sceneChars, player, setting, vibe, context = ''
   const isFlyOnWall = sceneMode === 'fly_on_wall';
   const displaySetting = setting || { label: location || 'Private scene', sub: isFlyOnWall ? 'Private character cutaway' : '', emoji: isFlyOnWall ? '👁️' : '🎭' };
   const displayVibe = vibe || { label: tone || 'Private tension', emoji: isFlyOnWall ? '👁️' : '💬', color:C.purple };
-  const SCENE_MAX_MESSAGES = 60;
+  const SCENE_MAX_MESSAGES = 300;
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);

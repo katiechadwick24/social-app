@@ -5011,14 +5011,16 @@ function pickCharLikes(post, chars, player) {
   return scored.slice(0, count).filter(x => x.score > 0.3).map(x => x.id);
 }
 
-function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, tweaks = TWEAK_DEFAULTS }) {
+function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, onDelete, tweaks = TWEAK_DEFAULTS }) {
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
   const [liked, setLiked] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const compact = !!tweaks.compactFeed;
   const fs = (base) => tweakFont(base, tweaks);
   const likerChars = (post.charLikes || []).map(id => allChars.find(c => c.id === id)).filter(Boolean);
   const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
+  const canDelete = onDelete && ['player', 'havoc', 'rowan'].includes(post.charId);
 
   function timeAgo(ts) {
     const d = Math.max(0, (Date.now() - ts) / 1000);
@@ -5045,7 +5047,21 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
               <span style={{color:C.muted, fontSize:fs(13)}}>@{char.handle}</span>
               <span style={{color:C.muted, fontSize:fs(13)}}>· {timeAgo(post.timestamp)}</span>
             </div>
-            <span style={{color:C.muted, fontSize:18, cursor:'pointer', padding:'0 4px'}}>···</span>
+            <div style={{position:'relative'}}>
+              <span style={{color:C.muted, fontSize:18, cursor:'pointer', padding:'0 4px', userSelect:'none'}} onClick={e => { e.stopPropagation(); if (canDelete) setMenuOpen(o => !o); }}}>···</span>
+              {menuOpen && canDelete && (
+                <>
+                  <div style={{position:'fixed', inset:0, zIndex:49}} onClick={() => setMenuOpen(false)} />
+                  <div style={{position:'absolute', right:0, top:'100%', background:C.card, border:`1px solid ${C.border}`, borderRadius:10, minWidth:140, zIndex:50, boxShadow:'0 4px 16px rgba(0,0,0,0.4)'}}>
+                    <button onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete(post.id); }}
+                      style={{display:'flex', alignItems:'center', gap:8, width:'100%', background:'none', border:'none', color:'#ef4444', fontSize:14, fontWeight:600, padding:'11px 14px', cursor:'pointer', borderRadius:10}}>
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M9 3h6l1 1h4v2H4V4h4L9 3zm-2 4h10l-1 14H8L7 7zm4 2v9h2V9h-2zm-2 0v9H9V9H7zm6 0h2v9h-2V9z"/></svg>
+                      Delete post
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
           <p style={{color:C.text, fontSize:fs(14), lineHeight: compact ? 1.35 : 1.5, marginTop:compact ? 2 : 4, cursor:'pointer'}} onClick={() => onOpenThread && onOpenThread(post)}>{renderText(safePostText)}</p>
           {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', aspectRatio:'1 / 1', borderRadius:12, marginTop:compact ? 6 : 8, objectFit:'cover', cursor:'pointer', display:'block'}} />}
@@ -7134,7 +7150,7 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
 
         {/* Posts */}
         {feed.map(post => (
-          <PostCard key={post.id} post={post} chars={chars} player={player} onCharClick={onCharClick} onOpenThread={onOpenThread} tweaks={tweaks} />
+          <PostCard key={post.id} post={post} chars={chars} player={player} onCharClick={onCharClick} onOpenThread={onOpenThread} onDelete={id => setFeed(f => f.filter(p => p.id !== id))} tweaks={tweaks} />
         ))}
 
         {/* Spacer */}
@@ -9570,7 +9586,19 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
   function applyCustomEvent() {
     if (!customScenario.trim()) return;
     const inferredChars = mentionedCharactersInText(customScenario, chars).map(c => c.id);
-    const selectedChars = (customChars.length ? customChars : inferredChars).slice(0, 3);
+    let selectedChars = (customChars.length ? customChars : inferredChars).slice(0, 3);
+    // Auto-inject witnesses for Keres romance/scandal events so the drama lands right
+    const scenLower = customScenario.toLowerCase();
+    const keresInScene = /keres|@keresvalen/.test(scenLower);
+    const romanceInScene = /kiss|snog|together|caught|corridor|hand.in.hand|spotted|photo|walk|date|flirt|public|outed|secret/i.test(customScenario);
+    if (keresInScene && romanceInScene) {
+      const addId = (id) => {
+        if (!selectedChars.includes(id) && chars.some(c => c.id === id)) selectedChars = [...selectedChars, id];
+      };
+      if (/havoc|@havocfang/.test(scenLower)) addId('elara'); // Elara jealous over Havoc + Keres
+      if (/rowan|@rowancade/.test(scenLower) || /havoc|@havocfang/.test(scenLower)) addId('tamsin'); // Tamsin protective/cold
+      addId('milo'); // Milo is always loud about drama
+    }
     selectEvent({
       id: `custom-${Date.now()}`,
       type: customType,
@@ -9629,7 +9657,8 @@ PLAYER'S ACTION: "${actionText}"
 ${visibilityInstruction}
 ${actionInstruction}
 
-Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles only if that makes sense for the visibility mode. Use the pronouns and identities listed above exactly. Show consequences. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.`
+Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles only if that makes sense for the visibility mode. Use the pronouns and identities listed above exactly. Show consequences. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.
+${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo/i.test(currentEvent?.scenario || '') && /keres|@keresvalen/.test((currentEvent?.scenario || '').toLowerCase()) ? `DRAMA ESCALATION: This is a major romantic scandal. Make it feel like a bomb drop — the timeline should be ON FIRE. If Elara March is in this scene: she is sharp, jealous, specifically cutting — make her drag Keres or Havoc by name, not vaguely observe. She sounds dangerous and possessive without being wounded. If Tamsin Cade is in this scene: she is cold, direct, and protective of Rowan — she calls it out pointedly, not diplomatically. If Milo Vale is in this scene: he is the loudest voice in the room, chaotic and delighted, saying the thing everyone else is only thinking. This outcome should have real social teeth — not "the timeline reacted," but showing exactly WHO said WHAT and how it burned.` : ''}`
         }]
       });
       const cleaned = response
@@ -11573,17 +11602,27 @@ Write ONE GMZ gossip post. Rules:
       return;
     }
     const isTransferHeat = /keres|transfer|new girl|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(ev.scenario || '');
+    const isKeromeRomance = /kiss|snog|together|corridor|hand.in.hand|spotted|outed|secret|staircase|arm.in.arm/i.test(ev.scenario || '') && /keres|@keresvalen/i.test(ev.scenario || '');
     const tamsinInterestHeat = tamsinRowanHavocKeresConcernSignal(`${ev.scenario || ''} @${player.handle}`, player)
-      || (isTransferHeat && /\b(?:rowan|@rowancade|havoc|@havocfang)\b/i.test(ev.scenario || ''));
-    if (isTransferHeat) {
+      || (isTransferHeat && /\b(?:rowan|@rowancade|havoc|@havocfang)\b/i.test(ev.scenario || ''))
+      || (isKeromeRomance && /rowan|@rowancade|havoc|@havocfang/i.test(ev.scenario || ''));
+    const elaraHeat = isTransferHeat || (isKeromeRomance && /havoc|@havocfang/i.test(ev.scenario || ''));
+    if (elaraHeat) {
       const elara = chars.find(c => c.id === 'elara');
       if (elara && !involved.some(c => c.id === 'elara')) involved = [...involved, elara];
     }
-    if (tamsinInterestHeat) {
+    if (tamsinInterestHeat || isKeromeRomance) {
       const tamsin = chars.find(c => c.id === 'tamsin');
       if (tamsin && !involved.some(c => c.id === 'tamsin')) involved = [...involved, tamsin];
     }
+    if (isKeromeRomance || isTransferHeat) {
+      const milo = chars.find(c => c.id === 'milo');
+      if (milo && !involved.some(c => c.id === 'milo')) involved = [...involved, milo];
+    }
     const fallbackReaction = (char) => {
+      if (char.id === 'elara' && isKeromeRomance) return 'the corridor photo is everywhere. havoc\'s attention span is so on brand.';
+      if (char.id === 'tamsin' && isKeromeRomance) return 'rowan at least had the decency to make his terrible decisions where everyone could see.';
+      if (char.id === 'milo' && isKeromeRomance) return 'nobody is pretending they did not see that. not a single person. i am watching everyone pretend.';
       if (char.id === 'tamsin' && tamsinInterestHeat) {
         return 'rowan developing taste in public was not on my schedule. havoc being involved is somehow the less surprising part.';
       }
@@ -11646,8 +11685,9 @@ ${threadPatternVarietyGuard(eventAvoidTexts)}
 Campus event: "${ev.scenario}"
 ${isTransferHeat ? `${player.name} is the new Slytherin transfer at the center of this: talented, gorgeous, mouthy, and arriving with a reputation/disciplinary record. The campus should mostly be excited, curious, attracted, impressed, or playfully chaotic. Characters may be wary or competitive, but do not make everyone bully her or tear her down.` : ''}
 ${isTransferHeat && char.id === 'callum' ? `Callum and Keres do not like each other. He may clock her talent, but his post should sound annoyed, competitive, exacting, or petty, not friendly or supportive.` : ''}
-${isTransferHeat && char.id === 'elara' ? `Elara has history with Havoc. If the event makes Keres visible or desirable, Elara should notice with direct irritation, dangerous humor, sharp jealousy, or a specific ex-adjacent jab. She does not sound wounded or beg for attention.` : ''}
-${tamsinInterestHeat && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
+${(elaraHeat || isKeromeRomance) && char.id === 'elara' ? `Elara has history with Havoc and is watching Keres collect attention. She should be sharp, jealous, and specifically cutting — drag the situation by name (Havoc's behavior, Keres getting the attention, or the corridor photo). Make her sound dangerous and a little possessive, not wounded or diplomatic. No vague commentary — she says the pointed thing.` : ''}
+${(tamsinInterestHeat || isKeromeRomance) && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
+${isKeromeRomance && char.id === 'milo' ? `Milo is the loudest, most delighted voice on campus right now. He should say the thing out loud that everyone else is only thinking — reckless, chaotic, zero filter. He can be excited about the drama, bait someone, or announce himself as a witness. He does not play it cool.` : ''}
 
 Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
 ` }]});
@@ -11756,7 +11796,6 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
           <ComposeModal chars={chars} player={player} onClose={() => setComposing(false)} onPost={post => {
             setFeed(f => [post, ...f]);
             setComposing(false);
-            // Player posts: simulate growing engagement
             if (post.charId === 'player') {
               maybeTriggerDMsFromPlayerPost(post);
               const ticks = [
@@ -11773,6 +11812,57 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
                   ? {...p, likes: jitter(t.l), reposts: jitter(t.r), comments: jitter(t.c)}
                   : p));
               }, t.delay));
+            } else {
+              // NPC character posted via compose — scale engagement by follower count
+              const poster = chars.find(c => c.id === post.charId);
+              const scale = poster ? Math.min(4, (poster.followers || 500000) / 500000) : 1;
+              const npcTicks = [
+                { delay: 1800,  l: Math.round(6000  * scale), r: Math.round(150  * scale), c: Math.round(6  * scale) },
+                { delay: 5000,  l: Math.round(28000 * scale), r: Math.round(700  * scale), c: Math.round(20 * scale) },
+                { delay: 12000, l: Math.round(72000 * scale), r: Math.round(2000 * scale), c: Math.round(50 * scale) },
+                { delay: 28000, l: Math.round(160000* scale), r: Math.round(4500 * scale), c: Math.round(110* scale) },
+              ];
+              npcTicks.forEach(t => setTimeout(() => {
+                const jitter = (n) => Math.max(0, Math.round(n * (0.85 + Math.random() * 0.3)));
+                setFeed(f => f.map(p => p.id === post.id
+                  ? {...p, likes: jitter(t.l), reposts: jitter(t.r), comments: jitter(t.c)}
+                  : p));
+              }, t.delay));
+              // Trigger an NPC reply for posts that tag @keresvalen or have relationship language
+              const mentionsKeres = characterMentionedInText(post.text || '', player);
+              const hasRelLang = /flirt|kiss|snog|caught|photo|secret|together|outed|spotted|secrets.out/i.test(post.text || '');
+              if ((mentionsKeres || hasRelLang) && poster) {
+                const elaraShouldReact = poster.id === 'havoc' && havocKeresAttentionSignal(post.text || '', player) && chars.some(c => c.id === 'elara');
+                const tamsinShouldReact = poster.id === 'rowan' && tamsinRowanHavocKeresConcernSignal(`${post.text || ''} @${player.handle}`, player) && chars.some(c => c.id === 'tamsin');
+                const others = chars.filter(c => c.id !== poster.id);
+                const replier = elaraShouldReact
+                  ? others.find(c => c.id === 'elara')
+                  : tamsinShouldReact
+                  ? others.find(c => c.id === 'tamsin')
+                  : characterMentionedInText(post.text || '', player)
+                  ? (others.find(c => c.id === 'elara') || others.find(c => c.id === 'milo') || others[0])
+                  : others[Math.floor(Math.random() * others.length)];
+                if (replier) {
+                  setTimeout(async () => {
+                    try {
+                      const replyRaw = await window.claude.complete({ label: 'feed post reply', messages:[{ role:'user', content:
+                        `Write as ${replier.name} on a campus social app.
+Speaker: ${compactCharacterCard(replier, poster)}
+Original poster: ${compactCharacterCard(poster, replier)}
+${buildPublicReplyRules()}
+${compactPlayerStance(replier, player)}
+${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
+@${poster.handle} just posted: "${post.text || ''}"${post.photo ? ' [with a photo]' : ''}
+${elaraShouldReact && replier.id === 'elara' ? 'Havoc just publicly tagged @keresvalen or posted about her. Elara should be plainly annoyed. React to the visible behavior — Havoc being obvious, Keres getting the attention, or the room pretending not to see it. Be sharp, jealous, specific, and mean-funny. Do not sound wounded or needy.' : ''}
+${mentionsKeres && replier.id === 'milo' ? 'Milo is the loudest, most delighted voice in the room. He should say the thing everyone is thinking out loud — reckless, chaotic, zero filter.' : ''}
+Write ONE short reply (1 sentence, in character). Tag @${poster.handle} directly. No quotes, just the reply text.
+`}]});
+                      const replyText = cleanSocialReplyText(replyRaw, replier, player, { feed, selfSubject: false, contextText: post.text || '', roster: [player, ...chars, GMZ_CHAR], replyToHandle: poster.handle, failureMode: 'silence' });
+                      if (replyText) setFeed(f => f.map(p => p.id === post.id ? {...p, reply:{ charId: replier.id, text: replyText }} : p));
+                    } catch(e) {}
+                  }, 10000 + Math.random() * 8000);
+                }
+              }
             }
           }} />
         )}

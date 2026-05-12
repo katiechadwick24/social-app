@@ -1485,6 +1485,10 @@ function relationshipBehaviorMode(rel) {
   };
 }
 
+function tierRank(label) {
+  return ({ 'bad blood': 0, 'tense or complicated': 1, 'cautious neutral': 2, 'positive acquaintance': 3, 'trusted ally': 4 })[label] ?? 2;
+}
+
 function playerStance(char, player, relationshipOverride) {
   if (!char || !player) return '';
   const rel = relationshipOverride ?? char.relationships?.player ?? defaultPlayerRelationshipFor(char);
@@ -3998,6 +4002,91 @@ function aggregateFeedRelationshipChanges(changes = []) {
   return [...grouped.values()]
     .map(ch => ({ ...ch, value: +clamp(ch.value, -3, 3).toFixed(2) }))
     .filter(ch => Math.abs(ch.value) >= 0.15);
+}
+
+// Derive secondary score shifts from primary feed changes.
+// When A<->B interact publicly, third parties who care about that relationship
+// get their own (smaller) score adjustment toward the player.
+function computeCascadeChanges(changes = [], chars = [], player = {}) {
+  const cascade = [];
+  const hasChar = (id) => (chars || []).some(c => c.id === id);
+
+  changes.forEach(ch => {
+    const { actorId, targetId, value, label = '' } = ch;
+    const isPositive = value > 0;
+    const isFlirty   = /flirt/.test(label);
+    const isWarm     = /warmth|support|banter/.test(label);
+    const isConflict = value < -0.3;
+
+    const playerHavoc = (actorId === 'player' && targetId === 'havoc') ||
+                        (actorId === 'havoc'   && targetId === 'player');
+    const playerRowan = (actorId === 'player' && targetId === 'rowan') ||
+                        (actorId === 'rowan'   && targetId === 'player');
+
+    // Player <-> Havoc warmth/flirt → Elara scores player negatively
+    if (playerHavoc && isPositive && (isFlirty || isWarm) && hasChar('elara')) {
+      cascade.push({
+        actorId: 'elara', targetId: 'player',
+        value: +(-Math.abs(value) * 0.55).toFixed(2),
+        label: 'jealous observer',
+      });
+    }
+
+    // Player <-> Havoc conflict → Elara is mildly pleased
+    if (playerHavoc && isConflict && hasChar('elara')) {
+      cascade.push({
+        actorId: 'elara', targetId: 'player',
+        value: +(Math.abs(value) * 0.3).toFixed(2),
+        label: 'rival friction',
+      });
+    }
+
+    // Player <-> Rowan warmth/flirt → Tamsin protective concern
+    if (playerRowan && isPositive && (isFlirty || isWarm) && hasChar('tamsin')) {
+      cascade.push({
+        actorId: 'tamsin', targetId: 'player',
+        value: +(-Math.abs(value) * 0.45).toFixed(2),
+        label: 'protective concern',
+      });
+    }
+
+    // Elara already scoring player negatively → Tamsin picks up the same vibe (Elara-Tamsin alliance)
+    if (actorId === 'elara' && targetId === 'player' && value < -0.3 && hasChar('tamsin')) {
+      cascade.push({
+        actorId: 'tamsin', targetId: 'player',
+        value: +(-Math.abs(value) * 0.25).toFixed(2),
+        label: 'shared concern',
+      });
+    }
+
+    // Player publicly backs Slytherin (Silas/Havoc) → Gryffindor chars tick down slightly
+    if (actorId === 'player' && (targetId === 'silas' || targetId === 'havoc') && isPositive && isWarm) {
+      ['briar', 'callum'].forEach(id => {
+        if (hasChar(id)) {
+          cascade.push({
+            actorId: id, targetId: 'player',
+            value: +(-Math.abs(value) * 0.3).toFixed(2),
+            label: 'rival alliance',
+          });
+        }
+      });
+    }
+
+    // Player publicly backs Gryffindor (Briar/Callum) → Slytherin chars tick down slightly
+    if (actorId === 'player' && (targetId === 'briar' || targetId === 'callum') && isPositive && isWarm) {
+      ['silas', 'havoc'].forEach(id => {
+        if (hasChar(id)) {
+          cascade.push({
+            actorId: id, targetId: 'player',
+            value: +(-Math.abs(value) * 0.25).toFixed(2),
+            label: 'rival alliance',
+          });
+        }
+      });
+    }
+  });
+
+  return cascade.filter(ch => Math.abs(ch.value) >= 0.1);
 }
 
 function scanFeedRelationshipInteractions(feed = [], chars = [], player = {}, trackedKeys = new Set()) {
@@ -10404,6 +10493,7 @@ function App() {
   const [day, setDayRaw] = useState(DEFAULT_DAY);
   const [stateLoaded, setStateLoaded] = useState(false);
   const feedRelationshipKeysRef = useRef(new Set());
+  const prevRelTiersRef = useRef({});
   const feedRef = useRef([]);
   useEffect(() => { feedRef.current = feed; }, [feed]);
   const gmzStateRef = useRef({ chars: [], player: null, eventLog: [] });
@@ -10493,9 +10583,32 @@ function App() {
     scan.trackedKeys.forEach(key => feedRelationshipKeysRef.current.add(key));
     if (scan.changedFeed) setFeedRaw(trimFeedPreservingPlayerPosts(scan.feed));
     if (scan.changes.length) {
-      setCharsRaw(prev => applyFeedRelationshipChanges(prev, scan.changes, player));
+      const cascade = computeCascadeChanges(scan.changes, chars, player);
+      const allChanges = cascade.length
+        ? aggregateFeedRelationshipChanges([...scan.changes, ...cascade])
+        : scan.changes;
+      setCharsRaw(prev => applyFeedRelationshipChanges(prev, allChanges, player));
     }
   }, [stateLoaded, feed, chars, player]);
+
+  // Relationship milestone DMs: fire triggerProactiveDM when a char crosses a tier boundary.
+  // prevRelTiersRef stores each char's last known tier label; first render just initialises.
+  useEffect(() => {
+    if (!stateLoaded) return;
+    chars.forEach(char => {
+      const rel = char.relationships?.player ?? defaultPlayerRelationshipFor(char);
+      const currentLabel = relationshipBehaviorMode(rel).label;
+      const prevLabel = prevRelTiersRef.current[char.id];
+      if (prevLabel !== undefined && prevLabel !== currentLabel) {
+        const improved = tierRank(currentLabel) > tierRank(prevLabel);
+        const ctx = improved
+          ? `your relationship with @${player.handle} just reached a new tier: "${currentLabel}"`
+          : `your relationship with @${player.handle} cooled to "${currentLabel}"`;
+        setTimeout(() => triggerProactiveDM(char, ctx), 8000 + Math.random() * 6000);
+      }
+      prevRelTiersRef.current[char.id] = currentLabel;
+    });
+  }, [stateLoaded, chars]);
 
   function getCharsWithRelationshipLogChanges(list, scoreChanges = []) {
     const relChanges = scoreChanges

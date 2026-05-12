@@ -1,0 +1,10 @@
+#!/bin/sh
+# Pre-commit hook: validate Babel/JSX syntax in CharacterFeed.html.
+# Only runs when that file is staged for commit.
+
+if git diff --cached --name-only | grep -q "project/CharacterFeed.html"; then
+  node scripts/check-babel.js
+  if [ $? -ne 0 ]; then
+    exit 1
+  fi
+fi

@@ -5,9 +5,14 @@
   "description": "A private playable Socials web app.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "check": "node scripts/check-babel.js"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@babel/parser": "^7.29.3",
+    "@babel/standalone": "^7.29.4"
   }
 }

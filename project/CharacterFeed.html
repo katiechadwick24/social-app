@@ -5048,7 +5048,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, onDe
               <span style={{color:C.muted, fontSize:fs(13)}}>· {timeAgo(post.timestamp)}</span>
             </div>
             <div style={{position:'relative'}}>
-              <span style={{color:C.muted, fontSize:18, cursor:'pointer', padding:'0 4px', userSelect:'none'}} onClick={e => { e.stopPropagation(); if (canDelete) setMenuOpen(o => !o); }}}>···</span>
+              <span style={{color:C.muted, fontSize:18, cursor:'pointer', padding:'0 4px', userSelect:'none'}} onClick={e => { e.stopPropagation(); if (canDelete) setMenuOpen(o => !o); }}>···</span>
               {menuOpen && canDelete && (
                 <>
                   <div style={{position:'fixed', inset:0, zIndex:49}} onClick={() => setMenuOpen(false)} />

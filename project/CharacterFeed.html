@@ -4410,10 +4410,10 @@ function recentCompactMemoryContext({ feed = [], eventLog = [], groupChats = [],
 
   filteredLog
     .filter(e => e.type === 'scene' || !!e.sceneMemory)
-    .slice(0, 2)
+    .slice(0, 3)
     .forEach(entry => {
       const text = entry.sceneMemory || entry.outcome || entry.text || entry.scenario || '';
-      if (text) lines.push(`Scene: ${String(text).replace(/\s+/g, ' ').slice(0, 180)}`);
+      if (text) lines.push(`Scene: ${String(text).replace(/\s+/g, ' ').slice(0, 320)}`);
     });
 
   if ((channel === 'dm' || channel === 'private' || channel === 'scene') && char?.id && dms?.[char.id]?.length) {

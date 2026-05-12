@@ -3231,9 +3231,13 @@ function cleanSocialPostText(raw = '', char, player, opts = {}) {
     .replace(/^post:\s*/i, '')
     .replace(/^tweet:\s*/i, '')
     .trim();
-  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || looksLikeAddressSlop(clean, char) || looksLikeCatchphraseSlop(clean) || looksLikeBannedFlatPhrase(clean) || looksLikeRecapThenFlatVerdict(clean, opts) || looksLikeInventedTimelineClaim(clean, { ...opts, avoidTexts }) || looksLikeUnanchoredMediaClaim(clean, { ...opts, avoidTexts }) || looksLikeInventedTeamWeaknessClaim(clean, { ...opts, avoidTexts }) || looksLikePhantomEngagementGossip(clean) || looksLikeVagueDeletedPostDrama(clean, { ...opts, avoidTexts }) || looksLikeReactionBlameSpiral(clean) || looksLikeUnsupportedPlayerActionClaim(clean, '', player) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || looksLikeVagueAphorism(clean) || violatesCharacterDialogueContract(clean, char) || hasDialoguePatternCollision(clean, avoidTexts) || clean.length > 280) {
+  // Hard failures: corrupted or character-breaking output — use fallback pool
+  if (!clean || looksLikePromptLeak(clean) || looksLikePhraseInfection(clean) || isSelfNarration(clean, char) || looksLikeIdentityConfusion(clean, char) || clean.length > 280) {
     return fallbackPostForChar(char, player, avoidTexts);
   }
+  // Soft failures: style/quality issues — prefer the AI text over repeating the same 8-entry fallback pool
+  // These validators are useful for replies where we have alternatives, but for standalone posts they
+  // cause more repetition than they prevent by routing everything to the tiny hardcoded pool.
   return clean;
 }
 
@@ -4983,7 +4987,7 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, twea
   if (!char) return null;
 
   const renderText = (text) => renderLinkedText(text, allChars, onCharClick);
-  const safePostText = cleanSocialPostText(post.text, char, player);
+  const safePostText = post.text || '';
 
   return (
     <div style={{padding: compact ? '10px 14px' : '16px 16px', borderBottom:`1px solid ${C.border}`}}>
@@ -5036,7 +5040,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
   const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
-  const safePostText = char ? cleanSocialPostText(post.text, char, player) : post.text;
+  const safePostText = post.text || '';
   const safePostReplyText = post.reply?.text || null;
   const playerRelFor = (c) => effectivePlayerRelationship(c, eventLog, dms, groupChats).value;
   const threadMemory = recentCompactMemoryContext({ feed, eventLog, groupChats, dms, player, allChars, channel:'public', limit: 4 });
@@ -9861,7 +9865,7 @@ function NotificationsScreen({ chars, player, feed, onOpenThread, onCharClick })
     const items = [];
     const poster = allChars.find(c => c.id === post.charId);
     if (post.charId !== player.id && mentionRe.test(post.text || '')) {
-      items.push({ id:`mention-${post.id}`, type:'mention', char:poster, text:'mentioned you in a post', preview: poster ? cleanSocialPostText(post.text, poster, player) : post.text, timestamp:post.timestamp, post });
+      items.push({ id:`mention-${post.id}`, type:'mention', char:poster, text:'mentioned you in a post', preview: post.text, timestamp:post.timestamp, post });
     }
     if (post.reply?.charId && post.reply.charId !== player.id && (post.charId === player.id || mentionRe.test(post.reply.text || ''))) {
       const replier = allChars.find(c => c.id === post.reply.charId);
@@ -10831,7 +10835,7 @@ Output ONLY the chat message. Do not say "I'm ready", "Understood", "I know the 
       ];
       // ~30% chance to continue an ongoing feed drama instead of picking a generic topic
       const dramaTopicCandidates = !elaraHavocKeresHeat && !tamsinRowanKeresHeat && Math.random() < 0.30
-        ? feed.slice(0, 5)
+        ? currentFeed.slice(0, 5)
             .map(p => {
               const poster = [...chars, player].find(c => c.id === p.charId);
               return poster && p.text ? `${poster.name} (@${poster.handle}) recently posted: "${p.text.slice(0, 90)}"` : null;

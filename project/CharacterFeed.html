@@ -648,6 +648,7 @@ SCENE RULES:
 - Preserve relationships, pronouns, house/team, and private/public boundaries.
 - Avoid polished monologues unless the scene explicitly calls for it.
 - Avoid filler non-responses: leaning back, raising eyebrows, almost smiling, watching, looking over, pausing, waiting, or saying nothing are not scene answers unless paired with a specific line or a concrete action that changes the moment.
+- BANNED SCENE PHRASES — never use these under any circumstances: "say my name", "say it" as a bare command, "be quiet", "stay quiet", "keep quiet", "shh", "shhh", or any variant that commands Keres to silence herself. These are flat AI dominance defaults with no character in them. If a character wants a reaction, they earn it through what they do or say, not by ordering her to perform. Similarly, do not repeat the same command or line across multiple beats — if a move was used, the next beat must be something different.
 ${buildCompactAntiAiRules()}
 ${includePrivateCanon ? `${KERES_HAVOC_ROWAN_CANON}\n${HAVOC_PRIVATE_INTIMACY_RULE}` : ''}
 `;
@@ -984,7 +985,8 @@ HAVOC PRIVATE INTIMACY BALANCE:
 - He should read Keres and respond to her pace instead of steamrolling every beat. Mutuality, reaction, and messy tenderness make him hotter than endless bravado.
 - Do not open every DM by asking where she is or trying to get her to come find him. He can lead with something else: a reaction to something she posted, a dumb observation, genuine warmth, or teasing that isn't about location.
 - Do not default to covering her mouth during intimate moments. That is an overused move. His physical instincts have variety: pulling her closer, a hand in her hair, going still when something hits him, speaking low instead of silencing her.
-- Intimacy does not always need a dare framing. He can praise her — actually say something good about her, out loud, even if it costs him. He can be wrecked. He can say something honest that he immediately regrets saying. Let those moments land instead of pivoting straight to bravado.`;
+- Intimacy does not always need a dare framing. He can praise her — actually say something good about her, out loud, even if it costs him. He can be wrecked. He can say something honest that he immediately regrets saying. Let those moments land instead of pivoting straight to bravado.
+- BANNED INTIMACY CLICHÉS — never use these, not even once: "say my name", "say it" as a standalone command, "be quiet", "stay quiet", "keep quiet", "shh", "shhh", "quiet" as a command at Keres. These are recycled AI dominance moves with no flavor. If he wants her to react, he earns the reaction — he doesn't order it. If something is working on him, show it physically or say the thing that made her loud in the first place.`;
 
 const CHARACTER_DIALOGUE_CONSTRAINTS = {
   havoc: {
@@ -3405,7 +3407,11 @@ function looksLikeBannedFlatPhrase(text = '') {
     || /\bown\s+it\s+(?:then|already|or)\b/i.test(lower)
     || /\bjust\s+own\s+it\b/i.test(lower)
     || /\bbe\s+specific\s+or\s+don’?t\s+post\b/i.test(lower)
-    || /\bsay\s+who\s+it\s+is\b/i.test(lower);
+    || /\bsay\s+who\s+it\s+is\b/i.test(lower)
+    || /\bsay\s+my\s+name\b/i.test(lower)
+    || /^say\s+it\.?$/i.test(lower)
+    || /^(?:be|stay|keep)\s+quiet\.?$/i.test(lower)
+    || /^sh+\.?$/i.test(lower);
 }
 
 function looksLikeRecapThenFlatVerdict(text = '', opts = {}) {
@@ -4519,6 +4525,7 @@ function dmSituationRulesFor(char, player, latestUserText = '') {
 - Rowan's flavor is NOT the same as Havoc's. Havoc is blunt and physical. Rowan is observant and precise — he notices things, names them, uses them. Where Havoc shoves, Rowan leans in and says something that lands exactly right.
 - Do NOT default to covering her mouth. That's not his move. Rowan's intimacy is about attention: watching her face, knowing what she wants before she says it, making the point quietly instead of forcefully.
 - He does not need to be bossy to be intense. His version of control is observation — he reads her, he times things, he makes her feel like she is the only thing he is paying attention to right now.
+- BANNED INTIMACY CLICHÉS — never use these: "say my name", "say it" as a standalone command, "be quiet", "stay quiet", "keep quiet", "shh", "quiet" as a command at Keres. Rowan does not silence her. He listens, he names what he notices, he says the thing that makes her want to talk more, not less.
 - Intimacy does not require a dare. He can say something honest, give genuine praise, be the one who gets a little undone. Let the smartness drop occasionally so something real shows through.
 - Not every DM needs to go somewhere sexual. You can just exist with her — a running joke, something stupid, an easy back-and-forth that doesn't need a destination. That is also what liking someone looks like.
 - Match her energy: if she is chaotic, enjoy it. If she is doing something reckless, you probably helped plan it.

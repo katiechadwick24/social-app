@@ -9692,7 +9692,7 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
     // Auto-inject witnesses for Keres romance/scandal events so the drama lands right
     const scenLower = customScenario.toLowerCase();
     const keresInScene = /keres|@keresvalen/.test(scenLower);
-    const romanceInScene = /kiss|snog|together|caught|corridor|hand.in.hand|spotted|photo|walk|date|flirt|public|outed|secret/i.test(customScenario);
+    const romanceInScene = /kiss|snog|together|caught|corridor|hand.in.hand|spotted|photo|walk|date|flirt|public|outed|secret|collecting|both|staircase|arm.in.arm|secrets.out|romantic|scandal|seen with|caught with|walking with/i.test(customScenario);
     if (keresInScene && romanceInScene) {
       const addId = (id) => {
         if (!selectedChars.includes(id) && chars.some(c => c.id === id)) selectedChars = [...selectedChars, id];
@@ -9759,8 +9759,8 @@ PLAYER'S ACTION: "${actionText}"
 ${visibilityInstruction}
 ${actionInstruction}
 
-Write a punchy 2-3 sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles only if that makes sense for the visibility mode. Use the pronouns and identities listed above exactly. Show consequences. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.
-${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo/i.test(currentEvent?.scenario || '') && /keres|@keresvalen/.test((currentEvent?.scenario || '').toLowerCase()) ? `DRAMA ESCALATION: This is a major romantic scandal. Make it feel like a bomb drop — the timeline should be ON FIRE. If Elara March is in this scene: she is sharp, jealous, specifically cutting — make her drag Keres or Havoc by name, not vaguely observe. She sounds dangerous and possessive without being wounded. If Tamsin Cade is in this scene: she is cold, direct, and protective of Rowan — she calls it out pointedly, not diplomatically. If Milo Vale is in this scene: he is the loudest voice in the room, chaotic and delighted, saying the thing everyone else is only thinking. This outcome should have real social teeth — not "the timeline reacted," but showing exactly WHO said WHAT and how it burned.` : ''}`
+${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|collecting|both|staircase|secrets.out|scandal|arm.in.arm|romantic|seen with|caught with|walking with/i.test(currentEvent?.scenario || '') && /keres|@keresvalen/i.test(currentEvent?.scenario || '') ? `DRAMA ESCALATION: This is a major romantic scandal — write 4-6 sentences. Make it feel like a bomb drop. The timeline is ON FIRE and everyone has something to say. Show exactly WHO said WHAT and how it burned — name characters by @handle when they react publicly. If Elara March is here: she is sharp, jealous, and specifically cutting. She @mentions Havoc or Keres by handle, drags what actually happened (the pic, the corridor, the attention), and sounds dangerous and a little possessive — not wounded, not diplomatic, not vague. If Tamsin Cade is here: she is cold, direct, and protective of Rowan. She calls it out by name, not a general observation. If Milo Vale is here: he is the loudest voice in the room, chaotic and delighted, saying the thing everyone else is only thinking out loud. Do NOT write "the timeline reacted" or "people were talking" — show the specific reactions that made it burn.` : ''}
+Write a ${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|collecting|both|staircase|secrets.out|scandal|arm.in.arm|romantic|seen with|caught with|walking with/i.test(currentEvent?.scenario || '') && /keres|@keresvalen/i.test(currentEvent?.scenario || '') ? '4-6' : '2-3'} sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles when characters react publicly. Use the pronouns and identities listed above exactly. Show consequences. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.`
         }]
       });
       const cleaned = response
@@ -11755,7 +11755,7 @@ Write ONE GMZ gossip post. Rules:
       return;
     }
     const isTransferHeat = /keres|transfer|new girl|bombshell|mega babe|pretty|photo|disciplinary|record|tryout|chaser/i.test(ev.scenario || '');
-    const isKeromeRomance = /kiss|snog|together|corridor|hand.in.hand|spotted|outed|secret|staircase|arm.in.arm/i.test(ev.scenario || '') && /keres|@keresvalen/i.test(ev.scenario || '');
+    const isKeromeRomance = /kiss|snog|together|corridor|hand.in.hand|spotted|outed|secret|staircase|arm.in.arm|collecting|both|photo|secrets.out|romantic|scandal|caught with|walking with|seen with/i.test(ev.scenario || '') && /keres|@keresvalen/i.test(ev.scenario || '');
     const tamsinInterestHeat = tamsinRowanHavocKeresConcernSignal(`${ev.scenario || ''} @${player.handle}`, player)
       || (isTransferHeat && /\b(?:rowan|@rowancade|havoc|@havocfang)\b/i.test(ev.scenario || ''))
       || (isKeromeRomance && /rowan|@rowancade|havoc|@havocfang/i.test(ev.scenario || ''));
@@ -11842,7 +11842,7 @@ ${(elaraHeat || isKeromeRomance) && char.id === 'elara' ? `Elara has history wit
 ${(tamsinInterestHeat || isKeromeRomance) && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
 ${isKeromeRomance && char.id === 'milo' ? `Milo is the loudest, most delighted voice on campus right now. He should say the thing out loud that everyone else is only thinking — reckless, chaotic, zero filter. He can be excited about the drama, bait someone, or announce himself as a witness. He does not play it cool.` : ''}
 
-Write ONE social media post from ${char.name}'s perspective reacting to the event. 1 sentence, 8-28 words. In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. If tagging @${player.handle} fits, do it. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
+Write ONE social media post from ${char.name}'s perspective reacting to the event. ${isKeromeRomance ? `1-2 sentences, 12-50 words. Tag @handles if it fits — calling out @${player.handle}, @havocfang, or @rowancade directly is encouraged for maximum impact. Make it feel like a real campus sub-tweet, callout, or reaction that would get liked immediately.` : '1 sentence, 8-28 words.'} In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
 ` }]});
           const clean = cleanSocialPostText(raw, char, player, { feed, avoidTexts: eventAvoidTexts });
           if (!clean) return;
@@ -11852,23 +11852,32 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
     });
 
     setActiveEvent(null);
-    // Custom events resolve through feed/event log; DMs are handled by the Messages tab.
-    // GMZ only posts when the custom event explicitly names the gossip account.
     const shouldTriggerGMZ = /\b(?:gmz|@gmz|gossip account|anonymous tip)\b/i.test(`${ev.scenario || ''} ${ev.outcome || ''}`);
-    if (shouldTriggerGMZ) {
-      const involvedHandles = evCharIds.map(id => {
-        const found = [...chars, player].find(c => c.id === id);
-        return found?.handle ? `@${found.handle}` : id;
-      }).join(', ');
+    const involvedHandles = evCharIds.map(id => {
+      const found = [...chars, player].find(c => c.id === id);
+      return found?.handle ? `@${found.handle}` : id;
+    }).join(', ');
+    if (shouldTriggerGMZ || isKeromeRomance) {
       const gmzTip = [
         `Anonymous raw tip about a ${ev.type || 'gossip'} event.`,
         `Public setup: "${ev.scenario || ''}"`,
         ev.playerAction ? `Submitted action/details: "${ev.playerAction}"` : '',
         ev.outcome ? `What happened next: "${ev.outcome}"` : '',
         involvedHandles ? `People involved or named in the tip: ${involvedHandles}.` : '',
+        isKeromeRomance && !shouldTriggerGMZ ? `This is a campus romance scandal involving ${player.name}. Post about it with full GMZ tabloid energy — breathless, specific, and pointed.` : '',
         'Turn this into public gossip. Do not reveal who submitted the tip.'
       ].filter(Boolean).join('\n');
-      setTimeout(() => triggerGMZPost(gmzTip, { anonymousTip: true }), 3500 + Math.random()*4500);
+      setTimeout(() => triggerGMZPost(gmzTip, { anonymousTip: !isKeromeRomance }), 3500 + Math.random()*3000);
+    }
+    // Cascade: bystander characters react to what Elara/Tamsin/Milo just posted, so the feed keeps burning
+    if (isKeromeRomance) {
+      const involvedIds = new Set(involved.map(c => c.id));
+      const cascadePool = chars.filter(c => !involvedIds.has(c.id) && ['silas','callum','briar','theo','jude','vesper'].includes(c.id));
+      const cascaders = cascadePool.sort(() => Math.random() - 0.5).slice(0, 2);
+      const scenarioRef = { text: `${ev.scenario || ''}${ev.outcome ? ' — ' + ev.outcome.slice(0, 120) : ''}` };
+      cascaders.forEach((char, i) => {
+        setTimeout(() => triggerGmzInspiredTake(char, scenarioRef), 9000 + i * 3500 + Math.random() * 2000);
+      });
     }
   }
 

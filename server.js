@@ -163,6 +163,11 @@ function normalizeOpenAIContent(content) {
   return content.map(part => {
     if (typeof part === 'string') return { type: 'input_text', text: part };
     if (!part || typeof part !== 'object') return { type: 'input_text', text: String(part || '') };
+    // Pass image parts through to the Responses API
+    if (part.type === 'image_url' || part.type === 'input_image') {
+      const url = part.image_url || part.url || '';
+      if (url) return { type: 'input_image', image_url: url };
+    }
     if (typeof part.text === 'string') return { type: 'input_text', text: part.text };
     if (typeof part.output_text === 'string') return { type: 'input_text', text: part.output_text };
     return { type: 'input_text', text: JSON.stringify(part) };

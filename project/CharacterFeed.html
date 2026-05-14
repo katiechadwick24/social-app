@@ -4379,12 +4379,67 @@ function recentCompactMemoryContext({ feed = [], eventLog = [], groupChats = [],
     .slice(0, 2)
     .forEach(entry => {
       const text = entry.outcome || entry.text || entry.scenario || '';
-      if (text) lines.push(`Event: ${String(text).replace(/\s+/g, ' ').slice(0, 160)}`);
+      if (text) lines.push(`Event: ${String(text).replace(/\s+/g, ' ').slice(0, 280)}`);
     });
 
+  // Surface recent scandal/drama reaction posts to ALL characters regardless of @-mention filter.
+  // This keeps the drama alive in future posts even after the initial wave.
+  const dramaReactionPosts = (feed || [])
+    .filter(p => p.isEventReaction || p.isGMZInspiredTake)
+    .slice(0, 5)
+    .map(p => {
+      const speaker = (allChars || []).find(c => c.id === p.charId) || (p.charId === 'player' ? player : null);
+      return speaker?.handle && p.text ? `@${speaker.handle}: "${String(p.text).slice(0, 110)}"` : '';
+    })
+    .filter(Boolean);
+  if (dramaReactionPosts.length) lines.push(`Drama wave (still visible): ${dramaReactionPosts.join(' / ')}`);
+
   return lines.length
-    ? `COMPACT MEMORY:\n${lines.slice(0, limit).map((line, i) => `${i + 1}. ${line}`).join('\n')}`
+    ? `COMPACT MEMORY:\n${lines.slice(0, limit + 1).map((line, i) => `${i + 1}. ${line}`).join('\n')}`
     : 'COMPACT MEMORY: none relevant.';
+}
+
+function getActiveDramaContext(eventLog, feed, chars, player) {
+  // Returns a live drama injection string for NPC post prompts so the scandal
+  // continues to ripple into future posts even after the initial reaction wave.
+  const DRAMA_WINDOW_MS = 72 * 60 * 60 * 1000; // 72h real-time — drama has long legs
+  const allC = [...(chars || []), player].filter(Boolean);
+  const recentScandalEvent = (eventLog || []).find(e => {
+    if (e.type !== 'event' || !e.custom) return false;
+    const age = Date.now() - (e.timestamp || 0);
+    if (age > DRAMA_WINDOW_MS) return false;
+    const txt = `${e.scenario || ''} ${e.outcome || ''}`;
+    return /kiss|snog|corridor|spotted|caught|photo|romantic|scandal|both|staircase|outed|seen with|walking with|caught with/i.test(txt)
+      && /keres|@keresvalen/i.test(txt);
+  });
+  if (!recentScandalEvent) return '';
+  const involvedHandles = (recentScandalEvent.chars || [])
+    .map(id => { const c = allC.find(x => x?.id === id); return c?.handle ? `@${c.handle}` : null; })
+    .filter(Boolean).join(', ');
+  const outcomeSnip = recentScandalEvent.outcome
+    ? ` What happened: "${recentScandalEvent.outcome.slice(0, 240)}"`
+    : '';
+  const isBoth = /havoc|@havocfang/i.test(recentScandalEvent.scenario || '')
+    && /rowan|@rowancade/i.test(recentScandalEvent.scenario || '');
+  const isQuidditch = /havoc|@havocfang|rowan|@rowancade/i.test(recentScandalEvent.scenario || '');
+  // Surface the drama reaction posts so characters know the campus response
+  const dramaReactionSnip = (feed || [])
+    .filter(p => p.isEventReaction || p.isGMZInspiredTake)
+    .slice(0, 4)
+    .map(p => {
+      const speaker = allC.find(c => c.id === p.charId);
+      return speaker?.handle && p.text ? `@${speaker.handle}: "${String(p.text).slice(0, 90)}"` : '';
+    })
+    .filter(Boolean)
+    .join(' / ');
+  return [
+    `ACTIVE CAMPUS DRAMA (still burning): Scenario — "${recentScandalEvent.scenario}"${outcomeSnip}`,
+    involvedHandles ? `People involved: ${involvedHandles}.` : '',
+    isBoth ? `THE CAMPUS ANGLE: Keres was publicly linked to BOTH @havocfang AND @rowancade at the same time. This is the part everyone is still processing.` : '',
+    isQuidditch ? `QUIDDITCH LAYER: Slytherin Chaser publicly entangled with Gryffindor players — match integrity questions are still flying.` : '',
+    dramaReactionSnip ? `How the campus already reacted: ${dramaReactionSnip}` : '',
+    `Your post may reference the ongoing fallout, add a late take, process the drama, or react to how others responded — if it fits your character's voice. You can also ignore it if your character genuinely would.`,
+  ].filter(Boolean).join('\n');
 }
 
 function relationshipLogicFor(char) {
@@ -5436,7 +5491,7 @@ ${intentLine}
 Characters:
 ${charRoster}
 
-Each non-empty reply 6-24 words. Give every speaker a distinct social move and sentence shape. If directly mentioned, answer from inside that role. If a speaker would not naturally respond with a specific anchored line, use "" for that array slot. Return ONLY a JSON array of ${picked.length} strings.`
+Each non-empty reply 6-40 words. Give every speaker a distinct social move and sentence shape. If directly mentioned, answer from inside that role. If a speaker would not naturally respond with a specific anchored line, use "" for that array slot. Return ONLY a JSON array of ${picked.length} strings.`
           }]
         });
         const parsed = parseJsonArrayFromText(res);
@@ -5552,7 +5607,7 @@ Write replies from random anonymous student accounts joining the comment thread.
 Accounts (in order):
 ${botRoster}
 
-Each comment 5-22 words. Match each account's voice. Mostly lowercase/casual. NO hashtags.
+Each comment 5-30 words. Match each account's voice. Mostly lowercase/casual. NO hashtags.
 Return ONLY a JSON array of ${botCount} strings, in order. No other text.`
           }]
         });
@@ -5603,7 +5658,7 @@ ${threadPatternVarietyGuard([post.text, ...charR1.map(cc => cc.text)])}
 
 @${targetSpeaker.handle} just replied: "${targetReply.text}"
 
-Write as the original poster jumping back into their own thread. Reply directly to @${targetSpeaker.handle} or clarify/escalate the thread from your own position. Be reactive, specific, and in character. 6-24 words. No hashtags. No quotes.
+Write as the original poster jumping back into their own thread. Reply directly to @${targetSpeaker.handle} or clarify/escalate the thread from your own position. Be reactive, specific, and in character. 6-40 words. No hashtags. No quotes.
 ${author.id === 'milo' && targetSpeaker.id === 'havoc' && miloFlirtingWithHavoc ? 'MILO/HAVOC BEAT: Milo finds Havoc answering him extremely entertaining and also a little frightening. Let him sound delighted, flustered, reckless, and recalibrating without backing out of the flirt.' : ''}
 Return ONLY the reply text.`
               }],
@@ -5696,7 +5751,7 @@ ${fight.havocOutedRowan ? 'HAVOC/ROWAN OUTING BEAT: Havoc just publicly needled 
 Write as ${fight.replier.name}, and output only the public reply text.
 Your relationship with @${fight.target.handle} is ${fight.miloHavocFlirt ? 'chaotic and reactive: Milo is openly enjoying the danger of getting Havoc attention' : fight.rowanHavocCallout ? 'best-friend charged: Rowan knows exactly what button he hit, and Havoc cannot leave that unanswered' : fight.havocOutedRowan ? 'best-friend dangerous: Havoc said too much on main and Rowan is not letting him get away clean' : fight.warmExchange ? `close and easy (${fight.rel}/100). You see what they said and want to jump in — warmly, playfully, or with the easy familiarity of someone who knows them well` : `charged (${fight.rel}/100). You see what they just said and you can't help yourself`}. You reply to THEM, not to the original post. Voice cues: ${fight.replier.personality}. ${(fight.replier.description||'').slice(0,200)}
 
-Write ONE reply (8-26 words). ${fight.warmExchange ? 'Warm, playful, or familiar.' : 'Tease, joke, flirt, correct, speculate, or clap back only if fitting.'} It should clearly answer @${fight.target.handle}. NO hashtags. NO quotes.
+Write ONE reply (8-40 words). ${fight.warmExchange ? 'Warm, playful, or familiar.' : 'Tease, joke, flirt, correct, speculate, or clap back only if fitting.'} It should clearly answer @${fight.target.handle}. NO hashtags. NO quotes.
 Return ONLY the reply text. No other text.`
             }],
             model: 'fast'
@@ -5816,7 +5871,7 @@ Write as ${fight.target.name}, and output only the reply text.
 Voice cues: ${fight.target.personality}. Your relationship with @${fight.replier.handle} is ${fight.miloHavocFlirt ? 'chaotic, flirty, entertaining, and slightly frightening' : `charged (${fight.rel}/100)`}.
 
 Decide if you would answer or leave it on read. If silence is more in-character, return exactly: SILENCE
-Otherwise write ONE counter-reply (8-24 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, speculative, or sharp. Only twist the knife if that truly fits. Keep rumor/alibi/mentioned-handle roles straight. On GMZ threads, theories and alibi reads are normal as long as uncertainty stays visible. No hashtags. No quotes around the reply.
+Otherwise write ONE counter-reply (8-40 words) directly to @${fight.replier.handle}. It can be playful, amused, dismissive, flirty, embarrassed, speculative, or sharp. Only twist the knife if that truly fits. Keep rumor/alibi/mentioned-handle roles straight. On GMZ threads, theories and alibi reads are normal as long as uncertainty stays visible. No hashtags. No quotes around the reply.
 Return ONLY SILENCE or the reply text.`
                   }],
                   model: 'fast'
@@ -6092,7 +6147,7 @@ Your visible comment:
 ${compactCommentForPrompt({ charId: targetChar.id, text: target.sourceText || '' }, allChars, player)}
 ${player.name} (@${player.handle}) replied to you: "${text}"
 
-Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, giving a short deflection, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, guess what might be missing from the story, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a playful pointed question, speculate, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Treat this as a public thread with multiple people, not a private one-on-one. Respond to what was ACTUALLY just said and the visible thread context. Preserve the visible order of events: if someone else attacked or escalated before ${player.name}, do not claim ${player.name} started it unless your character is openly baiting or lying. If ${player.name} corrects the timeline, answer that correction instead of repeating the same wrong read. Keep your own stance consistent with your previous lines in this thread; do not flip sides or contradict yourself unless you explicitly joke about changing your mind. Do not reverse the logic, invent judgment, or turn appreciation into criticism. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. Stay in character. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, giving a short deflection, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, guess what might be missing from the story, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, ask a playful pointed question, speculate, or be awkward instead of angry. Avoid dead-end closers like "let's see it", "prove it", "we'll see", or "this got interesting". 6-40 words. No quotes.
 `
           }]
         });
@@ -6288,7 +6343,7 @@ ${saturatedLine}
 Characters in order:
 ${roster}
 
-Each reply 6-24 words. Vary shapes. Use @handles when responding directly. No hashtags. No quotes around replies.
+Each reply 6-40 words. Vary shapes. Use @handles when responding directly. No hashtags. No quotes around replies.
 Return ONLY a JSON array of ${responders.length} strings, in order.`
         }]
       });
@@ -6367,7 +6422,7 @@ ${compactCharacterCard(conversationTarget, interrupter)}
 Target:
 ${compactCharacterCard(interrupter, conversationTarget)}
 
-Write as @${conversationTarget.handle}. You were the person @${player.handle} was talking to before @${interrupter.handle} jumped in. Do not ignore the interruption. Reply directly to @${interrupter.handle}; you can also reference @${player.handle} if it matters. Keep it live, specific, and in character. 6-24 words. No hashtags. No quotes.
+Write as @${conversationTarget.handle}. You were the person @${player.handle} was talking to before @${interrupter.handle} jumped in. Do not ignore the interruption. Reply directly to @${interrupter.handle}; you can also reference @${player.handle} if it matters. Keep it live, specific, and in character. 6-40 words. No hashtags. No quotes.
 Return ONLY the reply text.`
           }]
         });
@@ -6479,7 +6534,7 @@ ${compactCharacterCard(havocChar || { id:'havoc', name:'Havoc Fang', handle:'hav
 ${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText, havocOutedRowanReply.text, rowanHistory])}
 ${rowanHistory ? `Previous Rowan lines in this thread:\n${rowanHistory}` : ''}
 
-Write as Rowan replying directly to @${havocChar?.handle || 'havocfang'}. Havoc just outed or needled Rowan about reacting to Keres / "her name" on main. Rowan should clap back: sly, quick, defensive without sounding panicked, and sharp enough to punish Havoc for saying too much. 6-24 words. No hashtags. No quotes.
+Write as Rowan replying directly to @${havocChar?.handle || 'havocfang'}. Havoc just outed or needled Rowan about reacting to Keres / "her name" on main. Rowan should clap back: sly, quick, defensive without sounding panicked, and sharp enough to punish Havoc for saying too much. 6-40 words. No hashtags. No quotes.
 Return ONLY the reply text.`
           }],
           model: 'fast'
@@ -6634,7 +6689,7 @@ Your visible comment:
 ${compactCommentForPrompt({ charId: cChar.id, text: cc.text }, allChars, player)}
 ${player.name} (@${player.handle}) replied to you: "${playerReply}"
 
-Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, deflecting, laughing, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, guess what might be missing from the story, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, speculate, or be awkward instead of angry. 6-24 words. No quotes.
+Write ONE short response to ${player.name}. Stay in character. Preserve the visible order of events: do not claim ${player.name} started, swung first, dodged, or caused something if the recent thread shows someone else did it first. If ${player.name} corrects the timeline, answer that correction instead of repeating the wrong read unless your character is intentionally baiting. Keep your own stance consistent with your previous lines in this thread; do not suddenly reverse your opinion unless you make the reversal part of the joke. Keep the thread roles straight: original poster, tagged handle, alibi/witness, and rumor subject may be different people. If this is about ${player.name} being a hot new transfer with a record/reputation, default toward curiosity, attraction, competitive interest, approval, or trying-not-to-be-impressed. If she is joking, flirting, deflecting, laughing, or clearly doing it for the reaction, meet the humor instead of interrogating her motive. If she roasts you or jokes about shoving you into a locker, do not deny it, redirect it to another character, or claim she is proving someone right; take the hit, escalate the joke, flirt, or answer with a sharper tease. Do not narrate her move back at her and close with "fair", "tactical", or "useful". Havoc should flirt back at a Keres no or distraction joke. Silas should not call Keres a distraction if she is simply backing Jude or Slytherin camaraderie. On GMZ threads, they can speculate, guess what might be missing from the story, or push an alibi theory if they mark it as gossip. Do not bully her or tear her down unless your character has a specific reason. They can tease, flirt, joke, deflect, speculate, or be awkward instead of angry. 6-40 words. No quotes.
 `
                 }]
               });
@@ -9659,6 +9714,7 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
         : '';
       const response = await window.claude.complete({
         label: 'event outcome',
+        maxOutputTokens: (/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|collecting|both|staircase|secrets.out|scandal|arm.in.arm|romantic|seen with|caught with|walking with/i.test(currentEvent?.scenario || '') && /keres|@keresvalen/i.test(currentEvent?.scenario || '')) ? 1600 : 1100,
         messages: [{
           role:'user',
           content: `Narrate a social media event like a dramatic story beat.
@@ -10603,6 +10659,7 @@ function App() {
     const tamsinPressureNote = char.id === 'tamsin' && tamsinRowanHavocKeresConcernSignal(recentContext, player)
       ? `\n${tamsinKeresConcernNote(recentContext, player)}`
       : '';
+    const activeDramaNote = getActiveDramaContext(eventLog, feed, chars, player);
 
     try {
       const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
@@ -10612,6 +10669,7 @@ Voice lane: ${dialogueContractSummaryFor(char)}
 ${buildFeedPostRules()}
 ${compactPlayerStance(char, player)}
 ${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
+${activeDramaNote ? `\n${activeDramaNote}` : ''}
 ${tamsinPressureNote}
 Other campus accounts: ${otherHandles}
 
@@ -11428,6 +11486,7 @@ Write ONE punchy social media post reaction. Use insider language for your own t
 
   async function triggerGmzInspiredTake(char, gmzPost) {
     try {
+      const activeDramaNote = getActiveDramaContext(eventLog, feed, chars, player);
       const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
         `Write as ${char.name} on a campus social app.
 Speaker: ${compactCharacterCard(char, player)}
@@ -11435,6 +11494,7 @@ GMZ: ${compactCharacterCard(GMZ_CHAR)}
 ${buildPublicReplyRules({ gmz: true })}
 ${compactPlayerStance(char, player)}
 ${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
+${activeDramaNote ? `\n${activeDramaNote}` : ''}
 
 GMZ just posted: "${gmzPost.text || ''}"
 
@@ -11709,7 +11769,7 @@ Write ONE GMZ gossip post. Rules:
               return `@${sibling?.handle || p.charId}: "${p.text}"`;
             });
           const eventAvoidTexts = [ev.scenario, ...siblingReactions];
-          const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
+          const raw = await window.claude.complete({ label: 'feed post', maxOutputTokens: isKeromeRomance ? 400 : 250, messages:[{ role:'user', content:
             `Write as ${char.name} on a campus social app.
 Speaker: ${compactCharacterCard(char, player)}
 Voice lane: ${dialogueContractSummaryFor(char)}

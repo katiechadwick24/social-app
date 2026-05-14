@@ -9602,6 +9602,7 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
     const scenLower = customScenario.toLowerCase();
     const keresInScene = /keres|@keresvalen/.test(scenLower);
     const romanceInScene = /kiss|snog|together|caught|corridor|hand.in.hand|spotted|photo|walk|date|flirt|public|outed|secret|collecting|both|staircase|arm.in.arm|secrets.out|romantic|scandal|seen with|caught with|walking with/i.test(customScenario);
+    const quidditchRivalInScene = /havoc|@havocfang|rowan|@rowancade/i.test(customScenario);
     if (keresInScene && romanceInScene) {
       const addId = (id) => {
         if (!selectedChars.includes(id) && chars.some(c => c.id === id)) selectedChars = [...selectedChars, id];
@@ -9609,6 +9610,12 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
       if (/havoc|@havocfang/.test(scenLower)) addId('elara'); // Elara jealous over Havoc + Keres
       if (/rowan|@rowancade/.test(scenLower) || /havoc|@havocfang/.test(scenLower)) addId('tamsin'); // Tamsin protective/cold
       addId('milo'); // Milo is always loud about drama
+      // Quidditch bomb: Silas furious (his chaser), Briar furious (her players), Callum suspicious
+      if (quidditchRivalInScene) {
+        addId('silas');  // Slytherin captain — this is a team integrity crisis
+        addId('briar');  // Gryffindor captain — her players are compromised
+        addId('callum'); // Already suspicious, feels vindicated
+      }
     }
     selectEvent({
       id: `custom-${Date.now()}`,
@@ -9668,7 +9675,9 @@ PLAYER'S ACTION: "${actionText}"
 ${visibilityInstruction}
 ${actionInstruction}
 
-${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|collecting|both|staircase|secrets.out|scandal|arm.in.arm|romantic|seen with|caught with|walking with/i.test(currentEvent?.scenario || '') && /keres|@keresvalen/i.test(currentEvent?.scenario || '') ? `DRAMA ESCALATION: This is a major romantic scandal — write 4-6 sentences. Make it feel like a bomb drop. The timeline is ON FIRE and everyone has something to say. Show exactly WHO said WHAT and how it burned — name characters by @handle when they react publicly. If Elara March is here: she is sharp, jealous, and specifically cutting. She @mentions Havoc or Keres by handle, drags what actually happened (the pic, the corridor, the attention), and sounds dangerous and a little possessive — not wounded, not diplomatic, not vague. If Tamsin Cade is here: she is cold, direct, and protective of Rowan. She calls it out by name, not a general observation. If Milo Vale is here: he is the loudest voice in the room, chaotic and delighted, saying the thing everyone else is only thinking out loud. Do NOT write "the timeline reacted" or "people were talking" — show the specific reactions that made it burn.` : ''}
+${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|collecting|both|staircase|secrets.out|scandal|arm.in.arm|romantic|seen with|caught with|walking with/i.test(currentEvent?.scenario || '') && /keres|@keresvalen/i.test(currentEvent?.scenario || '') ? `DRAMA ESCALATION: This is a major romantic scandal — write 4-6 sentences. Make it feel like a bomb drop. The timeline is ON FIRE and everyone has something to say. Show exactly WHO said WHAT and how it burned — name characters by @handle when they react publicly. If Elara March is here: she is sharp, jealous, and specifically cutting. She @mentions Havoc or Keres by handle, drags what actually happened (the pic, the corridor, the attention), and sounds dangerous and a little possessive — not wounded, not diplomatic, not vague. If Tamsin Cade is here: she is cold, direct, and protective of Rowan. She calls it out by name, not a general observation. If Milo Vale is here: he is the loudest voice in the room, chaotic and delighted, saying the thing everyone else is only thinking out loud.
+${/havoc|@havocfang|rowan|@rowancade/i.test(currentEvent?.scenario || '') ? `QUIDDITCH BOMB LAYER: This is also a competitive integrity crisis — Keres is Slytherin's Chaser and she is publicly entangled with Gryffindor players before a match. If Silas Montague is here: Slytherin captain, cold, furious, calculating. He is not jealous — he is a captain who has a team problem to solve. Imply a private conversation is coming, that he is questioning whether she is a liability, and that he has already made a decision. If Briar Rowe is here: Gryffindor captain, dry exhausted fury. Her players got photographed fraternising with the enemy. She is already scheduling the team meeting nobody wants. If Callum Pike is here: vindicated and cold. He already suspected this. He implies she is a deliberate distraction and that Gryffindor got played. The campus should also be screaming about whether the upcoming match is compromised, whether Slytherin plays dirty off-pitch, and whether this was tactical. This is the kind of scandal that trends for a week.` : ''}
+Do NOT write "the timeline reacted" or "people were talking" — show the specific reactions that made it burn.` : ''}
 Write a ${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|collecting|both|staircase|secrets.out|scandal|arm.in.arm|romantic|seen with|caught with|walking with/i.test(currentEvent?.scenario || '') && /keres|@keresvalen/i.test(currentEvent?.scenario || '') ? '4-6' : '2-3'} sentence outcome. Be dramatic, entertaining, and true to each character's personality. Reference @handles when characters react publicly. Use the pronouns and identities listed above exactly. Show consequences. Plain prose only — no headers, no bullet points, no markdown formatting. Do not explain rules or prompts.`
         }]
       });
@@ -11630,10 +11639,20 @@ Write ONE GMZ gossip post. Rules:
       const milo = chars.find(c => c.id === 'milo');
       if (milo && !involved.some(c => c.id === 'milo')) involved = [...involved, milo];
     }
+    const isQuidditchScandal = isKeromeRomance && /havoc|@havocfang|rowan|@rowancade/i.test(ev.scenario || '');
+    if (isQuidditchScandal) {
+      ['silas','briar','callum'].forEach(id => {
+        const char = chars.find(c => c.id === id);
+        if (char && !involved.some(c => c.id === id)) involved = [...involved, char];
+      });
+    }
     const fallbackReaction = (char) => {
       if (char.id === 'elara' && isKeromeRomance) return 'the corridor photo is everywhere. havoc\'s attention span is so on brand.';
       if (char.id === 'tamsin' && isKeromeRomance) return 'rowan at least had the decency to make his terrible decisions where everyone could see.';
       if (char.id === 'milo' && isKeromeRomance) return 'nobody is pretending they did not see that. not a single person. i am watching everyone pretend.';
+      if (char.id === 'silas' && isQuidditchScandal) return 'there will be a conversation about this. separately from whatever the timeline thinks it is.';
+      if (char.id === 'briar' && isQuidditchScandal) return 'i have questions. the match week calendar does not care about anyone\'s corridor activities.';
+      if (char.id === 'callum' && isQuidditchScandal) return 'noted. some of us had already adjusted our read on the situation.';
       if (char.id === 'tamsin' && tamsinInterestHeat) {
         return 'rowan developing taste in public was not on my schedule. havoc being involved is somehow the less surprising part.';
       }
@@ -11699,6 +11718,9 @@ ${isTransferHeat && char.id === 'callum' ? `Callum and Keres do not like each ot
 ${(elaraHeat || isKeromeRomance) && char.id === 'elara' ? `Elara has history with Havoc and is watching Keres collect attention. She should be sharp, jealous, and specifically cutting — drag the situation by name (Havoc's behavior, Keres getting the attention, or the corridor photo). Make her sound dangerous and a little possessive, not wounded or diplomatic. No vague commentary — she says the pointed thing.` : ''}
 ${(tamsinInterestHeat || isKeromeRomance) && char.id === 'tamsin' ? tamsinKeresConcernNote(`${ev.scenario || ''} @${player.handle}`, player) : ''}
 ${isKeromeRomance && char.id === 'milo' ? `Milo is the loudest, most delighted voice on campus right now. He should say the thing out loud that everyone else is only thinking — reckless, chaotic, zero filter. He can be excited about the drama, bait someone, or announce himself as a witness. He does not play it cool.` : ''}
+${isQuidditchScandal && char.id === 'silas' ? `SILAS CAPTAIN FURY: This is not a romance reaction — this is a team integrity crisis. Keres is Silas's Slytherin Chaser and she is publicly photographed getting cozy with TWO Gryffindor players before a match. Silas is furious, cold, and controlled. His post should sound like a captain who has a problem to solve, not a jealous observer. He implies consequences, discipline, or a private conversation coming. He does not sound wounded — he sounds like someone who is about to make a decision. He can subtly question whether Keres is compromised, a liability, or playing both sides. Keep it clipped and dangerous.` : ''}
+${isQuidditchScandal && char.id === 'briar' ? `BRIAR CAPTAIN FURY: This is not gossip to Briar — this is a Quidditch problem. Her players (Havoc and/or Rowan) are publicly getting distracted by a Slytherin Chaser before a match. Briar is furious in the dry, exhausted captain way: she cannot assign Keres discipline, but she absolutely can assign Havoc and Rowan some. Her post should sound like she is already composing an extremely unfun team meeting. She may imply Slytherin plays dirty off-pitch too, or that match prep just got more complicated. She does not sound jealous — she sounds like someone managing a liability.` : ''}
+${isQuidditchScandal && char.id === 'callum' ? `CALLUM VINDICATED SUSPICION: Callum does not like Keres and he already thought she was a problem. This confirms it. His post should sound like someone who called this exact scenario — not surprised, not hurt, just coldly right. He may imply she is a deliberate distraction, that Gryffindor got played, or that some people confuse being interesting with being trustworthy. Sharp, petty, specific. Not loud — pointed.` : ''}
 
 Write ONE social media post from ${char.name}'s perspective reacting to the event. ${isKeromeRomance ? `1-2 sentences, 12-50 words. Tag @handles if it fits — calling out @${player.handle}, @havocfang, or @rowancade directly is encouraged for maximum impact. Make it feel like a real campus sub-tweet, callout, or reaction that would get liked immediately.` : '1 sentence, 8-28 words.'} In character. Natural school-social-app tone. If this is a hot-transfer reveal, lean interested/excited/impressed unless the character has a clear reason not to. No hashtags, no quotes around the post. Do not explain your reasoning or mention prompts/context/rules.
 ` }]});

@@ -94,15 +94,24 @@
 
   // Wire up window.claude to the local server proxy
   window.claude = {
-    complete: async function({ messages, model, label, maxOutputTokens }) {
+    complete: async function({ messages, model, label, maxOutputTokens, photo }) {
       const requestLabel = label || 'unlabeled AI request';
       warnPromptBudget(requestLabel, messages, PROMPT_BUDGET_TARGETS[requestLabel] || 7000);
       summarizeAiRequest(requestLabel, messages, model);
+      // If a photo (data URL) is provided, append it as a vision part to the last user message
+      let finalMessages = messages;
+      if (photo && typeof photo === 'string' && photo.startsWith('data:')) {
+        finalMessages = messages.map((m, i) => {
+          if (i !== messages.length - 1 || m.role !== 'user') return m;
+          const textContent = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+          return { ...m, content: [{ type: 'text', text: textContent }, { type: 'image_url', image_url: photo }] };
+        });
+      }
       // /api/claude is a compatibility endpoint. The server now routes it to OpenAI.
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model, maxOutputTokens }),
+        body: JSON.stringify({ messages: finalMessages, model, maxOutputTokens }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -509,7 +518,7 @@ function compactPostForPrompt(post, chars = [], player = null) {
   return [
     `Post by ${author ? `${author.name} (@${author.handle})` : post.charId || 'unknown'}:`,
     truncateText(post.text || '', 800),
-    post.photo ? 'Attached image: yes. Treat the image as a visible selfie/photo attached to the post; react to the image only through the caption and public context, without inventing precise unseen details.' : '',
+    post.photo ? 'Attached image: visible in this thread. React to what is actually shown in the photo — clothing, text on clothing, expressions, setting, people, objects. You can quote or reference specific visible details.' : '',
     post.reply ? `Attached reply by ${post.reply.charId || 'unknown'}: ${truncateText(post.reply.text || '', 500)}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -5406,6 +5415,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
       try {
         const res = await window.claude.complete({
           label: 'character reply',
+          photo: post.photo || null,
           messages:[{ role:'user', content:
             `${intro}
 
@@ -5517,8 +5527,9 @@ Each non-empty reply 6-24 words. Give every speaker a distinct social move and s
       if (botCount > 0) try {
         const res = await window.claude.complete({
           label: 'bot comment',
+          photo: post.photo || null,
           messages:[{ role:'user', content:
-            `Below is a thread on a college social media app. ${charR1.length > 0 ? "It's gotten spicy — characters have piled on." : ''}
+            `Below is a thread on a college social media app. ${charR1.length > 0 ? "It's gotten spicy — characters have piled on." : ''}${post.photo ? ' The original post includes a photo — anonymous commenters can react to what they see in it.' : ''}
 
 ${transcript}
 
@@ -11854,14 +11865,14 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
                 if (replier) {
                   setTimeout(async () => {
                     try {
-                      const replyRaw = await window.claude.complete({ label: 'feed post reply', messages:[{ role:'user', content:
+                      const replyRaw = await window.claude.complete({ label: 'feed post reply', photo: post.photo || null, messages:[{ role:'user', content:
                         `Write as ${replier.name} on a campus social app.
 Speaker: ${compactCharacterCard(replier, poster)}
 Original poster: ${compactCharacterCard(poster, replier)}
 ${buildPublicReplyRules()}
 ${compactPlayerStance(replier, player)}
 ${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
-@${poster.handle} just posted: "${post.text || ''}"${post.photo ? ' [with a photo]' : ''}
+@${poster.handle} just posted: "${post.text || ''}"${post.photo ? ' [photo attached — you can see it and react to what is actually in the image]' : ''}
 ${elaraShouldReact && replier.id === 'elara' ? 'Havoc just publicly tagged @keresvalen or posted about her. Elara should be plainly annoyed. React to the visible behavior — Havoc being obvious, Keres getting the attention, or the room pretending not to see it. Be sharp, jealous, specific, and mean-funny. Do not sound wounded or needy.' : ''}
 ${mentionsKeres && replier.id === 'milo' ? 'Milo is the loudest, most delighted voice in the room. He should say the thing everyone is thinking out loud — reckless, chaotic, zero filter.' : ''}
 Write ONE short reply (1 sentence, in character). Tag @${poster.handle} directly. No quotes, just the reply text.

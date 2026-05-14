@@ -5199,6 +5199,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
   const safePostReplyText = post.reply?.text || null;
   const playerRelFor = (c) => effectivePlayerRelationship(c, eventLog, dms, groupChats).value;
   const threadMemory = recentCompactMemoryContext({ feed, eventLog, groupChats, dms, player, allChars, channel:'public', limit: 4 });
+  const activeDramaContext = getActiveDramaContext(eventLog, feed, chars, player);
   const compactOriginalPost = compactPostForPrompt(post, allChars, player);
   const threadPhraseGuard = phraseRepetitionGuard(feed, post?.text || '', { dms, groupChats });
   const isGMZThread = post?.charId === '__gmz__' || post?.isGMZ || /@?gmz|breaking:|sources confirm:|exclusive:|witnesses say:/i.test(post?.text || '');
@@ -5481,6 +5482,7 @@ function PostThreadView({ post, chars, player, onBack, onCharClick, feed, onPost
 
 ${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRule })}
 ${threadMemory}
+${activeDramaContext ? `\n${activeDramaContext}` : ''}
 ${roleContext}
 ${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}${vaguePostRule}${visibleAnchorRule}
 ${dialogueSeparationRule}
@@ -5594,7 +5596,7 @@ Each non-empty reply 6-40 words. Give every speaker a distinct social move and s
 ${transcript}
 
 ${buildBotCommentRules()}
-Relevant people: ${[author, player, ...picked].filter(Boolean).map(c => compactCharacterCard(c)).join('\n')}
+${activeDramaContext ? `${activeDramaContext}\n` : ''}Relevant people: ${[author, player, ...picked].filter(Boolean).map(c => compactCharacterCard(c)).join('\n')}
 ${gmzSpeculationRule ? 'This is a gossip thread: speculate as rumor/theory/question, not confirmed canon.' : ''}
 ${isKeresPost ? `KERES AUDIENCE MODE:
 - This is Keres's thread. Audience accounts should mostly simp, thirst, hype her up, act impressed, cheer the mess, or be playfully overwhelmed.
@@ -6331,6 +6333,7 @@ ${allyFollowupRule}
 ${keresFollowupBiteRule}
 ${tamsinFollowupPressure ? tamsinKeresConcernNote(tamsinFollowupText, player) : ''}
 ${threadMemory}
+${activeDramaContext ? `\n${activeDramaContext}` : ''}
 ${threadRoleContext(`${post.text || ''} ${sourceText || ''} ${playerText || ''}`, char, [player, ...chars, GMZ_CHAR])}
 ${threadPatternVarietyGuard([post.text, sourceText, transcript, playerText])}
 ${dialogueSeparationRule}

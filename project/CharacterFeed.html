@@ -5032,6 +5032,14 @@ const EVENT_XP_DEFAULTS = {
   opportunity: [100, 210],
 };
 
+const STORY_PULSE_MIN_AWAY_MS = 8 * 60 * 60 * 1000;
+const STORY_PULSE_COOLDOWN_MS = 4 * 60 * 60 * 1000;
+const STORY_PULSE_MAX_DAY_ADVANCE = 3;
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
 function rollEventXp(range = [80, 180]) {
   const low = Math.max(20, Number(range?.[0]) || 80);
   const high = Math.max(low + 1, Number(range?.[1]) || 180);
@@ -5113,6 +5121,144 @@ function normalizeCampusEvent(raw = {}, index = 0, chars = []) {
     chars: charIds.length ? charIds : fallbackEventCharIds(chars, scenario),
     xp: [minXp, maxXp],
     generated: true,
+  };
+}
+
+function formatAwayDuration(ms = 0) {
+  const hours = Math.max(1, Math.round(ms / (60 * 60 * 1000)));
+  if (hours < 24) return `${hours}h`;
+  const days = Math.max(1, Math.round(hours / 24));
+  return `${days}d`;
+}
+
+function weightedStoryChar(chars = [], avoidIds = []) {
+  const avoid = new Set(avoidIds);
+  const pool = chars.filter(c => c?.id && !avoid.has(c.id));
+  if (!pool.length) return null;
+  const weighted = pool.map(c => {
+    let w = 1;
+    const text = `${c.personality || ''} ${c.position || ''} ${c.description || ''}`;
+    if (/chaotic|sharp|gossip|nosy|reactive|provocative|flirty|captain|observant|vindictive|snarky/i.test(text)) w += 2;
+    if (/havoc|rowan|silas|vesper|tamsin|milo|jude|callum/i.test(c.id)) w += 1;
+    return { c, w };
+  });
+  const total = weighted.reduce((sum, item) => sum + item.w, 0);
+  let roll = Math.random() * total;
+  for (const item of weighted) {
+    roll -= item.w;
+    if (roll <= 0) return item.c;
+  }
+  return weighted[0].c;
+}
+
+function pulsePostEngagement(multiplier = 1) {
+  return {
+    likes: Math.floor((52000 + Math.random() * 420000) * multiplier),
+    reposts: Math.floor((1200 + Math.random() * 18000) * multiplier),
+    comments: Math.floor(24 + Math.random() * 260 * multiplier),
+  };
+}
+
+function createStoryPulse({ chars = [], player = DEFAULT_PLAYER, feed = [], eventLog = [], day = DEFAULT_DAY, gapMs = 0, source = 'return' } = {}) {
+  const allHandles = [player, ...chars].map(c => `@${c.handle}`).join(', ');
+  const havoc = chars.find(c => c.id === 'havoc') || weightedStoryChar(chars);
+  const rowan = chars.find(c => c.id === 'rowan') || weightedStoryChar(chars, [havoc?.id]);
+  const silas = chars.find(c => c.id === 'silas') || weightedStoryChar(chars, [havoc?.id, rowan?.id]);
+  const vesper = chars.find(c => c.id === 'vesper') || weightedStoryChar(chars, [silas?.id]);
+  const tamsin = chars.find(c => c.id === 'tamsin') || weightedStoryChar(chars, [rowan?.id]);
+  const callum = chars.find(c => c.id === 'callum') || weightedStoryChar(chars, [rowan?.id, havoc?.id]);
+  const noisy = weightedStoryChar(chars, []);
+  const second = weightedStoryChar(chars, [noisy?.id]);
+  const third = weightedStoryChar(chars, [noisy?.id, second?.id]);
+  const awayLabel = source === 'advance_day' ? 'overnight' : formatAwayDuration(gapMs);
+  const recentPlayerPost = (feed || []).find(p => p?.charId === 'player' && p?.text);
+  const recentHook = recentPlayerPost
+    ? `after your post about "${truncateText(recentPlayerPost.text, 80)}"`
+    : 'after the timeline went quiet around you';
+
+  const templates = [
+    {
+      kind: 'gmz',
+      title: 'GMZ woke the feed up',
+      eventType: 'gossip',
+      chars: [havoc?.id, rowan?.id, tamsin?.id].filter(Boolean),
+      sourceCharId: '__gmz__',
+      targetCharId: rowan?.id || havoc?.id,
+      scenario: `GMZ posted that ${player.name}'s name is still moving through the Gryffindor side ${recentHook}, and @${tamsin?.handle || 'tamsincade'} appears to be asking sharper questions than anyone expected.`,
+      postText: `sources say @${player.handle} went quiet and somehow @${rowan?.handle || 'rowancade'}, @${havoc?.handle || 'havocfang'}, and @${tamsin?.handle || 'tamsincade'} all got more interesting. witness math is ugly.`,
+      actionCue: 'Answer publicly, DM the person asking questions, or let GMZ keep shaping the story.',
+    },
+    {
+      kind: 'dm',
+      title: 'Someone slid into your DMs',
+      eventType: 'tag',
+      chars: [silas?.id, vesper?.id].filter(Boolean),
+      sourceCharId: silas?.id || noisy?.id,
+      targetCharId: silas?.id || noisy?.id,
+      scenario: `@${silas?.handle || noisy?.handle || 'silasmontague'} noticed the silence ${awayLabel} and sent a private message that sounds less like concern and more like a captain deciding whether this becomes useful or expensive.`,
+      dmText: `you went quiet long enough for people to start interpreting it. irritatingly, some of them are almost clever.`,
+      postText: `silence is only strategic when the room cannot tell you are using it.`,
+      actionCue: 'Open the DM, turn it into an event, or ignore him and let the interpretation harden.',
+    },
+    {
+      kind: 'opportunity',
+      title: 'A clean opening appeared',
+      eventType: 'opportunity',
+      chars: [callum?.id, vesper?.id, silas?.id].filter(Boolean),
+      sourceCharId: callum?.id || vesper?.id || noisy?.id,
+      targetCharId: callum?.id || vesper?.id || noisy?.id,
+      scenario: `@${callum?.handle || 'callumpike'} and @${vesper?.handle || 'vesperholloway'} both touched the same argument from opposite sides: whether ${player.name} is talent, distraction, or leverage. Nobody has landed the final line yet.`,
+      postText: `funny how everyone says distraction when they mean threat and then acts shocked when the threat can read.`,
+      actionCue: 'Use the opening, DM one of them, or do nothing and watch who claims the angle.',
+    },
+    {
+      kind: 'scandal',
+      title: 'The group chats got bored',
+      eventType: 'scandal',
+      chars: [noisy?.id, second?.id, third?.id].filter(Boolean),
+      sourceCharId: noisy?.id || '__gmz__',
+      targetCharId: noisy?.id,
+      scenario: `While ${player.name} was absent, ${[noisy, second].filter(Boolean).map(c => `@${c.handle}`).join(' and ') || 'two campus accounts'} turned a small silence into a theory thread. The annoying part is that one detail is close enough to sting.`,
+      postText: `every theory thread gets funnier when the person it is about refuses to rescue anyone from guessing wrong.`,
+      actionCue: `Post, DM, or let the group chats keep inventing. People in play: ${allHandles}.`,
+    },
+  ];
+
+  const shuffled = templates
+    .filter(t => t.scenario && (t.chars || []).length)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 3);
+  const createdAt = Date.now();
+  return {
+    id: `pulse-${createdAt}`,
+    source,
+    day,
+    awayLabel,
+    createdAt,
+    hooks: shuffled.map((hook, index) => ({
+      ...hook,
+      id: `pulse-hook-${createdAt}-${index}`,
+      xp: EVENT_XP_DEFAULTS[hook.eventType] || [80, 180],
+    })),
+  };
+}
+
+function storyPulsePostFromHook(hook, chars = [], player = DEFAULT_PLAYER) {
+  if (!hook?.postText) return null;
+  const now = Date.now();
+  const charId = hook.sourceCharId || '__gmz__';
+  const engagement = pulsePostEngagement(charId === '__gmz__' ? 1.35 : 1);
+  const postId = `story-pulse-${now}-${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id: postId,
+    charId,
+    text: hook.postText,
+    ...engagement,
+    timestamp: now - Math.floor(Math.random() * 22 * 60 * 1000),
+    reply: null,
+    botComments: [],
+    charLikes: charId !== '__gmz__' ? pickCharLikes({ id: postId, charId }, chars, player) : [],
+    storyPulseId: hook.id,
   };
 }
 
@@ -7250,7 +7396,7 @@ function MatchDayBanner({ match, day, onWatch }) {
 }
 
 // ─── Feed Screen ──────────────────────────────────────────────────
-function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, setTab, onCompose, onOpenThread, onWatchMatch, currentMatch, onRefreshFeed, tweaks = TWEAK_DEFAULTS, onOpenTweaks }) {
+function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, setTab, onCompose, onOpenThread, onWatchMatch, currentMatch, onRefreshFeed, onAdvanceDay, tweaks = TWEAK_DEFAULTS, onOpenTweaks }) {
   const [showEvent, setShowEvent] = useState(false);
   const [pullStart, setPullStart] = useState(null);
   const [pullDistance, setPullDistance] = useState(0);
@@ -7334,13 +7480,21 @@ function FeedScreen({ chars, player, feed, setFeed, day, onCharClick, onEvent, s
       </div>
 
       {/* Feed actions */}
-      <div style={{display:'flex', justifyContent:'center', gap:12, padding:'10px 16px 12px', background:C.bg, borderTop:`1px solid ${C.border}`, flexShrink:0}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr auto auto', gap:10, padding:'10px 12px 12px', background:C.bg, borderTop:`1px solid ${C.border}`, flexShrink:0}}>
+        <button onClick={onAdvanceDay} style={{
+          background:C.card2, color:C.text, border:`1px solid ${C.border}`,
+          borderRadius:24, padding:'0 14px', minHeight:50, fontSize:13, fontWeight:800, cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center', gap:6, minWidth:0,
+        }}>
+          <span style={{fontSize:16}}>☾</span>
+          <span style={{whiteSpace:'nowrap'}}>Advance Day</span>
+        </button>
         <button onClick={() => onEvent()} style={{
           background:'linear-gradient(135deg, #4dabf7, #2280d2)', color:'#fff', border:'none',
-          borderRadius:28, padding:'13px 28px', fontSize:16, fontWeight:700, cursor:'pointer',
+          borderRadius:28, padding:'0 18px', minHeight:50, fontSize:14, fontWeight:800, cursor:'pointer',
           display:'flex', alignItems:'center', gap:8, boxShadow:'0 3px 14px rgba(77,171,247,0.28)',
         }}>
-          📣 Custom Event
+          📣 Event
         </button>
         <button onClick={onCompose} style={{
           background:C.blue, color:'#fff', border:'none',
@@ -10063,6 +10217,68 @@ Write a ${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|c
   );
 }
 
+function StoryPulseModal({ pulse, chars, player, onClose, onUseEvent, onOpenDM, onOpenThread }) {
+  const allChars = [...chars, player, GMZ_CHAR];
+  const hooks = pulse?.hooks || [];
+  if (!pulse || hooks.length === 0) return null;
+
+  const typeLabel = pulse.source === 'advance_day' ? `Day ${pulse.day}` : `Away ${pulse.awayLabel || ''}`;
+
+  return (
+    <div style={{position:'absolute', inset:0, zIndex:180, background:'rgba(0,0,0,0.72)', display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
+      <div style={{width:'100%', maxHeight:'92%', background:C.bg, borderTopLeftRadius:22, borderTopRightRadius:22, border:`1px solid ${C.border}`, overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 -18px 50px rgba(0,0,0,0.42)'}}>
+        <div style={{padding:'16px 16px 12px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
+          <div style={{width:42, height:42, borderRadius:'50%', background:`${C.blue}22`, color:C.blue, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0}}>✦</div>
+          <div style={{flex:1, minWidth:0}}>
+            <div style={{color:C.muted, fontSize:12, fontWeight:800, letterSpacing:'0.04em', textTransform:'uppercase'}}>{typeLabel}</div>
+            <h2 style={{color:C.text, fontSize:20, fontWeight:850, lineHeight:1.1, marginTop:2}}>While you were gone</h2>
+          </div>
+          <button onClick={onClose} style={{background:C.card2, color:C.muted, border:'none', borderRadius:'50%', width:36, height:36, fontSize:20, cursor:'pointer', flexShrink:0}}>×</button>
+        </div>
+
+        <div style={{padding:'14px 14px 18px', overflowY:'auto'}}>
+          {hooks.map((hook, index) => {
+            const t = EVENT_TYPES[hook.eventType] || EVENT_TYPES.gossip;
+            const people = (hook.chars || []).map(id => allChars.find(c => c.id === id)).filter(Boolean);
+            const dmChar = allChars.find(c => c.id === hook.targetCharId);
+            return (
+              <div key={hook.id} style={{background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:14, marginBottom:12}}>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:10}}>
+                  <div style={{width:26, height:26, borderRadius:'50%', background:`${t.color}18`, color:t.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:900}}>{index + 1}</div>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{color:t.color, fontSize:11, fontWeight:850, textTransform:'uppercase', letterSpacing:'0.04em'}}>{t.label}</div>
+                    <div style={{color:C.text, fontSize:15, fontWeight:850, lineHeight:1.2}}>{hook.title}</div>
+                  </div>
+                  <div style={{display:'flex', flexShrink:0}}>
+                    {people.slice(0,3).map((c, i) => (
+                      <div key={c.id} style={{marginLeft:i ? -8 : 0, position:'relative', zIndex:4-i}}>
+                        <Avatar char={c} size={28} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p style={{color:C.text, fontSize:14, lineHeight:1.55, marginBottom:8}}>{hook.scenario}</p>
+                <p style={{color:C.muted, fontSize:12, lineHeight:1.45, marginBottom:12}}>{hook.actionCue}</p>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+                  <button onClick={() => onUseEvent(hook)} style={{background:C.blue, color:'#fff', border:'none', borderRadius:12, padding:'10px 12px', fontSize:13, fontWeight:850, cursor:'pointer'}}>Play Event</button>
+                  {hook.dmText && dmChar ? (
+                    <button onClick={() => onOpenDM(dmChar)} style={{background:C.card2, color:C.text, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 12px', fontSize:13, fontWeight:800, cursor:'pointer'}}>Open DM</button>
+                  ) : hook.postId ? (
+                    <button onClick={() => onOpenThread(hook)} style={{background:C.card2, color:C.text, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 12px', fontSize:13, fontWeight:800, cursor:'pointer'}}>Open Thread</button>
+                  ) : (
+                    <button onClick={onClose} style={{background:C.card2, color:C.text, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 12px', fontSize:13, fontWeight:800, cursor:'pointer'}}>Let It Spread</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <button onClick={onClose} style={{width:'100%', background:C.card2, color:C.muted, border:`1px solid ${C.border}`, borderRadius:14, padding:'12px', fontSize:14, fontWeight:800, cursor:'pointer'}}>Back to feed</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Activity Log helpers (shared by Activity > Log tab) ─────────
 function LogScoreRow({ ch, allChars }) {
   const isNumeric = typeof ch.value === 'number';
@@ -10510,7 +10726,8 @@ function App() {
       chars: normalizeCharactersIdentity(state.chars || []),
       player: normalizeCharacterIdentity(state.player || DEFAULT_PLAYER),
       stateVersion: SAVE_STATE_VERSION,
-      savedAt: Date.now()
+      savedAt: Date.now(),
+      storyPulseSeenAt: Number(state.storyPulseSeenAt || 0)
     };
   }
 
@@ -10535,6 +10752,7 @@ function App() {
     if (saved.groupChats) setGroupChatsRaw(normalizeGroupChats(repairPromptLeakGroupChats(saved.groupChats, savedChars, savedPlayer)));
     setEventLogRaw(ensureCanonEventLog(saved.eventLog || []));
     if (typeof saved.day === 'number') setDayRaw(saved.day);
+    if (typeof saved.storyPulseSeenAt === 'number') setStoryPulseSeenAt(saved.storyPulseSeenAt);
   }
 
   function chooseSavedState(serverState, localState) {
@@ -10594,10 +10812,14 @@ function App() {
   const [groupChats, setGroupChatsRaw] = useState(DEFAULT_GROUP_CHATS);
   const [eventLog, setEventLogRaw] = useState([]);
   const [day, setDayRaw] = useState(DEFAULT_DAY);
+  const [storyPulseSeenAt, setStoryPulseSeenAt] = useState(0);
+  const [storyPulse, setStoryPulse] = useState(null);
   const [stateLoaded, setStateLoaded] = useState(false);
   const feedRelationshipKeysRef = useRef(new Set());
   const prevRelTiersRef = useRef({});
   const feedRef = useRef([]);
+  const resumeGapMsRef = useRef(0);
+  const storyPulseCreatedRef = useRef(false);
   useEffect(() => { feedRef.current = feed; }, [feed]);
   const gmzStateRef = useRef({ chars: [], player: null, eventLog: [] });
   useEffect(() => { gmzStateRef.current = { chars, player, eventLog }; }, [chars, player, eventLog]);
@@ -10626,6 +10848,7 @@ function App() {
       day: DEFAULT_DAY,
       stateVersion: SAVE_STATE_VERSION,
       savedAt: Date.now(),
+      storyPulseSeenAt: 0,
     };
   }
 
@@ -10642,6 +10865,7 @@ function App() {
     const localSaved = loadLocalState();
     if (isFileMode()) {
       if (isCurrentSave(localSaved)) {
+        resumeGapMsRef.current = Math.max(0, Date.now() - Number(localSaved.savedAt || Date.now()));
         applySavedState(localSaved);
       } else {
         window.localStorage.removeItem(LOCAL_STATE_KEY);
@@ -10652,6 +10876,7 @@ function App() {
     fetch('/api/state').then(r => r.json()).then(saved => {
       const bestSaved = chooseSavedState(saved, localSaved);
       if (bestSaved) {
+        resumeGapMsRef.current = Math.max(0, Date.now() - Number(bestSaved.savedAt || Date.now()));
         applySavedState(bestSaved);
         if (bestSaved === localSaved) serverSaveNow(bestSaved);
       }
@@ -10659,7 +10884,10 @@ function App() {
     }).catch(() => {
       // Server unreachable or returned unparseable data — never wipe progress.
       // Fall back to localStorage if it has a valid save.
-      if (isCurrentSave(localSaved)) applySavedState(localSaved);
+      if (isCurrentSave(localSaved)) {
+        resumeGapMsRef.current = Math.max(0, Date.now() - Number(localSaved.savedAt || Date.now()));
+        applySavedState(localSaved);
+      }
       setStateLoaded(true);
     });
   }, []);
@@ -10676,19 +10904,19 @@ function App() {
 
   useEffect(() => {
     if (!stateLoaded) return;
-    serverSave({ chars, player, feed, dms, groupChats, eventLog, day });
-  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day]);
+    serverSave({ chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt });
+  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt]);
 
   useEffect(() => {
     if (!stateLoaded) return;
-    const flushSave = () => serverSaveNow({ chars, player, feed, dms, groupChats, eventLog, day });
+    const flushSave = () => serverSaveNow({ chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt });
     window.addEventListener('pagehide', flushSave);
     window.addEventListener('beforeunload', flushSave);
     return () => {
       window.removeEventListener('pagehide', flushSave);
       window.removeEventListener('beforeunload', flushSave);
     };
-  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day]);
+  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt]);
 
   useEffect(() => {
     if (!stateLoaded || !feed?.length) return;
@@ -10800,6 +11028,9 @@ function App() {
     setDmNotifs({});
     setActiveMatch(null);
     setActivitySection('posts');
+    setStoryPulse(null);
+    setStoryPulseSeenAt(0);
+    storyPulseCreatedRef.current = false;
     setTab('profile');
     setNavStack([]);
     serverSaveNow(next);
@@ -10883,6 +11114,119 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
         isPullGenerated: true,
       }, ...f]);
     }
+  }
+
+  function applyStoryPulse(nextPulse, { advanceDays = 0 } = {}) {
+    if (!nextPulse?.hooks?.length) return;
+    const postPairs = nextPulse.hooks.map(hook => ({
+      hook,
+      post: storyPulsePostFromHook(hook, chars, player),
+    }));
+    const hooks = postPairs.map(({ hook, post }) => post ? { ...hook, postId: post.id } : hook);
+    const posts = postPairs.map(pair => pair.post).filter(Boolean);
+    const appliedPulse = {
+      ...nextPulse,
+      day: day + advanceDays,
+      hooks,
+    };
+    if (advanceDays) setDay(d => d + advanceDays);
+    if (posts.length) setFeed(f => [...posts, ...f]);
+    hooks.filter(h => h.dmText && h.targetCharId).forEach(hook => {
+      const target = chars.find(c => c.id === hook.targetCharId);
+      if (!target) return;
+      const msg = {
+        role: 'char',
+        charId: target.id,
+        text: hook.dmText,
+        id: Date.now() + Math.random(),
+        ts: Date.now(),
+        openedBy: 'char',
+        originContext: `story pulse: ${hook.title}`,
+      };
+      setDms(d => ({ ...d, [target.id]: [...(d[target.id] || []), msg] }));
+      setDmNotifs(n => ({ ...n, [target.id]: (n[target.id] || 0) + 1 }));
+    });
+    setEventLog(log => [{
+      id: appliedPulse.id,
+      type: 'event',
+      eventType: 'gossip',
+      visibility: 'public',
+      title: 'Story pulse',
+      scenario: appliedPulse.source === 'advance_day'
+        ? `Day ${appliedPulse.day} opened with ${hooks.length} new story hooks.`
+        : `Keres was away for ${appliedPulse.awayLabel}; the timeline moved without her.`,
+      action: 'Story pulse generated new playable hooks.',
+      outcome: hooks.map(h => h.title).join(' / '),
+      chars: [...new Set(hooks.flatMap(h => h.chars || []))],
+      participants: ['player', ...new Set(hooks.flatMap(h => h.chars || []))],
+      relationshipApplied: false,
+      storyPulse: true,
+      timestamp: Date.now(),
+    }, ...log].slice(0, 30));
+    setStoryPulse(appliedPulse);
+    setStoryPulseSeenAt(Date.now());
+    storyPulseCreatedRef.current = true;
+  }
+
+  function createAndApplyStoryPulse({ source = 'return', gapMs = resumeGapMsRef.current, advanceDays = 0 } = {}) {
+    const pulse = createStoryPulse({
+      chars,
+      player,
+      feed,
+      eventLog,
+      day: day + advanceDays,
+      gapMs,
+      source,
+    });
+    applyStoryPulse(pulse, { advanceDays });
+  }
+
+  useEffect(() => {
+    if (!stateLoaded || storyPulseCreatedRef.current) return;
+    const gapMs = resumeGapMsRef.current;
+    const recentlyPulsed = storyPulseSeenAt && (Date.now() - storyPulseSeenAt) < STORY_PULSE_COOLDOWN_MS;
+    if (gapMs < STORY_PULSE_MIN_AWAY_MS || recentlyPulsed) return;
+    const advanceDays = gapMs >= 20 * 60 * 60 * 1000
+      ? clampNumber(Math.floor(gapMs / (24 * 60 * 60 * 1000)), 1, STORY_PULSE_MAX_DAY_ADVANCE)
+      : 0;
+    createAndApplyStoryPulse({ source: 'return', gapMs, advanceDays });
+  }, [stateLoaded, chars.length]);
+
+  function handleAdvanceDay() {
+    setStoryPulse(null);
+    createAndApplyStoryPulse({ source: 'advance_day', gapMs: 24 * 60 * 60 * 1000, advanceDays: 1 });
+  }
+
+  function closeStoryPulse() {
+    setStoryPulse(null);
+  }
+
+  function handleStoryPulseEvent(hook) {
+    if (!hook) return;
+    setStoryPulse(null);
+    setActiveEvent({
+      id: `pulse-event-${Date.now()}`,
+      type: hook.eventType || 'gossip',
+      scenario: hook.scenario,
+      chars: hook.chars || [],
+      xp: hook.xp || EVENT_XP_DEFAULTS[hook.eventType || 'gossip'],
+      custom: true,
+      canon: true,
+    });
+  }
+
+  function handleStoryPulseDM(char) {
+    setStoryPulse(null);
+    handleOpenChat(char);
+  }
+
+  function handleStoryPulseThread(hook) {
+    if (!hook?.postId) return;
+    const post = feed.find(p => p.id === hook.postId);
+    if (!post) return;
+    setStoryPulse(null);
+    pushNav();
+    setThreadPost(post);
   }
 
   // ── Navigation helpers ────────────────────────────────────────
@@ -12037,12 +12381,12 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
   } else {
     const mainScreen = (() => {
       switch(tab) {
-        case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
+        case 'feed': return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} onAdvanceDay={handleAdvanceDay} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
         case 'activity': return <ActivityScreen chars={chars} player={player} onEvent={handleEvent} feed={feed} dms={dms} eventLog={eventLog} onOpenChat={() => {}} onOpenThread={post => { pushNav(); setThreadPost(post); }} section={activitySection} setSection={setActivitySection} />;
         case 'messages': return <MessagesScreen chars={chars} player={player} dms={dms} onOpenChat={handleOpenChat} dmNotifs={dmNotifs} setDmNotifs={setDmNotifs} groupChats={groupChats} onOpenGroup={handleOpenGroup} setGroupChats={setGroupChats} />;
         case 'notifications': return <NotificationsScreen chars={chars} player={player} feed={feed} onOpenThread={post => { pushNav(); setThreadPost(post); }} onCharClick={handleViewChar} />;
         case 'profile': return <ProfileScreen player={player} chars={chars} eventLog={eventLog} dms={dms} groupChats={groupChats} onEditChar={handleEditChar} onCreateChar={handleCreateChar} onCharClick={handleViewChar} onShowLog={() => { setActivitySection('log'); setTab('activity'); }} onResetGame={handleResetGame} onSaveBackup={handleSaveBackup} />;
-        default: return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
+        default: return <FeedScreen chars={chars} player={player} feed={feed} setFeed={setFeed} day={day} onCharClick={handleViewChar} onEvent={handleEvent} setTab={setTab} onCompose={() => setComposing(true)} onOpenThread={post => { pushNav(); setThreadPost(post); }} onWatchMatch={handleWatchMatch} currentMatch={currentMatch} onRefreshFeed={handleRefreshFeed} onAdvanceDay={handleAdvanceDay} tweaks={tweaks} onOpenTweaks={() => setTweaksOpen(true)} />;
       }
     })();
 
@@ -12058,6 +12402,17 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
   const appContent = (
     <div style={{display:'flex', flexDirection:'column', height:'100%', background:C.bg, position:'relative', overflow:'hidden'}}>
       {screenContent}
+        {storyPulse && (
+          <StoryPulseModal
+            pulse={storyPulse}
+            chars={chars}
+            player={player}
+            onClose={closeStoryPulse}
+            onUseEvent={handleStoryPulseEvent}
+            onOpenDM={handleStoryPulseDM}
+            onOpenThread={handleStoryPulseThread}
+          />
+        )}
         {activeMatch && (
           <LiveMatchModal match={activeMatch} chars={chars} player={player} onClose={() => setActiveMatch(null)} onPostToFeed={handleMatchPost} onMatchEnd={handleMatchEnd} />
         )}

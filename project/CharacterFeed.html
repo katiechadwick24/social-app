@@ -89,6 +89,7 @@
     'fallback rewrite': 4000,
     'profile feeling': 3000,
     'profile analysis': 4000,
+    'visual evidence': 5000,
     'event outcome': 7000,
   };
 
@@ -510,6 +511,106 @@ function compactPlayerCard(player) {
   return compactCharacterCard(player);
 }
 
+const VISUAL_EVIDENCE_VERSION = 1;
+
+function visualEvidencePhotoKey(photo = '') {
+  const text = String(photo || '');
+  if (!text.startsWith('data:')) return '';
+  const sample = `${text.length}:${text.slice(0, 180)}:${text.slice(-180)}`;
+  let hash = 2166136261;
+  for (let i = 0; i < sample.length; i++) {
+    hash ^= sample.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${text.length}:${(hash >>> 0).toString(36)}`;
+}
+
+function visualEvidenceArray(value, limit = 8, maxLen = 150) {
+  const raw = Array.isArray(value)
+    ? value
+    : (typeof value === 'string' && value.trim() ? [value] : []);
+  return raw
+    .map(v => String(v || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, limit)
+    .map(v => truncateText(v, maxLen));
+}
+
+function normalizeVisualEvidence(raw = {}, photo = '') {
+  const kind = ['photo', 'screenshot', 'mixed', 'unknown'].includes(String(raw.kind || '').toLowerCase())
+    ? String(raw.kind || '').toLowerCase()
+    : 'unknown';
+  const screenshot = raw.screenshot && typeof raw.screenshot === 'object' ? raw.screenshot : {};
+  return {
+    version: VISUAL_EVIDENCE_VERSION,
+    status: 'ready',
+    photoKey: visualEvidencePhotoKey(photo),
+    kind,
+    summary: truncateText(String(raw.summary || '').replace(/\s+/g, ' ').trim(), 260),
+    visibleFacts: visualEvidenceArray(raw.visibleFacts, 10, 160),
+    screenshot: {
+      handles: visualEvidenceArray(screenshot.handles, 10, 80),
+      captions: visualEvidenceArray(screenshot.captions, 5, 180),
+      visibleReplies: visualEvidenceArray(screenshot.visibleReplies, 8, 180),
+      metrics: visualEvidenceArray(screenshot.metrics, 6, 100),
+      timestamps: visualEvidenceArray(screenshot.timestamps, 6, 100),
+      appActions: visualEvidenceArray(screenshot.appActions, 6, 130),
+    },
+    uncertain: visualEvidenceArray(raw.uncertain, 6, 150),
+    analyzedAt: Date.now(),
+  };
+}
+
+function visualEvidenceNeedsAnalysis(post = {}) {
+  const key = visualEvidencePhotoKey(post.photo);
+  if (!key) return false;
+  const evidence = post.visualEvidence || {};
+  if (evidence.photoKey !== key || evidence.version !== VISUAL_EVIDENCE_VERSION) return true;
+  return evidence.status !== 'ready' && evidence.status !== 'failed';
+}
+
+function visualEvidenceFailed(photo = '', error = '') {
+  return {
+    version: VISUAL_EVIDENCE_VERSION,
+    status: 'failed',
+    photoKey: visualEvidencePhotoKey(photo),
+    error: truncateText(String(error || 'visual analysis unavailable'), 180),
+    analyzedAt: Date.now(),
+  };
+}
+
+function visualEvidenceLines(label, values = []) {
+  if (!values.length) return [];
+  return [`- ${label}:`, ...values.map(v => `  - ${v}`)];
+}
+
+function visualEvidencePromptBlock(post = {}) {
+  if (!post?.photo) return '';
+  const evidence = post.visualEvidence || {};
+  const key = visualEvidencePhotoKey(post.photo);
+  if (evidence.status !== 'ready' || evidence.photoKey !== key || evidence.version !== VISUAL_EVIDENCE_VERSION) {
+    return 'Attached image: visible in this thread. React only to what is actually shown in the photo or screenshot. Do not invent unreadable text, identities, off-screen actions, deleted posts, or secret context.';
+  }
+
+  const screenshot = evidence.screenshot || {};
+  const lines = [
+    'VISUAL EVIDENCE CACHE:',
+    `- Image type: ${evidence.kind || 'unknown'}`,
+    evidence.summary ? `- Summary: ${evidence.summary}` : '',
+    ...visualEvidenceLines('Visible facts', evidence.visibleFacts || []),
+    ...visualEvidenceLines('Readable handles', screenshot.handles || []),
+    ...visualEvidenceLines('Readable captions/text', screenshot.captions || []),
+    ...visualEvidenceLines('Visible replies/comments', screenshot.visibleReplies || []),
+    ...visualEvidenceLines('Visible metrics', screenshot.metrics || []),
+    ...visualEvidenceLines('Visible timestamps', screenshot.timestamps || []),
+    ...visualEvidenceLines('Visible app actions', screenshot.appActions || []),
+    ...visualEvidenceLines('Uncertain or low-confidence reads', evidence.uncertain || []),
+    '- Treat this as visible evidence only. Do not infer off-screen actions, hidden motives, deleted posts, relationships, or identities beyond readable text, supplied caption, and known app context.',
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
 function compactPostForPrompt(post, chars = [], player = null) {
   if (!post) return '';
   const author = post.charId === 'player'
@@ -519,7 +620,7 @@ function compactPostForPrompt(post, chars = [], player = null) {
   return [
     `Post by ${author ? `${author.name} (@${author.handle})` : post.charId || 'unknown'}:`,
     truncateText(post.text || '', 800),
-    post.photo ? 'Attached image: visible in this thread. React to what is actually shown in the photo — clothing, text on clothing, expressions, setting, people, objects. You can quote or reference specific visible details.' : '',
+    post.photo ? visualEvidencePromptBlock(post) : '',
     post.reply ? `Attached reply by ${post.reply.charId || 'unknown'}: ${truncateText(post.reply.text || '', 500)}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -5501,6 +5602,63 @@ function parseJsonArrayFromText(text = '') {
   if (start === -1 || end === -1 || end <= start) return [];
   const parsed = JSON.parse(withoutFence.slice(start, end + 1));
   return Array.isArray(parsed) ? parsed : [];
+}
+
+function parseJsonObjectFromText(text = '') {
+  const withoutFence = String(text || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  const start = withoutFence.indexOf('{');
+  const end = withoutFence.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return {};
+  const parsed = JSON.parse(withoutFence.slice(start, end + 1));
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+}
+
+async function analyzeVisualEvidence(photo, caption = '', player = null, chars = []) {
+  if (!photo || !window.claude?.complete) throw new Error('visual analyzer unavailable');
+  const knownPeople = [player, ...(chars || [])]
+    .filter(Boolean)
+    .map(c => `${c.name || c.id} (@${c.handle || c.id})`)
+    .slice(0, 30)
+    .join(', ');
+
+  const raw = await window.claude.complete({
+    label: 'visual evidence',
+    photo,
+    maxOutputTokens: 850,
+    messages: [{ role: 'user', content: `Analyze the attached image for a college social app post. Return ONLY valid JSON with this exact shape:
+{
+  "kind": "photo" | "screenshot" | "mixed" | "unknown",
+  "summary": "one short sentence",
+  "visibleFacts": ["concrete visible details only"],
+  "screenshot": {
+    "handles": ["readable @handles or account names"],
+    "captions": ["readable captions or main post text"],
+    "visibleReplies": ["readable replies or comments"],
+    "metrics": ["visible like/repost/comment/view counts"],
+    "timestamps": ["visible dates or times"],
+    "appActions": ["visible actions like liked, followed, deleted, edited, reposted, only when exact text/icon is visible"]
+  },
+  "uncertain": ["anything partly unreadable or low-confidence"]
+}
+
+STRICT RULES:
+- Include only what is visible in the image or supplied caption. Do not infer events outside the frame.
+- If it is a screenshot, transcribe readable social text, handles, metrics, timestamps, and visible action labels.
+- If text is blurry or cropped, put it in "uncertain" instead of pretending.
+- Do not identify real people from faces. You may connect known fictional app handles only when the image text/caption clearly names them.
+- Do not invent deleted posts, cheating, relationships, injuries, private DMs, or secret motives.
+- Keep every array item brief.
+
+Supplied post caption/text: ${JSON.stringify(truncateText(caption || '', 700))}
+Known app people, for handle matching only: ${knownPeople || 'none'}` }]
+  });
+
+  const parsed = parseJsonObjectFromText(raw);
+  return normalizeVisualEvidence(parsed, photo);
 }
 
 function normalizeEventCharId(value, chars = []) {
@@ -11468,6 +11626,7 @@ function App() {
   const feedRef = useRef([]);
   const resumeGapMsRef = useRef(0);
   const storyPulseCreatedRef = useRef(false);
+  const visualEvidencePendingRef = useRef(new Set());
   useEffect(() => { feedRef.current = feed; }, [feed]);
   const gmzStateRef = useRef({ chars: [], player: null, eventLog: [] });
   useEffect(() => { gmzStateRef.current = { chars, player, eventLog }; }, [chars, player, eventLog]);
@@ -11562,6 +11721,32 @@ function App() {
 	    }, 700);
 	    return () => clearTimeout(timer);
 	  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog]);
+
+  useEffect(() => {
+    if (!stateLoaded || !feed?.length) return;
+    const candidate = feed.find(post =>
+      visualEvidenceNeedsAnalysis(post) &&
+      !visualEvidencePendingRef.current.has(post.id)
+    );
+    if (!candidate) return;
+
+    const timer = setTimeout(() => {
+      visualEvidencePendingRef.current.add(candidate.id);
+      analyzeVisualEvidence(candidate.photo, candidate.text || '', player, chars)
+        .then(evidence => {
+          setFeed(f => f.map(post => post.id === candidate.id ? { ...post, visualEvidence: evidence } : post));
+        })
+        .catch(err => {
+          console.warn('[visual evidence] Analysis failed:', err?.message || err);
+          setFeed(f => f.map(post => post.id === candidate.id ? { ...post, visualEvidence: visualEvidenceFailed(candidate.photo, err?.message || err) } : post));
+        })
+        .finally(() => {
+          visualEvidencePendingRef.current.delete(candidate.id);
+        });
+    }, 900);
+
+    return () => clearTimeout(timer);
+  }, [stateLoaded, feed, chars, player]);
 
 	  useEffect(() => {
 	    if (!stateLoaded) return;
@@ -13136,14 +13321,15 @@ Write ONE social media post from ${char.name}'s perspective reacting to the even
                 if (replier) {
                   setTimeout(async () => {
                     try {
-                      const replyRaw = await window.claude.complete({ label: 'feed post reply', photo: post.photo || null, messages:[{ role:'user', content:
+                      const currentPost = feedRef.current.find(p => p.id === post.id) || post;
+                      const replyRaw = await window.claude.complete({ label: 'feed post reply', photo: currentPost.photo || null, messages:[{ role:'user', content:
                         `Write as ${replier.name} on a campus social app.
 Speaker: ${compactCharacterCard(replier, poster)}
 Original poster: ${compactCharacterCard(poster, replier)}
 ${buildPublicReplyRules()}
 ${compactPlayerStance(replier, player)}
 ${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: replier, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
-@${poster.handle} just posted: "${post.text || ''}"${post.photo ? ' [photo attached — you can see it and react to what is actually in the image]' : ''}
+${compactPostForPrompt(currentPost, [...chars, player, GMZ_CHAR], player)}
 ${elaraShouldReact && replier.id === 'elara' ? 'Havoc just publicly tagged @keresvalen or posted about her. Elara should be plainly annoyed. React to the visible behavior — Havoc being obvious, Keres getting the attention, or the room pretending not to see it. Be sharp, jealous, specific, and mean-funny. Do not sound wounded or needy.' : ''}
 ${mentionsKeres && replier.id === 'milo' ? 'Milo is the loudest, most delighted voice in the room. He should say the thing everyone is thinking out loud — reckless, chaotic, zero filter.' : ''}
 Write ONE short reply (1 sentence, in character). Tag @${poster.handle} directly. No quotes, just the reply text.

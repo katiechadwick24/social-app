@@ -2030,6 +2030,20 @@ function threadPatternVarietyGuard(lines = []) {
 ${recent.length ? `RECENT LINE SHAPES TO AVOID ECHOING:\n${recent.map((line, i) => `${i + 1}. ${line.slice(0, 160)}`).join('\n')}` : 'No recent line shapes are available yet, so make each speaker choose a different move.'}`;
 }
 
+function sourceTweetEchoGuard(sourceText = '', label = 'source post') {
+  const clean = String(sourceText || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const keywords = normalizedDialogueWords(clean)
+    .filter(w => !DIALOGUE_PATTERN_STOP_WORDS.has(w) && w.length > 3)
+    .slice(0, 10);
+  return `SOURCE TWEET ECHO GUARD:
+- The ${label} is the anchor, not a template. Do not rewrite it with swapped adjectives.
+- Do not repeat its opening rhythm, key verb, punchline structure, or more than one distinctive keyword unless directly quoting/tagging is the point.
+- Each reply needs a new social function: consequence, witness joke, private-pressure read, practical complaint, flirt, team stake, question, or refusal.
+${keywords.length ? `- Treat these as already-used source words unless needed for clarity: ${keywords.map(w => `"${w}"`).join(', ')}.` : ''}
+- If the draft could sit under the ${label} as "same tweet, different speaker", change the move before output.`;
+}
+
 // When a character is replying to a thread they already replied to,
 // surface their previous reply explicitly so the model varies structure
 // instead of producing a near-duplicate template with different filler.
@@ -5542,6 +5556,17 @@ function normalizeCampusEvent(raw = {}, index = 0, chars = []) {
   };
 }
 
+function rollRandomEventFromPool(chars = []) {
+  const pool = EVENT_POOL.filter(ev => ev?.scenario);
+  const raw = pool[Math.floor(Math.random() * pool.length)] || createCustomEventDraft();
+  const normalized = normalizeCampusEvent(raw, Math.floor(Math.random() * 10000), chars);
+  return {
+    ...(normalized || raw),
+    id: `random-event-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    random: true,
+  };
+}
+
 function formatAwayDuration(ms = 0) {
   const hours = Math.max(1, Math.round(ms / (60 * 60 * 1000)));
   if (hours < 24) return `${hours}h`;
@@ -5712,7 +5737,11 @@ function buildPinnedStoryArcs({ chars = [], player = DEFAULT_PLAYER, feed = [], 
       beat: triangleHeat > 70
         ? 'The next public hint could force someone to define what this is.'
         : 'The private warmth is still outrunning the public explanation.',
-      eventScenario: `A new piece of gossip puts @${player.handle}, @havocfang, and @rowancade in the same sentence again. The campus is trying to decide whether this is romance, strategy, or all three people making terrible choices on purpose.`,
+      eventScenarios: [
+        `A new piece of gossip puts @${player.handle}, @havocfang, and @rowancade in the same sentence again. The campus is trying to decide whether this is romance, strategy, or all three people making terrible choices on purpose.`,
+        `Someone in a corridor catches @havocfang and @rowancade reacting to @${player.handle}'s name at the exact same time, and the clip is blurry enough to become everyone's favorite theory.`,
+        `@${player.handle} gets tagged in a post about "two Gryffindors and one Slytherin problem," and neither @havocfang nor @rowancade ignores it fast enough.`,
+      ],
     },
     {
       id: 'vesper-long-game',
@@ -5725,7 +5754,11 @@ function buildPinnedStoryArcs({ chars = [], player = DEFAULT_PLAYER, feed = [], 
       beat: vesperHeat > 68
         ? 'Someone polite is probably feeding the right people the wrong details.'
         : 'The problem is not on main yet, which is exactly why it matters.',
-      eventScenario: `@vesperholloway is still publicly gracious about @${player.handle}'s place on Slytherin, but a private detail reaches the wrong person with suspiciously careful timing.`,
+      eventScenarios: [
+        `@vesperholloway is still publicly gracious about @${player.handle}'s place on Slytherin, but a private detail reaches the wrong person with suspiciously careful timing.`,
+        `A too-perfectly framed rumor about Slytherin practice makes @${player.handle} look reckless, and @vesperholloway is the only person smiling normally.`,
+        `Someone praises @${player.handle}'s Chaser spot in a way that sounds supportive until the replies notice exactly who got replaced.`,
+      ],
     },
     {
       id: 'captain-pressure',
@@ -5738,7 +5771,11 @@ function buildPinnedStoryArcs({ chars = [], player = DEFAULT_PLAYER, feed = [], 
       beat: daysToMatch <= 7
         ? 'Match week makes every flirt, post, and mistake look tactical.'
         : 'The captains are still pretending this is only about standards.',
-      eventScenario: `A practice argument spills onto the feed: @silasmontague and @briarrowe both frame @${player.handle}'s attention problem as a team problem, and @callumpike has thoughts nobody asked for.`,
+      eventScenarios: [
+        `A practice argument spills onto the feed: @silasmontague and @briarrowe both frame @${player.handle}'s attention problem as a team problem, and @callumpike has thoughts nobody asked for.`,
+        `A captain standards post goes sideways when everyone realizes @silasmontague and @briarrowe are talking about different teams and the same distraction.`,
+        `@callumpike turns a match-prep comment into a public argument about whether @${player.handle} is a player, a tactic, or a liability.`,
+      ],
     },
     {
       id: 'gmz-heat',
@@ -5751,11 +5788,41 @@ function buildPinnedStoryArcs({ chars = [], player = DEFAULT_PLAYER, feed = [], 
       beat: gmzHeat > 72
         ? 'GMZ does not need proof anymore. It needs timing.'
         : 'One tip could decide which version of the story gets believed.',
-      eventScenario: `GMZ asks for anonymous tips about @${player.handle}'s latest silence, the Gryffindor orbit, and whether Slytherin is using drama as match pressure.`,
+      eventScenarios: [
+        `GMZ asks for anonymous tips about @${player.handle}'s latest silence, the Gryffindor orbit, and whether Slytherin is using drama as match pressure.`,
+        `GMZ posts a witness map with too many arrows pointing back to @${player.handle}, and the replies start building theories faster than facts.`,
+        `An anonymous GMZ tip claims someone on Slytherin is feeding the account just enough truth to make @${player.handle}'s week worse.`,
+      ],
     },
   ];
 
-  return arcs.sort((a, b) => b.progress - a.progress).slice(0, 4);
+  return arcs.map(arc => ({
+    ...arc,
+    played: (eventLog || []).filter(e => e?.storyArcId === arc.id).length,
+  })).sort((a, b) => b.progress - a.progress).slice(0, 4);
+}
+
+function rollStoryArcEvent(arc, chars = [], player = DEFAULT_PLAYER) {
+  const scenarios = arc?.eventScenarios || [arc?.eventScenario || arc?.title].filter(Boolean);
+  const scenario = scenarios[Math.floor(Math.random() * scenarios.length)] || arc?.title || '';
+  const type = arc?.id === 'gmz-heat'
+    ? 'gossip'
+    : arc?.id === 'vesper-long-game'
+    ? 'scandal'
+    : arc?.id === 'private-orbit'
+    ? 'tag'
+    : 'opportunity';
+  return {
+    id: `arc-event-${Date.now()}-${arc?.id || 'arc'}-${Math.floor(Math.random() * 10000)}`,
+    type,
+    scenario,
+    chars: (arc?.people || []).filter(id => id !== 'player' && id !== '__gmz__' && chars.some(c => c.id === id)).slice(0, 3),
+    xp: type === 'scandal' ? [130, 240] : type === 'tag' ? [110, 210] : [90, 190],
+    custom: true,
+    canon: true,
+    random: true,
+    storyArcId: arc?.id,
+  };
 }
 
 // ─── Relationship bar ─────────────────────────────────────────────
@@ -6251,6 +6318,7 @@ ${threadMemory}
 ${activeDramaContext ? `\n${activeDramaContext}` : ''}
 ${roleContext}
 ${attractionRule}${embarrassmentRule}${exPressureRule}${tamsinPressureRule}${allyBalanceRule}${keresPostBiteRule}${vaguePostRule}${visibleAnchorRule}
+${sourceTweetEchoGuard(post.text || '', 'original post')}
 ${dialogueSeparationRule}
 
 Task: Write ${picked.length} public replies, one from each listed student, in order.
@@ -6422,6 +6490,7 @@ ${buildPublicReplyRules({ playful: !!playfulThreadRule, gmz: !!gmzSpeculationRul
 Speaker: ${compactCharacterCard(author, player)}
 ${characterKnowledgeStateNote(author.id)}
 ${threadRoleContext(post.text || '', author, [player, ...chars, GMZ_CHAR])}
+${sourceTweetEchoGuard(post.text || '', 'original post')}
 ${threadPatternVarietyGuard([post.text, ...charR1.map(cc => cc.text)])}
 
 @${targetSpeaker.handle} just replied: "${targetReply.text}"
@@ -7920,7 +7989,7 @@ function PinnedStoryArcs({ arcs = [], chars = [], player, onArcEvent }) {
     <div style={{padding:'10px 12px 8px', borderBottom:`1px solid ${C.border}`}}>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
         <div style={{color:C.text, fontSize:13, fontWeight:850}}>Pinned arcs</div>
-        <div style={{color:C.muted, fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.04em'}}>Live pressure</div>
+        <div style={{color:C.muted, fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.04em'}}>Event lanes</div>
       </div>
       <div style={{display:'flex', gap:10, overflowX:'auto', paddingBottom:2}}>
         {arcs.map(arc => {
@@ -7955,7 +8024,7 @@ function PinnedStoryArcs({ arcs = [], chars = [], player, onArcEvent }) {
                     </div>
                   ))}
                 </div>
-                <span style={{color:arc.color, fontSize:11, fontWeight:850}}>Play beat</span>
+                <span style={{color:arc.color, fontSize:11, fontWeight:850}}>{arc.played ? `${arc.played} played · ` : ''}Roll event</span>
               </div>
             </button>
           );
@@ -10468,7 +10537,7 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
   const draftEvent = !event?.scenario || event?.draft;
   const [currentEvent, setCurrentEvent] = useState(draftEvent ? null : event);
   const [xp, setXp] = useState(() => rollEventXp(event?.xp || [80, 200]));
-  const [customOpen, setCustomOpen] = useState(true);
+  const [customOpen, setCustomOpen] = useState(draftEvent);
   const [customScenario, setCustomScenario] = useState(draftEvent ? '' : (event?.scenario || ''));
   const [customType, setCustomType] = useState(event?.type || 'gossip');
   const [customChars, setCustomChars] = useState(Array.isArray(event?.chars) ? event.chars : []);
@@ -10488,6 +10557,10 @@ function EventModal({ event, chars, player, feed, eventLog = [], dms = {}, group
     setResult(null);
     setSubmittedEvent(null);
     setCustomOpen(false);
+  }
+
+  function rollRandomEvent() {
+    selectEvent(rollRandomEventFromPool(chars));
   }
 
   function applyCustomEvent() {
@@ -10607,6 +10680,7 @@ Write a ${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|c
         type: 'event',
         visibility: privateIntelMode ? 'private_intel' : 'public',
         eventType: evType,
+        storyArcId: currentEvent.storyArcId,
         scenario: currentEvent.scenario,
         action: actionText,
         outcome: cleaned,
@@ -10663,6 +10737,9 @@ Write a ${/kiss|snog|hand.in.hand|corridor|spotted|caught|together|outed|photo|c
             <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:16}}>
               <button onClick={() => setCustomOpen(o => !o)} style={{background: customOpen || currentEvent?.custom ? `${C.blue}18` : C.card2, color: customOpen || currentEvent?.custom ? C.blue : C.text, border:`1px solid ${customOpen || currentEvent?.custom ? C.blue : C.border}`, borderRadius:10, padding:'0 12px', minHeight:36, fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0}}>
                 {customOpen ? 'Hide Custom' : currentEvent?.scenario ? 'Edit Custom' : 'Custom'}
+              </button>
+              <button onClick={rollRandomEvent} style={{background:C.card2, color:C.text, border:`1px solid ${C.border}`, borderRadius:10, padding:'0 12px', minHeight:36, fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0}}>
+                Random
               </button>
               <div style={{flex:1, background:C.card2, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
                 <span style={{color:C.muted, fontSize:12}}>XP reward</span>
@@ -11778,16 +11855,7 @@ Write ONE fresh social media post from ${char.name}'s perspective. Rules:
 
   function handleArcEvent(arc) {
     if (!arc) return;
-    setActiveEvent({
-      id: `arc-event-${Date.now()}-${arc.id}`,
-      type: arc.id === 'gmz-heat' ? 'gossip' : arc.id === 'vesper-long-game' ? 'scandal' : 'opportunity',
-      scenario: arc.eventScenario || arc.title,
-      chars: (arc.people || []).filter(id => id !== 'player' && id !== '__gmz__').slice(0, 3),
-      xp: arc.id === 'vesper-long-game' ? [130, 240] : arc.id === 'private-orbit' ? [120, 230] : [90, 190],
-      custom: true,
-      canon: true,
-      storyArcId: arc.id,
-    });
+    setActiveEvent(rollStoryArcEvent(arc, chars, player));
   }
 
   function closeStoryPulse() {
@@ -12112,6 +12180,7 @@ ${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char: member, pl
 Recent group chat history:
 ${historyStr || '(new group chat)'}
 ${groundingLine}
+${sourceTweetEchoGuard(latestUserText || context || historyStr, 'latest chat beat')}
 ${threadPatternVarietyGuard(popInAvoidTexts)}
 
 The chat went quiet. Pop back in naturally because of this context: ${context}
@@ -12243,6 +12312,7 @@ Your relationship with @${target.handle} (${target.name}): ${char.relationships?
 
 Recent campus feed:\n${recentContext}
 ${repeatGuard}
+${sourceTweetEchoGuard(recentContext, 'recent feed')}
 ${threadPatternVarietyGuard([recentContext])}
 
 Write ONE social media post that is specifically directed at or about @${target.handle}. Rules:
@@ -12580,7 +12650,7 @@ Write ONE punchy social media post reaction. Use insider language for your own t
   }
 
   function handleEvent(ev) {
-    setActiveEvent(ev || createCustomEventDraft());
+    setActiveEvent(ev || rollRandomEventFromPool(chars));
   }
 
   async function triggerGmzInspiredTake(char, gmzPost) {

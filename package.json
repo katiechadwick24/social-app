@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node scripts/check-babel.js"
+    "check": "node scripts/check-babel.js && node scripts/eval-character-voice.js",
+    "check:babel": "node scripts/check-babel.js",
+    "eval:voice": "node scripts/eval-character-voice.js"
   },
   "engines": {
     "node": ">=20"

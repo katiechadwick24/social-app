@@ -146,7 +146,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "darkMode": true,
   "accentColor": "#4dabf7",
   "fontSize": 14,
-  "compactFeed": false
+  "compactFeed": false,
+  "toneDiagnostics": false
 }/*EDITMODE-END*/;
 
 const SESSION_FALLBACK_TRACKER = {};
@@ -2039,6 +2040,197 @@ function priorReplyVariationRule(charId, charR1) {
 - You already replied earlier in this thread with: "${String(prev.text).replace(/"/g, '\\"')}"
 - Your new reply MUST use a different opening, different sentence shape, and avoid echoing the same phrases, rhythm, or template.
 - The substance can build on your earlier point, but the framing should feel like a fresh beat — not the same template with different filler words at the end.`;
+}
+
+const TONE_DIAGNOSTIC_MODEL_ID = 'Xenova/distilbert-base-uncased-finetuned-sst-2-english';
+const toneDiagnosticState = {
+  classifierPromise: null,
+  resultCache: new Map(),
+  pendingKeys: new Set(),
+  disabled: false,
+  warned: false,
+};
+
+function toneDiagnosticsEnabled() {
+  try {
+    return window.localStorage.getItem('socials.toneDiagnosticsModel') !== 'off';
+  } catch(e) {
+    return true;
+  }
+}
+
+function toneDiagnosticKey(text = '') {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 360);
+  let hash = 5381;
+  for (let i = 0; i < clean.length; i++) hash = ((hash << 5) + hash) ^ clean.charCodeAt(i);
+  return `${clean.length}:${hash >>> 0}`;
+}
+
+function toneDiagnosticText(text = '') {
+  return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 360);
+}
+
+async function loadToneDiagnosticClassifier() {
+  if (!toneDiagnosticsEnabled() || toneDiagnosticState.disabled) return null;
+  if (!toneDiagnosticState.classifierPromise) {
+    toneDiagnosticState.classifierPromise = import(SEMANTIC_MEMORY_CDN)
+      .then(({ pipeline }) => pipeline('sentiment-analysis', TONE_DIAGNOSTIC_MODEL_ID, { dtype: 'q8' }))
+      .catch(err => {
+        toneDiagnosticState.disabled = true;
+        if (!toneDiagnosticState.warned) {
+          console.warn('[tone diagnostics] HF classifier unavailable; local diagnostics remain active:', err?.message || err);
+          toneDiagnosticState.warned = true;
+        }
+        return null;
+      });
+  }
+  return toneDiagnosticState.classifierPromise;
+}
+
+async function classifyToneDiagnostic(text = '') {
+  const clean = toneDiagnosticText(text);
+  if (!clean) return null;
+  const key = toneDiagnosticKey(clean);
+  if (toneDiagnosticState.resultCache.has(key)) return toneDiagnosticState.resultCache.get(key);
+  if (toneDiagnosticState.pendingKeys.has(key)) return null;
+  toneDiagnosticState.pendingKeys.add(key);
+  try {
+    const classifier = await loadToneDiagnosticClassifier();
+    if (!classifier) return null;
+    const result = await classifier(clean);
+    const first = Array.isArray(result) ? result[0] : result;
+    if (first?.label) {
+      const stored = { label: String(first.label), score: Number(first.score || 0) };
+      toneDiagnosticState.resultCache.set(key, stored);
+      return stored;
+    }
+  } catch(err) {
+    if (!toneDiagnosticState.warned) {
+      console.warn('[tone diagnostics] Classification failed; local diagnostics remain active:', err?.message || err);
+      toneDiagnosticState.warned = true;
+    }
+  } finally {
+    toneDiagnosticState.pendingKeys.delete(key);
+  }
+  return null;
+}
+
+function cachedToneDiagnostic(text = '') {
+  return toneDiagnosticState.resultCache.get(toneDiagnosticKey(toneDiagnosticText(text))) || null;
+}
+
+function scheduleToneDiagnostics(texts = [], onDone = null) {
+  if (!toneDiagnosticsEnabled() || toneDiagnosticState.disabled) return;
+  const unique = [];
+  const seen = new Set();
+  (texts || []).forEach(text => {
+    const clean = toneDiagnosticText(text);
+    if (!clean) return;
+    const key = toneDiagnosticKey(clean);
+    if (seen.has(key) || toneDiagnosticState.resultCache.has(key) || toneDiagnosticState.pendingKeys.has(key)) return;
+    seen.add(key);
+    unique.push(clean);
+  });
+  if (!unique.length) return;
+  setTimeout(async () => {
+    for (const text of unique.slice(0, 8)) await classifyToneDiagnostic(text);
+    if (onDone) onDone();
+  }, 0);
+}
+
+function diagnosticChip(label, severity = 'info', detail = '') {
+  return { label, severity, detail };
+}
+
+function looksOverPolishedForSocial(text = '') {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (clean.length > 210) return true;
+  return /\b(?:therefore|furthermore|ultimately|notably|in conclusion|objectively|to be clear,|for the record,)\b/i.test(clean)
+    || (clean.split(/[.!?]+/).filter(s => s.trim()).length > 2 && clean.length > 130);
+}
+
+function looksLikeGenericQuestionFallback(text = '') {
+  const lower = String(text || '').toLowerCase().replace(/[’]/g, "'");
+  return /\b(?:what'?s your angle|what are we doing here|what is happening|someone explain|care to explain|interesting choice)\b/i.test(lower)
+    || /\b(?:prove it|we'?ll see|let'?s see|say more|try again)\.?$/i.test(lower);
+}
+
+function toneDiagnosticsForLine(text = '', speaker = null, opts = {}) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  const previousTexts = (opts.previousTexts || []).filter(Boolean);
+  const diagnostics = [];
+  const push = (label, severity = 'info', detail = '') => diagnostics.push(diagnosticChip(label, severity, detail));
+
+  if (looksLikePromptLeak(clean) || looksLikePhraseInfection(clean)) push('prompt leak', 'danger');
+  if (speaker && looksLikeIdentityConfusion(clean, speaker)) push('identity drift', 'danger');
+  if (speaker && (isSelfNarration(clean, speaker) || looksLikeSelfPronounDrift(clean, speaker, opts))) push('self-ref drift', 'danger');
+  if (speaker && violatesCharacterDialogueContract(clean, speaker)) push('voice drift', 'warn');
+  if (looksLikeCatchphraseSlop(clean)) push('catchphrase', 'warn');
+  if (looksLikeBannedFlatPhrase(clean)) push('flat phrase', 'warn');
+  if (looksLikeRecapThenFlatVerdict(clean, opts)) push('recap verdict', 'warn');
+  if (looksLikeGenericQuestionFallback(clean)) push('generic beat', 'warn');
+  if (looksOverPolishedForSocial(clean)) push('too polished', 'warn');
+  if (previousTexts.length && hasDialoguePatternCollision(clean, previousTexts)) push('same shape', 'warn');
+  if (previousTexts.length && hasRepeatedDialogueNgram(clean, previousTexts)) push('repeated wording', 'warn');
+  if (looksLikeDeadAirReply(clean)) push('dead air', 'info');
+  if (looksLikeInterrogationSpiral(clean)) push('question spiral', 'info');
+
+  const sentiment = cachedToneDiagnostic(clean);
+  if (sentiment?.label && sentiment.score >= 0.86) {
+    push(`${sentiment.label.toLowerCase()} ${Math.round(sentiment.score * 100)}%`, sentiment.label === 'NEGATIVE' ? 'info' : 'ok');
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  diagnostics.forEach(item => {
+    if (seen.has(item.label)) return;
+    seen.add(item.label);
+    deduped.push(item);
+  });
+  return deduped.slice(0, 5);
+}
+
+function ToneDiagnosticStrip({ text, speaker, previousTexts = [], opts = {} }) {
+  const [, setRevision] = useState(0);
+  const clean = toneDiagnosticText(text);
+  useEffect(() => {
+    if (!clean) return;
+    let alive = true;
+    scheduleToneDiagnostics([clean], () => {
+      if (alive) setRevision(r => r + 1);
+    });
+    return () => { alive = false; };
+  }, [clean]);
+  const diagnostics = toneDiagnosticsForLine(clean, speaker, { ...opts, previousTexts });
+  if (!diagnostics.length) return null;
+  const colors = {
+    danger: { bg: '#ef444422', fg: '#f87171', border: '#ef444455' },
+    warn: { bg: '#f59e0b22', fg: '#fbbf24', border: '#f59e0b55' },
+    ok: { bg: '#22c55e22', fg: '#4ade80', border: '#22c55e55' },
+    info: { bg: C.card2, fg: C.muted, border: C.border },
+  };
+  return (
+    <div style={{display:'flex', gap:5, flexWrap:'wrap', marginTop:6}}>
+      {diagnostics.map(item => {
+        const tone = colors[item.severity] || colors.info;
+        return (
+          <span key={item.label} title={item.detail || item.label} style={{
+            color:tone.fg,
+            background:tone.bg,
+            border:`1px solid ${tone.border}`,
+            borderRadius:6,
+            padding:'2px 6px',
+            fontSize:10,
+            fontWeight:800,
+            textTransform:'uppercase',
+          }}>
+            {item.label}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function cleanGeneratedText(text = '') {
@@ -5631,12 +5823,13 @@ function pickCharLikes(post, chars, player) {
   return scored.slice(0, count).filter(x => x.score > 0.3).map(x => x.id);
 }
 
-function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, onDelete, tweaks = TWEAK_DEFAULTS }) {
+function PostCard({ post, chars, player, feed = [], onCharClick, onLike, onOpenThread, onDelete, tweaks = TWEAK_DEFAULTS }) {
   const allChars = [...chars, player, GMZ_CHAR];
   const char = allChars.find(c => c.id === post.charId);
   const [liked, setLiked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const compact = !!tweaks.compactFeed;
+  const showToneDiagnostics = !!tweaks.toneDiagnostics;
   const fs = (base) => tweakFont(base, tweaks);
   const likerChars = (post.charLikes || []).map(id => allChars.find(c => c.id === id)).filter(Boolean);
   const replyChar = post.reply ? allChars.find(c => c.id === post.reply.charId) : null;
@@ -5654,6 +5847,11 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, onDe
 
   const renderText = (text) => renderLinkedText(text, allChars, onCharClick);
   const safePostText = post.text || '';
+  const diagnosticPreviousTexts = showToneDiagnostics
+    ? collectRecentFeedDialogue(feed, { limit: 16 })
+        .filter(entry => entry.postId !== post.id)
+        .map(entry => entry.text)
+    : [];
 
   return (
     <div style={{padding: compact ? '10px 14px' : '16px 16px', borderBottom:`1px solid ${C.border}`}}>
@@ -5684,6 +5882,14 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, onDe
             </div>
           </div>
           <p style={{color:C.text, fontSize:fs(14), lineHeight: compact ? 1.35 : 1.5, marginTop:compact ? 2 : 4, cursor:'pointer'}} onClick={() => onOpenThread && onOpenThread(post)}>{renderText(safePostText)}</p>
+          {showToneDiagnostics && (
+            <ToneDiagnosticStrip
+              text={safePostText}
+              speaker={char}
+              previousTexts={diagnosticPreviousTexts}
+              opts={{ feed, contextText: safePostText, roster: allChars, selfSubject: post.charId === char.id }}
+            />
+          )}
           {post.photo && <img src={post.photo} alt="" onClick={() => onOpenThread && onOpenThread(post)} style={{width:'100%', aspectRatio:'1 / 1', borderRadius:12, marginTop:compact ? 6 : 8, objectFit:'cover', cursor:'pointer', display:'block'}} />}
           <div style={{display:'flex', gap:compact ? 16 : 20, marginTop:compact ? 7 : 10, alignItems:'center'}}>
             <button onClick={() => onOpenThread && onOpenThread(post)} style={{background:'none',border:'none',color:C.muted,fontSize:fs(12),cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
@@ -5723,12 +5929,20 @@ function PostCard({ post, chars, player, onCharClick, onLike, onOpenThread, onDe
                 <Avatar char={replyChar} size={24} />
               </div>
               <div style={{flex:1, minWidth:0}}>
-                <span style={{fontWeight:600, fontSize:fs(12), color:C.text}}>{replyChar.name}</span>
-                <span style={{color:C.muted, fontSize:fs(12), marginLeft:4}}>@{replyChar.handle}</span>
-                <p style={{color:C.text, fontSize:fs(12), lineHeight:1.4, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>{post.reply.text}</p>
-              </div>
-            </div>
-          )}
+	                <span style={{fontWeight:600, fontSize:fs(12), color:C.text}}>{replyChar.name}</span>
+	                <span style={{color:C.muted, fontSize:fs(12), marginLeft:4}}>@{replyChar.handle}</span>
+	                <p style={{color:C.text, fontSize:fs(12), lineHeight:1.4, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>{post.reply.text}</p>
+	                {showToneDiagnostics && (
+	                  <ToneDiagnosticStrip
+	                    text={post.reply.text}
+	                    speaker={replyChar}
+	                    previousTexts={[safePostText, ...diagnosticPreviousTexts]}
+	                    opts={{ feed, contextText: safePostText, roster: allChars, selfSubject: characterMentionedInText(safePostText, replyChar) || replyChar.id === post.charId }}
+	                  />
+	                )}
+	              </div>
+	            </div>
+	          )}
         </div>
       </div>
     </div>
@@ -7827,10 +8041,10 @@ function FeedScreen({ chars, player, feed, setFeed, day, storyArcs = [], onArcEv
         <MatchDayBanner match={currentMatch} day={day} onWatch={onWatchMatch} />
         <PinnedStoryArcs arcs={storyArcs} chars={chars} player={player} onArcEvent={onArcEvent} />
 
-        {/* Posts */}
-        {feed.map(post => (
-          <PostCard key={post.id} post={post} chars={chars} player={player} onCharClick={onCharClick} onOpenThread={onOpenThread} onDelete={id => setFeed(f => f.filter(p => p.id !== id))} tweaks={tweaks} />
-        ))}
+	        {/* Posts */}
+	        {feed.map(post => (
+	          <PostCard key={post.id} post={post} chars={chars} player={player} feed={feed} onCharClick={onCharClick} onOpenThread={onOpenThread} onDelete={id => setFeed(f => f.filter(p => p.id !== id))} tweaks={tweaks} />
+	        ))}
 
         {/* Spacer */}
         <div style={{height:18}}/>
@@ -12895,10 +13109,11 @@ Write ONE short reply (1 sentence, in character). Tag @${poster.handle} directly
       <TweakToggle label="Dark mode" value={tweaks.darkMode} onChange={v => setTweak('darkMode', v)} />
       <TweakSection label="Accent color" />
       <TweakColor label="Accent" value={tweaks.accentColor} onChange={v => setTweak('accentColor', v)} />
-      <TweakSection label="Feed" />
-      <TweakSlider label="Font size" value={tweaks.fontSize} min={12} max={18} step={1} unit="px" onChange={v => setTweak('fontSize', v)} />
-      <TweakToggle label="Compact feed" value={tweaks.compactFeed} onChange={v => setTweak('compactFeed', v)} />
-    </TweaksPanel>
+	      <TweakSection label="Feed" />
+	      <TweakSlider label="Font size" value={tweaks.fontSize} min={12} max={18} step={1} unit="px" onChange={v => setTweak('fontSize', v)} />
+	      <TweakToggle label="Compact feed" value={tweaks.compactFeed} onChange={v => setTweak('compactFeed', v)} />
+	      <TweakToggle label="Tone diagnostics" value={tweaks.toneDiagnostics} onChange={v => setTweak('toneDiagnostics', v)} />
+	    </TweaksPanel>
     </>
   );
 }

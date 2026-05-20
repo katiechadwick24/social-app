@@ -4419,83 +4419,309 @@ function recentMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = 
     ? 'Only use private scene memory if every person in this group could know it. Do not mention side DMs or other group chats here.'
     : 'Do not reveal private memories outside the current private relationship/context.';
 
-  return memory.length
-    ? `RECENT APP MEMORY (priority: scenes > DMs > public feed > events):
+	  return memory.length
+	    ? `RECENT APP MEMORY (priority: scenes > DMs > public feed > events):
 ${memory.slice(0, 12).map((line, i) => `${i + 1}. ${line}`).join('\n')}
 Use this as continuity only when it is visible to the current speaker and appropriate for this ${channel} context. ${privacyRule} Completed scenes shown here are already past-tense facts, not hypotheticals. Scenes and DMs outweigh public feed and events — if a scene or DM established something, do not contradict it with a vague public post. Do not reset relationships, forget scenes/events, invent details beyond it, or leak private memories into public/unrelated dialogue.`
     : 'RECENT APP MEMORY: no saved events yet. Do not pretend there is established history.';
 }
 
-function recentCompactMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = {}, char = null, player = null, allChars = [], channel = 'public', audienceIds = [], limit = 5 } = {}) {
+const SEMANTIC_MEMORY_MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
+const SEMANTIC_MEMORY_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+const SEMANTIC_MEMORY_MAX_TEXTS_PER_WARMUP = 24;
+const SEMANTIC_MEMORY_MAX_TEXT_CHARS = 520;
+const SEMANTIC_MEMORY_STOP_WORDS = new Set([
+  'the','a','an','and','or','but','to','of','in','on','for','with','is','are','was','were','be','been','being',
+  'you','your','yours','me','my','mine','i','it','its','that','this','these','those','at','as','by','from','if',
+  'then','than','so','not','no','do','does','did','can','could','should','would','will','just','about','into',
+  'one','two','they','them','their','we','our','he','him','his','she','her','hers'
+]);
+
+const semanticMemoryState = {
+  extractorPromise: null,
+  vectorCache: new Map(),
+  pendingKeys: new Set(),
+  disabled: false,
+  warned: false,
+};
+
+function semanticMemoryEnabled() {
+  try {
+    return window.localStorage.getItem('socials.semanticMemory') !== 'off';
+  } catch(e) {
+    return true;
+  }
+}
+
+function semanticMemoryKey(text = '') {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim().slice(0, SEMANTIC_MEMORY_MAX_TEXT_CHARS);
+  let hash = 2166136261;
+  for (let i = 0; i < clean.length; i++) {
+    hash ^= clean.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${clean.length}:${hash >>> 0}`;
+}
+
+function semanticMemoryText(text = '') {
+  return String(text || '').replace(/\s+/g, ' ').trim().slice(0, SEMANTIC_MEMORY_MAX_TEXT_CHARS);
+}
+
+function vectorFromTensor(output) {
+  const data = output?.data || output?.cpuData || output?.ort_tensor?.cpuData;
+  if (data && typeof data.length === 'number') return Array.from(data);
+  const list = typeof output?.tolist === 'function' ? output.tolist() : null;
+  if (Array.isArray(list?.[0])) return list[0];
+  return Array.isArray(list) ? list : null;
+}
+
+async function loadSemanticMemoryExtractor() {
+  if (!semanticMemoryEnabled() || semanticMemoryState.disabled) return null;
+  if (!semanticMemoryState.extractorPromise) {
+    semanticMemoryState.extractorPromise = import(SEMANTIC_MEMORY_CDN)
+      .then(({ pipeline }) => pipeline('feature-extraction', SEMANTIC_MEMORY_MODEL_ID, { dtype: 'q8' }))
+      .catch(err => {
+        semanticMemoryState.disabled = true;
+        if (!semanticMemoryState.warned) {
+          console.warn('[semantic memory] Falling back to lexical ranking:', err?.message || err);
+          semanticMemoryState.warned = true;
+        }
+        return null;
+      });
+  }
+  return semanticMemoryState.extractorPromise;
+}
+
+async function embedSemanticMemoryText(text = '') {
+  const clean = semanticMemoryText(text);
+  if (!clean) return null;
+  const key = semanticMemoryKey(clean);
+  if (semanticMemoryState.vectorCache.has(key)) return semanticMemoryState.vectorCache.get(key);
+  if (semanticMemoryState.pendingKeys.has(key)) return null;
+
+  semanticMemoryState.pendingKeys.add(key);
+  try {
+    const extractor = await loadSemanticMemoryExtractor();
+    if (!extractor) return null;
+    const output = await extractor(clean, { pooling: 'mean', normalize: true });
+    const vector = vectorFromTensor(output);
+    if (vector?.length) {
+      semanticMemoryState.vectorCache.set(key, vector);
+      return vector;
+    }
+  } catch(err) {
+    if (!semanticMemoryState.warned) {
+      console.warn('[semantic memory] Embedding failed; lexical ranking remains active:', err?.message || err);
+      semanticMemoryState.warned = true;
+    }
+  } finally {
+    semanticMemoryState.pendingKeys.delete(key);
+  }
+  return null;
+}
+
+function scheduleSemanticMemoryWarmup(texts = []) {
+  if (!semanticMemoryEnabled() || semanticMemoryState.disabled) return;
+  const unique = [];
+  const seen = new Set();
+  (texts || []).forEach(text => {
+    const clean = semanticMemoryText(text);
+    if (!clean) return;
+    const key = semanticMemoryKey(clean);
+    if (seen.has(key) || semanticMemoryState.vectorCache.has(key) || semanticMemoryState.pendingKeys.has(key)) return;
+    seen.add(key);
+    unique.push(clean);
+  });
+  if (!unique.length) return;
+
+  setTimeout(async () => {
+    for (const text of unique.slice(0, SEMANTIC_MEMORY_MAX_TEXTS_PER_WARMUP)) {
+      await embedSemanticMemoryText(text);
+    }
+  }, 0);
+}
+
+function cachedSemanticVector(text = '') {
+  return semanticMemoryState.vectorCache.get(semanticMemoryKey(semanticMemoryText(text))) || null;
+}
+
+function cosineSimilarity(a, b) {
+  if (!a || !b || a.length !== b.length) return null;
+  let dot = 0;
+  let aa = 0;
+  let bb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    aa += a[i] * a[i];
+    bb += b[i] * b[i];
+  }
+  return aa && bb ? dot / Math.sqrt(aa * bb) : null;
+}
+
+function memoryTokens(text = '') {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/@[a-z0-9_]+/g, match => ` ${match.slice(1)} ${match} `)
+    .replace(/[^a-z0-9_@'\s]/g, ' ')
+    .split(/\s+/)
+    .filter(token => token && token.length > 2 && !SEMANTIC_MEMORY_STOP_WORDS.has(token));
+}
+
+function lexicalMemoryScore(query = '', text = '') {
+  const queryTokens = new Set(memoryTokens(query));
+  if (!queryTokens.size) return 0;
+  const textTokens = new Set(memoryTokens(text));
+  let hits = 0;
+  queryTokens.forEach(token => { if (textTokens.has(token)) hits += 1; });
+  return hits / Math.max(5, queryTokens.size);
+}
+
+function compactMemoryQuery({ char = null, player = null, allChars = [], channel = 'public', audienceIds = [] } = {}) {
+  const audience = (audienceIds || [])
+    .map(id => (allChars || []).find(c => c?.id === id) || (id === 'player' ? player : null))
+    .filter(Boolean)
+    .map(c => `${c.name || ''} @${c.handle || ''} ${c.house || ''} ${c.team || ''} ${c.position || ''}`)
+    .join(' ');
+  return [
+    `channel ${channel}`,
+    char ? compactCharacterCard(char, player) : '',
+    player ? compactCharacterCard(player, char) : '',
+    audience,
+  ].filter(Boolean).join('\n');
+}
+
+function memoryCandidate(line, searchText, priority, recency = 0) {
+  const cleanLine = String(line || '').replace(/\s+/g, ' ').trim();
+  const cleanSearch = String(searchText || cleanLine).replace(/\s+/g, ' ').trim();
+  if (!cleanLine || !cleanSearch) return null;
+  return { line: cleanLine, searchText: cleanSearch, priority, recency };
+}
+
+function rankMemoryCandidates(candidates = [], opts = {}) {
+  const query = compactMemoryQuery(opts);
+  scheduleSemanticMemoryWarmup([query, ...candidates.map(c => c.searchText)]);
+
+  const queryVector = cachedSemanticVector(query);
+  return candidates
+    .map((candidate, index) => {
+      const semantic = queryVector ? cosineSimilarity(queryVector, cachedSemanticVector(candidate.searchText)) : null;
+      const lexical = lexicalMemoryScore(query, candidate.searchText);
+      const score = candidate.priority + candidate.recency + (lexical * 35) + (semantic === null ? 0 : semantic * 45);
+      return { ...candidate, index, score };
+    })
+    .sort((a, b) => (b.score - a.score) || (a.index - b.index));
+}
+
+function buildCompactMemoryCandidates({ feed = [], eventLog = [], groupChats = [], dms = {}, char = null, player = null, allChars = [], channel = 'public', audienceIds = [] } = {}) {
   const roster = [...(allChars || []), GMZ_CHAR].filter(Boolean);
   const byId = (id) => roster.find(c => c.id === id) || (id === 'player' ? player : null);
-  const lines = [];
+  const candidates = [];
   const filteredLog = (eventLog || []).filter(entry => entry && canUseMemoryEntry(entry, char, player, { channel, audienceIds }));
+  const push = (candidate) => { if (candidate) candidates.push(candidate); };
 
   filteredLog
     .filter(e => e.type === 'scene' || !!e.sceneMemory)
-    .slice(0, 3)
-    .forEach(entry => {
+    .slice(0, 5)
+    .forEach((entry, index) => {
       const text = entry.sceneMemory || entry.outcome || entry.text || entry.scenario || '';
-      if (text) lines.push(`Scene: ${String(text).replace(/\s+/g, ' ').slice(0, 320)}`);
+      push(memoryCandidate(
+        `Scene: ${String(text).replace(/\s+/g, ' ').slice(0, 320)}`,
+        `${entry.title || ''} ${text}`,
+        90,
+        12 - index
+      ));
     });
 
   if ((channel === 'dm' || channel === 'private' || channel === 'scene') && char?.id && dms?.[char.id]?.length) {
-    const recentDm = dms[char.id].slice(-3).map(m => `${m.role === 'user' ? player?.name || 'Player' : char.name}: "${String(m.text || '').slice(0, 90)}"`).join(' / ');
-    if (recentDm) lines.push(`DM: ${recentDm}`);
+    const recentDm = dms[char.id].slice(-5);
+    const line = recentDm.slice(-3).map(m => `${m.role === 'user' ? player?.name || 'Player' : char.name}: "${String(m.text || '').slice(0, 90)}"`).join(' / ');
+    const search = recentDm.map(m => `${m.role === 'user' ? player?.handle || 'player' : char.handle || char.name}: ${m.text || ''}`).join('\n');
+    push(memoryCandidate(`DM: ${line}`, search, 82, 10));
   }
 
   if (channel === 'group') {
     (groupChats || [])
       .filter(group => groupAudienceMatches(group.members || [], audienceIds, player))
-      .slice(0, 1)
-      .forEach(group => {
+      .slice(0, 2)
+      .forEach((group, index) => {
         const recent = (group.messages || []).slice(-4).map(m => {
           const speaker = m.role === 'user' ? player : byId(m.charId);
           return `@${speaker?.handle || 'someone'}: "${String(m.text || '').slice(0, 80)}"`;
         }).join(' / ');
-        if (recent) lines.push(`Group "${group.name}": ${recent}`);
+        const search = (group.messages || []).slice(-8).map(m => {
+          const speaker = m.role === 'user' ? player : byId(m.charId);
+          return `@${speaker?.handle || 'someone'} ${m.text || ''}`;
+        }).join('\n');
+        push(memoryCandidate(`Group "${group.name}": ${recent}`, search, 74, 8 - index));
       });
   }
 
   const handles = [char?.handle, player?.handle].filter(Boolean).map(h => String(h).toLowerCase());
-  const publicPosts = collectRecentFeedDialogue(feed, { limit: 6 })
-    .filter(entry => {
-      const text = String(entry.text || '').toLowerCase();
-      return handles.length > 0 && handles.some(handle => text.includes(`@${handle}`));
-    })
-    .slice(0, channel === 'public' ? 3 : 2)
-    .map(entry => {
+  collectRecentFeedDialogue(feed, { limit: 14 })
+    .slice(0, 24)
+    .forEach((entry, index) => {
+      const text = String(entry.text || '');
+      const lower = text.toLowerCase();
+      const directHit = handles.length > 0 && handles.some(handle => lower.includes(`@${handle}`));
       const speaker = entry.kind === 'bot-comment'
         ? { handle: entry.botId || 'student' }
         : byId(entry.charId);
-      return speaker?.handle && entry.text ? `@${speaker.handle}: "${String(entry.text).slice(0, 100)}"` : '';
-    })
-    .filter(Boolean);
-  if (publicPosts.length) lines.push(`Visible feed: ${publicPosts.join(' / ')}`);
+      if (!speaker?.handle || !text) return;
+      const label = entry.kind.includes('comment') || entry.kind === 'reply' ? 'reply' : 'post';
+      push(memoryCandidate(
+        `Visible feed: @${speaker.handle} ${label}: "${text.slice(0, 115)}"`,
+        `@${speaker.handle} ${label} ${text}`,
+        directHit ? 68 : 42,
+        Math.max(0, 14 - index)
+      ));
+    });
 
   filteredLog
     .filter(e => e.type !== 'scene' && !e.sceneMemory)
-    .slice(0, 2)
-    .forEach(entry => {
+    .slice(0, 5)
+    .forEach((entry, index) => {
       const text = entry.outcome || entry.text || entry.scenario || '';
-      if (text) lines.push(`Event: ${String(text).replace(/\s+/g, ' ').slice(0, 280)}`);
+      push(memoryCandidate(
+        `Event: ${String(text).replace(/\s+/g, ' ').slice(0, 280)}`,
+        `${entry.title || ''} ${entry.scenario || ''} ${entry.outcome || ''} ${entry.action || ''}`,
+        56,
+        7 - index
+      ));
     });
 
-  // Surface recent scandal/drama reaction posts to ALL characters regardless of @-mention filter.
-  // This keeps the drama alive in future posts even after the initial wave.
-  const dramaReactionPosts = (feed || [])
+  (feed || [])
     .filter(p => p.isEventReaction || p.isGMZInspiredTake)
     .slice(0, 5)
-    .map(p => {
+    .forEach((p, index) => {
       const speaker = (allChars || []).find(c => c.id === p.charId) || (p.charId === 'player' ? player : null);
-      return speaker?.handle && p.text ? `@${speaker.handle}: "${String(p.text).slice(0, 110)}"` : '';
-    })
-    .filter(Boolean);
-  if (dramaReactionPosts.length) lines.push(`Drama wave (still visible): ${dramaReactionPosts.join(' / ')}`);
+      push(memoryCandidate(
+        `Drama wave: @${speaker?.handle || 'student'}: "${String(p.text || '').slice(0, 110)}"`,
+        `@${speaker?.handle || 'student'} drama reaction ${p.text || ''}`,
+        62,
+        6 - index
+      ));
+    });
+
+  return candidates;
+}
+
+function warmSemanticMemory({ feed = [], eventLog = [], groupChats = [], dms = {}, chars = [], player = null } = {}) {
+  const allChars = [...(chars || []), player, GMZ_CHAR].filter(Boolean);
+  const samples = [
+    ...buildCompactMemoryCandidates({ feed, eventLog, groupChats, dms, player, allChars, channel:'public' }).map(c => c.searchText),
+    ...allChars.slice(0, 8).map(char => compactMemoryQuery({ char, player, allChars, channel:'public' })),
+  ];
+  scheduleSemanticMemoryWarmup(samples);
+}
+
+function recentCompactMemoryContext({ feed = [], eventLog = [], groupChats = [], dms = {}, char = null, player = null, allChars = [], channel = 'public', audienceIds = [], limit = 5 } = {}) {
+  const candidates = buildCompactMemoryCandidates({ feed, eventLog, groupChats, dms, char, player, allChars, channel, audienceIds });
+  const lines = rankMemoryCandidates(candidates, { char, player, allChars, channel, audienceIds })
+    .slice(0, limit + 1)
+    .map(candidate => candidate.line);
 
   return lines.length
-    ? `COMPACT MEMORY:\n${lines.slice(0, limit + 1).map((line, i) => `${i + 1}. ${line}`).join('\n')}`
+    ? `COMPACT MEMORY:\n${lines.map((line, i) => `${i + 1}. ${line}`).join('\n')}`
     : 'COMPACT MEMORY: none relevant.';
 }
 
@@ -11033,14 +11259,22 @@ function App() {
   function setEventLog(v)   { setEventLogRaw(prev   => (typeof v==='function'?v(prev):v).slice(0,30)); }
   function setDay(v)        { setDayRaw(prev        => typeof v==='function'?v(prev):v); }
 
-  useEffect(() => {
-    if (!stateLoaded) return;
-    serverSave({ chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt });
-  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt]);
+	  useEffect(() => {
+	    if (!stateLoaded) return;
+	    serverSave({ chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt });
+	  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt]);
 
-  useEffect(() => {
-    if (!stateLoaded) return;
-    const flushSave = () => serverSaveNow({ chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt });
+	  useEffect(() => {
+	    if (!stateLoaded) return;
+	    const timer = setTimeout(() => {
+	      warmSemanticMemory({ feed, eventLog, groupChats, dms, chars, player });
+	    }, 700);
+	    return () => clearTimeout(timer);
+	  }, [stateLoaded, chars, player, feed, dms, groupChats, eventLog]);
+
+	  useEffect(() => {
+	    if (!stateLoaded) return;
+	    const flushSave = () => serverSaveNow({ chars, player, feed, dms, groupChats, eventLog, day, storyPulseSeenAt });
     window.addEventListener('pagehide', flushSave);
     window.addEventListener('beforeunload', flushSave);
     return () => {

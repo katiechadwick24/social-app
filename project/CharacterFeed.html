@@ -153,6 +153,121 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 const SESSION_FALLBACK_TRACKER = {};
 
+const WORLD_PULSE_LANES = [
+  {
+    id: 'npc-sparring',
+    label: 'NPC sparring',
+    targetMode: 'friction',
+    replyChance: 0.96,
+    dmChance: 0.18,
+    prompt: 'Start a public NPC-to-NPC exchange: a precise tease, challenge, correction, dare, annoyed callout, or competitive jab with a concrete hook.',
+  },
+  {
+    id: 'friend-bit',
+    label: 'friend bit',
+    targetMode: 'warm',
+    replyChance: 0.92,
+    dmChance: 0.22,
+    prompt: 'Let two NPCs have a bit that belongs to them: amused teammate nonsense, a familiar tease, a public invitation to laugh, or affection disguised as annoyance.',
+  },
+  {
+    id: 'open-hook',
+    label: 'open hook',
+    targetMode: 'none',
+    replyChance: 0.68,
+    dmChance: 0.34,
+    prompt: 'Post an open social hook the player could notice but did not have to create: a plan, bet, invite, request for volunteers, dare, study dodge, snack run, or bad idea.',
+  },
+  {
+    id: 'campus-chaos',
+    label: 'campus chaos',
+    targetMode: 'none',
+    replyChance: 0.58,
+    dmChance: 0.24,
+    prompt: 'Anchor a standalone post in a small concrete school moment: class failure, dorm/common room mess, corridor weirdness, library behavior, food theft, spell mishap, or professor nonsense.',
+  },
+  {
+    id: 'team-static',
+    label: 'team static',
+    targetMode: 'teammate',
+    replyChance: 0.88,
+    dmChance: 0.20,
+    prompt: 'Let team or house life move sideways without centering the player: a practice complaint, captain pressure, teammate roast, rivalry warmup, match-week superstition, or locker-room irritation.',
+  },
+  {
+    id: 'gossip-ripple',
+    label: 'gossip ripple',
+    targetMode: 'any',
+    replyChance: 0.78,
+    dmChance: 0.28,
+    prompt: 'Create low-stakes public gossip or curiosity about NPC life that stays grounded in visible campus texture, not secret canon or a recycled player scandal.',
+  },
+];
+
+function worldPulseWeightedPick(items = [], weightFor = () => 1) {
+  const weighted = (items || []).map(item => ({ item, weight: Math.max(0.05, Number(weightFor(item) || 0)) }));
+  const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  if (!weighted.length || !total) return null;
+  let roll = Math.random() * total;
+  for (const entry of weighted) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.item;
+  }
+  return weighted[weighted.length - 1].item;
+}
+
+function chooseWorldPulseLane(feed = []) {
+  const recentPulses = (feed || []).filter(post => post?.worldPulseLane).slice(0, 8);
+  const recentLaneIds = recentPulses.map(post => post.worldPulseLane);
+  return worldPulseWeightedPick(WORLD_PULSE_LANES, lane => {
+    const usedCount = recentLaneIds.filter(id => id === lane.id).length;
+    const justUsed = recentLaneIds[0] === lane.id;
+    return (lane.targetMode === 'none' ? 1.12 : 1) / (1 + usedCount * 2.6 + (justUsed ? 6 : 0));
+  }) || WORLD_PULSE_LANES[0];
+}
+
+function recentWorldPulseAuthorCount(feed = [], charId = '') {
+  return (feed || [])
+    .filter(post => post?.worldPulseId && post.charId === charId)
+    .slice(0, 8)
+    .length;
+}
+
+function chooseWorldPulseActor(chars = [], feed = [], excludedIds = new Set()) {
+  const currentFeed = feed || [];
+  const recentAuthors = currentFeed.slice(0, 10).map(post => post?.charId).filter(Boolean);
+  const candidates = (chars || []).filter(char => char?.id && !excludedIds.has(char.id));
+  return worldPulseWeightedPick(candidates, char => {
+    const personality = `${char.personality || ''} ${char.description || ''}`.toLowerCase();
+    let weight = 1;
+    if (/chaotic|bold|loud|shameless|provocative|witty|social|gossip|reckless|funny|competitive/i.test(personality)) weight += 0.9;
+    if (/quiet|reserved|controlled|disciplined/i.test(personality)) weight -= 0.22;
+    if (recentAuthors.slice(0, 4).includes(char.id)) weight *= 0.12;
+    else if (recentAuthors.includes(char.id)) weight *= 0.42;
+    weight /= 1 + recentWorldPulseAuthorCount(currentFeed, char.id) * 2.8;
+    return weight;
+  }) || candidates[0] || null;
+}
+
+function chooseWorldPulseTarget(chars = [], actor = null, lane = null, feed = []) {
+  if (!actor || !lane || lane.targetMode === 'none') return null;
+  const recentAuthors = (feed || []).slice(0, 8).map(post => post?.charId).filter(Boolean);
+  const candidates = (chars || []).filter(char => char?.id && char.id !== actor.id);
+  return worldPulseWeightedPick(candidates, target => {
+    const rel = Number(actor.relationships?.[target.id] ?? 50);
+    const sameTeam = teamFor(actor) && teamFor(actor) === teamFor(target);
+    const sameHouse = actor.house && actor.house === target.house;
+    let weight = 1 + Math.random() * 0.35;
+    if (lane.targetMode === 'friction') weight += Math.max(0, 72 - rel) / 14;
+    if (lane.targetMode === 'warm') weight += Math.max(0, rel - 38) / 16;
+    if (lane.targetMode === 'teammate') weight += sameTeam ? 5 : sameHouse ? 2.6 : 0.15;
+    if (lane.targetMode === 'any') weight += Math.abs(rel - 50) / 35;
+    if (recentAuthors.slice(0, 4).includes(target.id)) weight *= 0.32;
+    weight /= 1 + recentWorldPulseAuthorCount(feed, target.id) * 1.8;
+    return weight;
+  });
+}
+
 function trackFallback(charId, text) {
   if (!charId || !text) return;
   if (!SESSION_FALLBACK_TRACKER[charId]) SESSION_FALLBACK_TRACKER[charId] = new Set();
@@ -11663,84 +11778,162 @@ function App() {
     serverSaveNow(next);
   }
 
-  async function handleRefreshFeed() {
-    if (!chars.length) return;
-    const weights = chars.map(c => ['chaotic','bold','loud','shameless','provocative'].some(w => (c.personality||'').includes(w)) ? 3 : 1);
-    const total = weights.reduce((a,b) => a+b, 0);
-    let r = Math.random() * total;
-    let char = chars[0];
-    for (let i = 0; i < chars.length; i++) { r -= weights[i]; if (r <= 0) { char = chars[i]; break; } }
-    const otherHandles = chars.filter(c => c.id !== char.id).map(c => `@${c.handle}`).join(', ');
-    const recentContext = feed.slice(0,6).map(p => {
-      const poster = [...chars, player, GMZ_CHAR].find(c => c.id === p.charId);
-      return `@${poster?.handle || '?'}: "${p.text?.slice(0,80)}"`;
+  function worldPulseFeedContext(currentFeed = []) {
+    return currentFeed.slice(0, 10).map(post => {
+      const poster = [...chars, player, GMZ_CHAR].find(c => c.id === post.charId);
+      return `@${poster?.handle || '?'}: "${String(post.text || '').slice(0, 110)}"`;
     }).join('\n');
-    const repeatGuard = phraseRepetitionGuard(feed, recentContext, { charId: char.id, dms, groupChats });
-    const tamsinPressureNote = char.id === 'tamsin' && tamsinRowanHavocKeresConcernSignal(recentContext, player)
-      ? `\n${tamsinKeresConcernNote(recentContext, player)}`
-      : '';
-    const activeDramaNote = getActiveDramaContext(eventLog, feed, chars, player);
+  }
+
+  function buildWorldPulsePost(actor, text, lane, pulseId, source) {
+    const id = `${source === 'background' ? 'pulse' : 'pull'}-${Date.now()}-${actor.id}-${Math.random().toString(36).slice(2, 7)}`;
+    return {
+      id,
+      charId: actor.id,
+      text,
+      likes: Math.floor(Math.random() * 210000 + 3000),
+      reposts: Math.floor(Math.random() * 9500),
+      comments: Math.floor(Math.random() * 180),
+      timestamp: Date.now(),
+      reply: null,
+      botComments: [],
+      charLikes: pickCharLikes({ id, charId: actor.id }, chars, player),
+      isPullGenerated: source === 'refresh',
+      isWorldPulse: true,
+      worldPulseId: pulseId,
+      worldPulseLane: lane.id,
+      worldPulseLabel: lane.label,
+    };
+  }
+
+  function scheduleWorldPulseReply(post, actor, target, lane, recentContext) {
+    if (!post || !actor || Math.random() > Number(lane?.replyChance || 0)) return;
+    const replier = target || chooseWorldPulseActor(chars, feedRef.current, new Set([actor.id]));
+    if (!replier) return;
+    const targetOwnsPost = !!target && target.id === replier.id;
+    setTimeout(async () => {
+      try {
+        const currentPost = feedRef.current.find(item => item.id === post.id) || post;
+        const raw = await window.claude.complete({
+          label: 'feed post reply',
+          messages:[{ role:'user', content:
+            `Write as ${replier.name} on a campus social app.
+Speaker: ${compactCharacterCard(replier, actor)}
+Original poster: ${compactCharacterCard(actor, replier)}
+${buildPublicReplyRules()}
+Voice lane: ${dialogueContractSummaryFor(replier)}
+${compactPlayerStance(replier, player)}
+${recentCompactMemoryContext({ feed: feedRef.current, eventLog, groupChats, dms, char: replier, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
+Visible public post by @${actor.handle}: "${currentPost.text}"
+World pulse lane: ${lane.label}. This is campus life moving without the player having to seed it.
+${targetOwnsPost ? `@${actor.handle} aimed this post at you or made you the clear subject. Answer as yourself in the first person.` : `You noticed the visible post. Reply only if your reply can hook into its exact words, invitation, joke, complaint, or social opening.`}
+${sourceTweetEchoGuard(currentPost.text, 'visible post')}
+${threadPatternVarietyGuard([recentContext, currentPost.text])}
+
+Write ONE short public reply in character. Ground it in the visible post. It can tease, answer, volunteer, complain, flirt, correct, or make the bit better. Tag @${actor.handle} directly. 1 sentence. No quotes, no hashtags, no explanation.
+` }]
+        });
+        const replyText = cleanSocialReplyText(raw, replier, player, {
+          feed: feedRef.current,
+          avoidTexts: [recentContext, currentPost.text],
+          selfSubject: targetOwnsPost,
+          contextText: currentPost.text || '',
+          roster: [player, ...chars, GMZ_CHAR],
+          replyToHandle: actor.handle,
+          failureMode: 'silence',
+        });
+        if (!replyText) return;
+        setFeed(current => current.map(item => item.id === post.id
+          ? { ...item, reply:{ charId: replier.id, text: replyText }, comments: Math.max(item.comments || 0, 1) }
+          : item
+        ));
+      } catch(e) {}
+    }, 2200 + Math.random() * 3200);
+  }
+
+  function scheduleWorldPulseDM(actor, target, lane, post) {
+    if (!post || Math.random() > Number(lane?.dmChance || 0)) return;
+    const candidates = [target, actor]
+      .filter(Boolean)
+      .filter((char, idx, list) => list.findIndex(other => other.id === char.id) === idx);
+    const dmChar = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : actor;
+    if (!dmChar) return;
+    setTimeout(() => {
+      triggerProactiveDM(dmChar, `campus life moved on its own: @${actor.handle} just posted "${String(post.text || '').slice(0, 160)}". ${dmChar.name} may use that as an excuse to message @${player.handle}, or bring a separate low-stakes thought if that feels more natural.`);
+    }, 9000 + Math.random() * 9000);
+  }
+
+  async function generateWorldPulse({ source = 'refresh' } = {}) {
+    if (!chars.length) return false;
+    const currentFeed = feedRef.current.length ? feedRef.current : feed;
+    const lane = chooseWorldPulseLane(currentFeed);
+    const actor = chooseWorldPulseActor(chars, currentFeed);
+    if (!actor) return false;
+    const target = chooseWorldPulseTarget(chars, actor, lane, currentFeed);
+    const otherHandles = chars.filter(c => c.id !== actor.id).map(c => `@${c.handle}`).join(', ');
+    const recentContext = worldPulseFeedContext(currentFeed);
+    const repeatGuard = phraseRepetitionGuard(currentFeed, recentContext, { charId: actor.id, dms, groupChats });
+    const targetLine = target
+      ? `NPC counterpart for this pulse: ${compactCharacterCard(target, actor)}`
+      : 'This pulse does not need a named counterpart.';
+    const targetRules = target
+      ? `- Make @${target.handle} the clear NPC counterpart. Tag @${target.handle} naturally and say an actual thing to or about them.
+- This is public visible interaction only. Do not claim secret history, private receipts, or off-screen app actions to make the hook work.`
+      : `- Keep the opening owned by ${actor.name}'s own life, NPC campus life, or a public opening to the room.
+- Do not mention @${player.handle} unless a direct public reason already exists in the visible recent feed.`;
+    let cleanText = '';
 
     try {
       const raw = await window.claude.complete({ label: 'feed post', messages:[{ role:'user', content:
-        `Write as ${char.name} on a campus social app.
-Speaker: ${compactCharacterCard(char, player)}
-Voice lane: ${dialogueContractSummaryFor(char)}
+        `Write as ${actor.name} on a campus social app.
+Speaker: ${compactCharacterCard(actor, target || player)}
+${targetLine}
+Voice lane: ${dialogueContractSummaryFor(actor)}
 ${buildFeedPostRules()}
-${compactPlayerStance(char, player)}
-${recentCompactMemoryContext({ feed, eventLog, groupChats, dms, char, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
-${activeDramaNote ? `\n${activeDramaNote}` : ''}
-${tamsinPressureNote}
+${compactPlayerStance(actor, player)}
+${recentCompactMemoryContext({ feed: currentFeed, eventLog, groupChats, dms, char: actor, player, allChars:[...chars, player, GMZ_CHAR], limit: 4 })}
 Other campus accounts: ${otherHandles}
 
 Recent campus feed posts:
 ${recentContext}
 ${repeatGuard}
+${sourceTweetEchoGuard(recentContext, 'recent feed')}
 ${threadPatternVarietyGuard([recentContext])}
 
-Write ONE fresh social media post from ${char.name}'s perspective. Rules:
+WORLD PULSE:
+The feed should reveal campus life that the player did not initiate or create.
+Pulse lane: ${lane.label}
+Pulse brief: ${lane.prompt}
+
+Write ONE fresh public post from ${actor.name}'s perspective. Rules:
 - Stay completely in character
-- 1-2 sentences max, punchy
-- Optionally tag 0-2 handles if natural
-- Can reference Quidditch, classes, campus drama, spells, dorms, the Great Hall, professors, etc.
-- Do not invent a concrete app action like someone liked/unliked, deleted/rewrote, screenshotted, or reposted something unless that action is visible in recent context.
-- Do not use vague deleted-post drama as the hook: no "someone deleted a post," "took it down," "scrubbed the timeline," "typed and deleted," "suspicious like," or "silent unfollow" posts unless the deleted content and stakes are explicitly visible in recent context. If you need gossip with thin context, use a concrete school moment instead.
-- Do not make Keres the culprit for anonymous or ambiguous feed behavior unless @${player.handle} is explicitly named in the prompt or recent context.
+- Use the pronouns listed above exactly
+- 1-2 sentences max, punchy, specific, casual
+- Keep this pulse distinct from recent posts in topic, social move, and sentence shape
+- Prefer NPC motives, ordinary school life, rivalries, friendships, invitations, and off-screen-safe visible texture over circling the same player-centered scandal
+${targetRules}
+- Do not invent a concrete app action like someone liked/unliked, deleted/rewrote, screenshotted, or reposted something unless that action is visible in recent context
+- Do not use vague deleted-post drama as the hook
 - NO hashtags, NO quotes around the post, JUST the post text
-- Do not introduce yourself, list identity facts, summarize rules, or mention prompts/context.
+- Do not introduce yourself, list identity facts, summarize rules, or mention prompts/context
 ` }] });
-      const cleanText = cleanSocialPostText(raw, char, player, { feed, avoidTexts: [recentContext] });
-      const pullId = `pull-${Date.now()}-${char.id}`;
-      setFeed(f => [{
-        id: pullId,
-        charId: char.id,
-        text: cleanText,
-        likes: Math.floor(Math.random()*180000),
-        reposts: Math.floor(Math.random()*9000),
-        comments: Math.floor(Math.random()*160),
-        timestamp: Date.now(),
-        reply: null,
-        botComments: [],
-        charLikes: pickCharLikes({ id: pullId, charId: char.id }, chars, player),
-        isPullGenerated: true,
-      }, ...f]);
-    } catch(e) {
-      const fallback = chars[Math.floor(Math.random()*chars.length)];
-      const fbId = `pull-${Date.now()}-${fallback.id}`;
-      setFeed(f => [{
-        id: fbId,
-        charId: fallback.id,
-        text: '...still thinking about what just happened.',
-        likes: Math.floor(Math.random()*80000),
-        reposts: Math.floor(Math.random()*4000),
-        comments: Math.floor(Math.random()*100),
-        timestamp: Date.now(),
-        reply: null,
-        botComments: [],
-        charLikes: pickCharLikes({ id: fbId, charId: fallback.id }, chars, player),
-        isPullGenerated: true,
-      }, ...f]);
+      cleanText = cleanSocialPostText(raw, actor, player, { feed: currentFeed, avoidTexts: [recentContext] });
+    } catch(e) {}
+
+    const avoidTexts = [recentContext, ...currentFeed.slice(0, 14).map(post => post.text).filter(Boolean)];
+    if (!cleanText || currentFeed.some(post => post.text && post.text.trim().toLowerCase() === cleanText.trim().toLowerCase())) {
+      cleanText = fallbackPostForChar(actor, player, avoidTexts);
     }
+    const pulseId = `world-pulse-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newPost = buildWorldPulsePost(actor, cleanText, lane, pulseId, source);
+    setFeed(current => [newPost, ...current]);
+    scheduleWorldPulseReply(newPost, actor, target, lane, recentContext);
+    scheduleWorldPulseDM(actor, target, lane, newPost);
+    return true;
+  }
+
+  async function handleRefreshFeed() {
+    await generateWorldPulse({ source: 'refresh' });
   }
 
   function handleAdvanceDay() {
@@ -12313,7 +12506,11 @@ Write ONE short reply (1 sentence, in character). Use the pronouns listed above 
 
     function scheduleNext(delay) {
       nextTimer = setTimeout(async () => {
-        await generatePost();
+        if (Math.random() < 0.62) {
+          await generateWorldPulse({ source: 'background' });
+        } else {
+          await generatePost();
+        }
         if (active) scheduleNext(240000 + Math.random()*240000);
       }, delay);
     }
